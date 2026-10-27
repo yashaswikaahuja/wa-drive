@@ -85,6 +85,72 @@ async function openEditor(page: Page): Promise<FrameLocator> {
   return frame;
 }
 
+/**
+ * On the phone layout most tools live in the "More" bottom sheet. Open it so a
+ * sheet-only control (clean, undo, redo, highlight, box, files, filter scope,
+ * copies, per-sheet, +Page, paper) is interactable, then the caller can click.
+ */
+async function openMore(page: Page) {
+  const more = page.locator('[data-doc-print-more="1"]');
+  if (await more.count()) {
+    const sheet = page.locator('[data-doc-print-more-sheet="1"]');
+    if (!(await sheet.isVisible().catch(() => false))) {
+      await more.click();
+      await expect(sheet).toBeVisible();
+    }
+  }
+}
+
+async function closeMore(page: Page) {
+  const close = page.locator('[data-doc-print-more-close="1"]');
+  if (await close.isVisible().catch(() => false)) await close.click();
+}
+
+/** Click a tool/control that may be behind the phone "More" sheet. */
+async function clickTool(page: Page, selector: string) {
+  const el = page.locator(selector);
+  if (!(await el.isVisible().catch(() => false))) await openMore(page);
+  await el.click();
+}
+
+/** Set the scan filter (control lives in the phone "More" sheet). */
+async function setFilter(page: Page, value: string) {
+  await openMore(page);
+  await page.locator('select[aria-label="Filter"]').selectOption(value);
+  await closeMore(page);
+}
+
+/** Set the filter scope segmented control (in the phone "More" sheet). */
+async function setScope(page: Page, scope: 'selected' | 'all') {
+  await openMore(page);
+  await page.locator(`[data-doc-print-filter-scope="${scope}"]`).click();
+  await expect(page.locator(`[data-doc-print-filter-scope="${scope}"]`)).toHaveAttribute('aria-checked', 'true');
+  await closeMore(page);
+}
+
+/** Set Copies (input lives in the phone "More" sheet). */
+async function setCopies(page: Page, n: number) {
+  await openMore(page);
+  const input = page.locator('[data-doc-print-copies="1"]');
+  await input.fill(String(n));
+  await input.dispatchEvent('input');
+  await closeMore(page);
+}
+
+/** Set documents-per-sheet (segmented control in the phone "More" sheet). */
+async function setNUp(page: Page, n: 1 | 2 | 4) {
+  await openMore(page);
+  await page.locator(`[data-doc-print-nup="${n}"]`).click();
+  await closeMore(page);
+}
+
+/** Add a blank page (+Page button lives in the phone "More" sheet). */
+async function addBlankPage(page: Page) {
+  await openMore(page);
+  await page.locator('[data-doc-print-blank="1"]').click();
+  await closeMore(page);
+}
+
 /** Average colour painted inside the stamp whose tag starts with prefix, [r,g,b]. */
 async function stampColor(page: Page, prefix: string): Promise<[number, number, number]> {
   const f = page.frames().find((fr) => fr.url().includes('viewer.html'))!;
@@ -210,22 +276,43 @@ test.describe('Print editor keeps work (operator)', () => {
     page.on('dialog', (d) => d.accept().catch(() => {}));
   });
 
-  test('toolbar is decluttered: no Color or A4 wide; Draw and Highlight kept', async ({ page }) => {
+  test('mobile toolbar: primary tools on the bar, the rest reachable via More', async ({ page }) => {
     test.setTimeout(60_000);
+    await page.setViewportSize({ width: 390, height: 844 });
     await openEditor(page);
-    // Removed tools are gone.
+    // Removed tools are gone (never present in any layout).
     await expect(page.locator('[data-doc-print-tool="color"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'A4 wide' })).toHaveCount(0);
-    // The useful tools remain (including Draw and Highlight).
-    for (const tool of ['crop', 'cleanup', 'select', 'text', 'draw', 'highlight', 'box', 'image', 'files', 'undo', 'redo']) {
-      await expect(page.locator(`[data-doc-print-tool="${tool}"]`)).toHaveCount(1);
+    // Primary tools sit on the thumb bar, directly visible.
+    for (const tool of ['select', 'crop', 'text', 'draw', 'image']) {
+      await expect(page.locator(`[data-doc-print-tool="${tool}"]`)).toBeVisible();
     }
-    await expect(page.locator('select[aria-label="Filter"]')).toBeVisible();
-    await expect(page.locator('[data-doc-print-copies="1"]')).toBeVisible();
-    await expect(page.locator('[data-doc-print-nup="2"]')).toBeVisible();
-    // Both papers still offered.
-    await expect(page.getByRole('button', { name: 'A4', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: '4×6' })).toBeVisible();
+    // A "More" button opens the full set.
+    const more = page.locator('[data-doc-print-more="1"]');
+    await expect(more).toBeVisible();
+    await more.click();
+    const sheet = page.locator('[data-doc-print-more-sheet="1"]');
+    await expect(sheet).toBeVisible();
+    // Every remaining tool is reachable and labelled inside the sheet.
+    for (const tool of ['cleanup', 'highlight', 'box', 'files', 'undo', 'redo']) {
+      await expect(sheet.locator(`[data-doc-print-tool="${tool}"]`)).toBeVisible();
+    }
+    await expect(sheet.locator('select[aria-label="Filter"]')).toBeVisible();
+    await expect(sheet.locator('[data-doc-print-copies="1"]')).toBeVisible();
+    await expect(sheet.locator('[data-doc-print-nup="2"]')).toBeVisible();
+    // Both papers still offered (now a segmented radiogroup).
+    await expect(sheet.locator('[data-doc-print-paper-pick="a4"]')).toBeVisible();
+    await expect(sheet.locator('[data-doc-print-paper-pick="4x6"]')).toBeVisible();
+    // Sheet closes cleanly.
+    await page.locator('[data-doc-print-more-close="1"]').click();
+    await expect(sheet).toHaveCount(0);
+
+    // No sideways scrolling at phone width — the whole point of the redesign.
+    const { scrollW, clientW } = await page.evaluate(() => ({
+      scrollW: document.documentElement.scrollWidth,
+      clientW: document.documentElement.clientWidth,
+    }));
+    expect(scrollW, `phone toolbar overflow: ${scrollW} > ${clientW}`).toBeLessThanOrEqual(clientW + 1);
   });
 
   test('second document moves alone, Undo/Redo work, refresh keeps everything', async ({ page }) => {
@@ -274,11 +361,12 @@ test.describe('Print editor keeps work (operator)', () => {
 
     // Undo the move, then Redo it.
     await expect(page.locator('[data-doc-print-tool="undo"]')).toBeEnabled();
-    await page.locator('[data-doc-print-tool="undo"]').click();
+    await clickTool(page, '[data-doc-print-tool="undo"]');
     await expect.poll(async () => (await editors(page)).find((e) => e.tag === extra.tag)?.y).toBeCloseTo(extra.y, 2);
     await expect(page.locator('[data-doc-print-tool="redo"]')).toBeEnabled();
-    await page.locator('[data-doc-print-tool="redo"]').click();
+    await clickTool(page, '[data-doc-print-tool="redo"]');
     await expect.poll(async () => (await editors(page)).find((e) => e.tag === extra.tag)?.y).toBeCloseTo(movedExtra.y, 2);
+    await closeMore(page);
 
     // Text on the empty top margin.
     const pageBox = await frame.locator('.page').first().boundingBox();
@@ -305,7 +393,7 @@ test.describe('Print editor keeps work (operator)', () => {
     await expect.poll(async () => (await editors(page)).some((e) => e.type === 'freetext' && e.text === 'Self attested'), { timeout: 10000 }).toBe(true);
 
     // Whiteout is kept as its own item.
-    await page.locator('[data-doc-print-tool="box"]').click();
+    await clickTool(page, '[data-doc-print-tool="box"]');
     await expect.poll(async () => (await editors(page)).filter((e) => e.type === 'stamp').length, { timeout: 15000 }).toBe(3);
     await page.waitForTimeout(1500);
 
@@ -378,8 +466,8 @@ test.describe('Print editor keeps work (operator)', () => {
     await page.waitForTimeout(1000);
 
     // Start from Original so colours are the source colours.
-    await page.locator('[data-doc-print-filter-scope="all"]').click();
-    await page.locator('select[aria-label="Filter"]').selectOption('original');
+    await setScope(page, 'all');
+    await setFilter(page, 'original');
     await page.waitForTimeout(2500);
     let blue = await stampColor(page, 'x');
     let red = await stampColor(page, 'c');
@@ -387,11 +475,10 @@ test.describe('Print editor keeps work (operator)', () => {
     expect(red[0], `red doc r>b, got ${red}`).toBeGreaterThan(red[2] + 30);
 
     // Selected scope: grayscale the blue doc only. Red parent stays red.
-    await page.locator('[data-doc-print-filter-scope="selected"]').click();
-    await expect(page.locator('[data-doc-print-filter-scope="selected"]')).toHaveAttribute('aria-checked', 'true');
     await clickStamp(page, 'x');
     await expect.poll(async () => (await editors(page)).filter((e) => e.sel).map((e) => e.tag[0])).toEqual(['x']);
-    await page.locator('select[aria-label="Filter"]').selectOption('gray');
+    await setScope(page, 'selected');
+    await setFilter(page, 'gray');
     await page.waitForTimeout(3000);
     blue = await stampColor(page, 'x');
     red = await stampColor(page, 'c');
@@ -399,10 +486,10 @@ test.describe('Print editor keeps work (operator)', () => {
     expect(red[0], `red parent still red, got ${red}`).toBeGreaterThan(red[2] + 25);
 
     // All scope: grayscale everything. Red parent turns gray too.
-    await page.locator('[data-doc-print-filter-scope="all"]').click();
-    await page.locator('select[aria-label="Filter"]').selectOption('original');
+    await setScope(page, 'all');
+    await setFilter(page, 'original');
     await page.waitForTimeout(2500);
-    await page.locator('select[aria-label="Filter"]').selectOption('gray');
+    await setFilter(page, 'gray');
     await page.waitForTimeout(3000);
     red = await stampColor(page, 'c');
     blue = await stampColor(page, 'x');
@@ -416,18 +503,16 @@ test.describe('Print editor keeps work (operator)', () => {
     page.on('dialog', (d) => d.dismiss().catch(() => {}));
 
     // One document page. Copies = 3 → 3 printed pages.
-    await page.locator('[data-doc-print-copies="1"]').fill('3');
-    await page.locator('[data-doc-print-copies="1"]').dispatchEvent('input');
+    await setCopies(page, 3);
     await page.waitForTimeout(400);
     await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(3);
 
     // Back to a single copy.
-    await page.locator('[data-doc-print-copies="1"]').fill('1');
-    await page.locator('[data-doc-print-copies="1"]').dispatchEvent('input');
+    await setCopies(page, 1);
     await page.waitForTimeout(400);
 
     // Add more document pages: a blank sheet plus an image.
-    await page.locator('[data-doc-print-blank="1"]').click();
+    await addBlankPage(page);
     await page.waitForTimeout(1500);
     await page.locator('[data-doc-print-image-input]').setInputFiles({
       name: 'second.png',
@@ -442,19 +527,18 @@ test.describe('Print editor keeps work (operator)', () => {
     expect(base1, 'multi-page job prints >1 sheet at 1-up').toBeGreaterThan(1);
 
     // 2-up packs two document pages per sheet → ceil(n/2) sheets.
-    await page.locator('[data-doc-print-nup="2"]').click();
+    await setNUp(page, 2);
     await page.waitForTimeout(400);
     await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(Math.ceil(base1 / 2));
 
     // 4-up → ceil(n/4) sheets.
-    await page.locator('[data-doc-print-nup="4"]').click();
+    await setNUp(page, 4);
     await page.waitForTimeout(400);
     await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(Math.ceil(base1 / 4));
 
     // 2-up, 2 copies → double the 2-up sheet count.
-    await page.locator('[data-doc-print-nup="2"]').click();
-    await page.locator('[data-doc-print-copies="1"]').fill('2');
-    await page.locator('[data-doc-print-copies="1"]').dispatchEvent('input');
+    await setNUp(page, 2);
+    await setCopies(page, 2);
     await page.waitForTimeout(400);
     await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(Math.ceil(base1 / 2) * 2);
   });

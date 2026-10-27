@@ -1,6 +1,22 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'fs';
 import { crc32, deflateSync } from 'node:zlib';
+
+/** Phone layout keeps Paper/Filter/+Page in a "More" bottom sheet; open it if needed. */
+async function ensureMore(page: Page, selector: string) {
+  const el = page.locator(selector).first();
+  if (await el.isVisible().catch(() => false)) return;
+  const more = page.locator('[data-doc-print-more="1"]');
+  if (await more.count()) {
+    await more.click();
+    await expect(page.locator('[data-doc-print-more-sheet="1"]')).toBeVisible();
+  }
+}
+async function closeMore(page: Page) {
+  const close = page.locator('[data-doc-print-more-close="1"]');
+  if (await close.isVisible().catch(() => false)) await close.click();
+}
+
 
 /**
  * Operator walkthrough: JPEG → paper layout → PDF at exact page size.
@@ -112,7 +128,10 @@ test.describe('Document print layout (operator)', () => {
     await page.screenshot({ path: 'C:/Users/yasha/AppData/Local/Temp/doc-print-op/01-a4-loaded.png', fullPage: true });
 
     // Operator picks 4×6. Wait until THAT sheet is the open PDF, not the previous A4.
-    await page.getByRole('button', { name: /4×6/i }).click();
+    // Operator picks 4×6. Wait until THAT sheet is the open PDF, not the previous A4.
+    await ensureMore(page, '[data-doc-print-paper-pick="4x6"]');
+    await page.locator('[data-doc-print-paper-pick="4x6"]').click();
+    await closeMore(page);
     await expect(page.locator('[data-doc-print-paper]')).toHaveAttribute('data-doc-print-paper', '4x6');
     await expect(page.locator('[data-doc-print-paper]')).toContainText(/4×6/);
     await expect(page.locator('[data-doc-print-pdf="1"]')).toHaveAttribute(
@@ -120,7 +139,9 @@ test.describe('Document print layout (operator)', () => {
       '152.4x101.6',
       { timeout: 25000 },
     );
+    await ensureMore(page, 'select[aria-label="Filter"]');
     await expect(page.locator('select[aria-label="Filter"]')).toHaveValue('auto');
+    await closeMore(page);
 
     const frame = page.frameLocator('iframe[title="PDF document"]');
     const pdfPage = frame.locator('.page').first();
@@ -151,7 +172,9 @@ test.describe('Document print layout (operator)', () => {
     // Crop now updates the photo live (no sheet reload), so just confirm it stays placed.
     await expect(page.locator('[data-image-crop="1"]')).toHaveCount(0, { timeout: 15000 });
     await expect(stamp).toBeVisible({ timeout: 20000 });
+    await ensureMore(page, 'select[aria-label="Filter"]');
     await page.locator('select[aria-label="Filter"]').selectOption('whiteboard');
+    await closeMore(page);
     await expect(stamp).toBeVisible({ timeout: 20000 });
     const before = await stamp.boundingBox();
     expect(before).toBeTruthy();
@@ -290,7 +313,7 @@ test.describe('Document print layout (operator)', () => {
     await expect(page.locator('[data-doc-print-pdf-tools="1"]')).toBeVisible();
     await expect(frame.locator('#editorModeButtons')).toBeHidden();
 
-    await page.locator('[data-doc-print-blank="1"]').click();
+    await ensureMore(page, '[data-doc-print-blank="1"]'); await page.locator('[data-doc-print-blank="1"]').click(); await closeMore(page);
     await expect(frame.locator('#numPages')).toContainText('2', { timeout: 30000 });
   });
 
@@ -370,7 +393,7 @@ test.describe('Document print layout (operator)', () => {
     await expect(page.locator('[data-image-crop="1"]')).toHaveCount(0);
     await expect(pageStamp(2)).toBeVisible({ timeout: 30000 });
 
-    await page.locator('[data-doc-print-blank="1"]').click();
+    await ensureMore(page, '[data-doc-print-blank="1"]'); await page.locator('[data-doc-print-blank="1"]').click(); await closeMore(page);
     await expect(frame.locator('#numPages')).toContainText('3', { timeout: 30000 });
     await expect(pageStamp(2)).toBeVisible({ timeout: 30000 });
     await show(3);

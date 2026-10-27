@@ -1241,7 +1241,12 @@ export default function DocumentPrintPage() {
         onNUp={setNUp}
       />
 
-      <div className="flex-1 min-h-0" data-doc-print-pdf="1" data-doc-print-sheet={openSheet} data-doc-print-ready={sheetReady}>
+      <div
+        className="flex-1 min-h-0 pb-[calc(60px+env(safe-area-inset-bottom))] md:pb-0"
+        data-doc-print-pdf="1"
+        data-doc-print-sheet={openSheet}
+        data-doc-print-ready={sheetReady}
+      >
         {viewerUrl ? (
           <MozillaPdfEmbed
             key={viewerUrl}
