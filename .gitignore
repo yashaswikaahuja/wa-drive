@@ -1,6 +1,10 @@
 node_modules/
 dist/
+dist-e2e/
 build/
+.playwright-mcp/
+test-results/
+apps/frontend/.tmp-*
 # Keep Mozilla PDF.js engine (public/pdfjs/build) Ã¢â‚¬â€ required for in-app viewer
 !apps/frontend/public/pdfjs/build/
 !apps/frontend/public/pdfjs/build/**

@@ -24,7 +24,6 @@ Deployment artifacts, organized by type.
       docker-compose.scale.yml    multi-instance pool: redis + 2 backends + 2 ext-svc + nginx LB
     loadbalancer/      nginx.conf + lb_proxy_params — the LB ("parent") tier in front of the pool
     tailscale/         tailscale-acl.json   tailnet ACL (tag:cybercontrol)
-    k8s-experimental/  parked Kubernetes manifests (not deployed)
 ```
 
 Start with [`docs/GHCR.md`](docs/GHCR.md) for the architecture, then [`docs/CD.md`](docs/CD.md) for how deploys work.

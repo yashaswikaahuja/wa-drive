@@ -31,8 +31,6 @@ const PdfSplit = lazy(() => import('./features/media-tools/PdfSplit'));
 const PdfCompress = lazy(() => import('./features/media-tools/PdfCompress'));
 const PdfResize = lazy(() => import('./features/media-tools/PdfResize'));
 const AadhaarLayout = lazy(() => import('./features/media-tools/AadhaarLayout'));
-const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
-const PlaygroundCounter = lazy(() => import('./features/playground/pages/Counter'));
 const SharedProfile = lazy(() => import('./features/customers/SharedProfile'));
 const Settings = lazy(() => import('./features/settings/Settings'));
 const Operators = lazy(() => import('./features/admin/Operators'));
@@ -99,18 +97,15 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Public preview route — design playground and shared profiles accessible without login
-  const isPlayground = typeof window !== 'undefined' && window.location.pathname.startsWith('/design-playground');
+  // Shared customer profiles are accessible without login.
   const isSharedProfile = typeof window !== 'undefined' && window.location.pathname.startsWith('/shared/');
   if (!authReady) return <PageLoader />;
-  if (!authed && !isPlayground && !isSharedProfile) return <Login />;
+  if (!authed && !isSharedProfile) return <Login />;
 
   return (
     <BrowserRouter>
       <Toasts />
       <Routes>
-        <Route path="/design-playground" element={<Suspense fallback={<PageLoader />}><PlaygroundIndex /></Suspense>} />
-        <Route path="/design-playground/counter" element={<Suspense fallback={<PageLoader />}><PlaygroundCounter /></Suspense>} />
         <Route path="/shared/:token" element={<Suspense fallback={<PageLoader />}><SharedProfile /></Suspense>} />
         <Route element={<Layout />}>
           <Route path="/app" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
