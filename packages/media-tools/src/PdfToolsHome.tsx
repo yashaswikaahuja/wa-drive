@@ -6,8 +6,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Stack, ArrowsOutCardinal, Scissors, ArrowsInLineHorizontal, Resize, ArrowLeft,
 } from '@phosphor-icons/react';
-import PageHeader from '../../shared/PageHeader';
-import { useReveal } from '../../shared/useReveal';
+import { PageHeader, useReveal } from './hub';
 
 const TOOLS = [
   { to: 'organize', title: 'Organize', hindi: 'क्रम', desc: 'Reorder, rotate and delete pages', icon: ArrowsOutCardinal, accent: 'hsl(var(--marigold))' },

@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   // Workspace package ships TSX source — transpile it, do not prebundle as opaque CJS.
   optimizeDeps: {
-    exclude: ['@cybercontrol/media-viewer'],
+    exclude: ['@cybercontrol/media-viewer', '@cybercontrol/media-tools'],
   },
   build: {
     rollupOptions: {

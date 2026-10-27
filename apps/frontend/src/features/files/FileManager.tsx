@@ -18,7 +18,7 @@ import {
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
-import { isCardType as isCardTag } from '../media-tools/documentPrintLayout';
+import { isCardType as isCardTag } from '@cybercontrol/media-tools';
 import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
 import { useReveal } from '../../shared/useReveal';
 import { useAuthStore } from '../auth/store';

@@ -7,7 +7,7 @@
  *       in the WhatsApp received-media view (which filters source='whatsapp').
  *       Provenance about the tool + source file is recorded in sourceMetadata.
  */
-import api from '../../shared/api';
+import { api } from './hub';
 import { bytesToPdfBlob } from './pdfToolkit';
 
 export type PdfSource = {

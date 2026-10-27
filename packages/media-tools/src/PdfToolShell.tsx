@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, DownloadSimple, FloppyDisk, FilePdf, UploadSimple } from '@phosphor-icons/react';
-import { toast } from '../../shared/toast';
+import { toast } from './hub';
 import { downloadBlob } from './imageOps';
 import { bytesToPdfBlob } from './pdfToolkit';
 import { loadPdfSource, saveBytesToDrive, type SaveMeta } from './pdfDriveIo';

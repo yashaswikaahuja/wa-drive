@@ -6,9 +6,7 @@ import { DownloadSimple, Printer, UploadSimple } from '@phosphor-icons/react';
 import { jsPDF } from 'jspdf';
 import { mm, PAPER_A4_P } from './sheetGeometry';
 import { downloadBlob, loadImageFromFile } from './imageOps';
-import { printBlob } from '../../shared/fileCache';
-import api from '../../shared/api';
-import { toast } from '../../shared/toast';
+import { api, printBlob, toast } from './hub';
 
 async function layoutAadhaar(front: HTMLImageElement, back: HTMLImageElement): Promise<Blob> {
   const paper = PAPER_A4_P;

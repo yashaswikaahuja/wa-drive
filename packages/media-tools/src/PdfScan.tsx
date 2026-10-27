@@ -9,8 +9,7 @@ import {
   ArrowDown, ArrowUp, Camera, DownloadSimple, FloppyDisk,
   Plus, Trash, UploadSimple, FilePdf, IdentificationCard, FolderOpen,
 } from '@phosphor-icons/react';
-import api from '../../shared/api';
-import { toast } from '../../shared/toast';
+import { api, toast } from './hub';
 import { downloadBlob, loadImageFromFile } from './imageOps';
 
 type Enhance = 'original' | 'clean' | 'contrast';

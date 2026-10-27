@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import PdfToolShell, { type ToolResult } from './PdfToolShell';
 import { extractPages, pageCountOf, parsePageRanges } from './pdfToolkit';
-import { toast } from '../../shared/toast';
+import { toast } from './hub';
 
 function Body({ source, setResult, setBusy }: {
   source: { fileName: string; fileId?: string; bytes: Uint8Array };

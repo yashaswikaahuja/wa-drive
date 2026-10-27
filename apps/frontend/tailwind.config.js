@@ -5,6 +5,7 @@ export default {
     './src/**/*.{ts,tsx}',
     // Photos-style MediaViewer lives in the shared package
     '../../packages/media-viewer/src/**/*.{ts,tsx}',
+    '../../packages/media-tools/src/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {

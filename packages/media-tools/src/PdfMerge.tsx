@@ -9,7 +9,7 @@ import PdfToolShell, { type ToolResult } from './PdfToolShell';
 import {
   PAPERS, imagesToPdf, mergePdfs, reorderIndices,
 } from './pdfToolkit';
-import { toast } from '../../shared/toast';
+import { toast } from './hub';
 
 type Part = { id: string; name: string; kind: 'pdf' | 'image'; bytes: Uint8Array; type: string };
 

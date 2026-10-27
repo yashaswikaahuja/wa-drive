@@ -31,10 +31,10 @@ import {
   TextT,
   X,
 } from '@phosphor-icons/react';
-import type { PdfEditorMode } from '../files/MozillaPdfEmbed';
+import type { PdfEditorMode } from '@cybercontrol/media-viewer';
 import type { DocPaperId } from './documentPrintLayout';
 import { DOC_SCAN_FILTERS, type DocScanFilter } from './docScanFilters';
-import { useIsNarrow } from '../../shared/useIsNarrow';
+import { useIsNarrow } from './hub';
 
 export type PrintTool = PdfEditorMode | 'whiteout';
 

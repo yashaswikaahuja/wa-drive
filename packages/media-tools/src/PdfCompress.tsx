@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import PdfToolShell, { type ToolResult } from './PdfToolShell';
 import { compressPdf, formatBytes } from './pdfToolkit';
-import { toast } from '../../shared/toast';
+import { toast } from './hub';
 
 type Level = 'high' | 'balanced' | 'small';
 const LEVELS: Record<Level, { label: string; hint: string; dpi: number; quality: number }> = {

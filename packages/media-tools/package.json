@@ -1,0 +1,55 @@
+{
+  "name": "@cybercontrol/media-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Photos desk: Photo Editor, Print Doc, PDF Tools, scan, and Aadhaar layout",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./hub": "./src/hub.tsx",
+    "./MediaDeskHome": "./src/MediaDeskHome.tsx",
+    "./PassportEditor": "./src/PassportEditor.tsx",
+    "./PrintSheet": "./src/PrintSheet.tsx",
+    "./DocumentPrintPage": "./src/DocumentPrintPage.tsx",
+    "./PdfScan": "./src/PdfScan.tsx",
+    "./PdfToolsHome": "./src/PdfToolsHome.tsx",
+    "./PdfOrganize": "./src/PdfOrganize.tsx",
+    "./PdfMerge": "./src/PdfMerge.tsx",
+    "./PdfSplit": "./src/PdfSplit.tsx",
+    "./PdfCompress": "./src/PdfCompress.tsx",
+    "./PdfResize": "./src/PdfResize.tsx",
+    "./AadhaarLayout": "./src/AadhaarLayout.tsx"
+  },
+  "scripts": {
+    "build": "echo no-op",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"console.log('[media-tools] no package tests yet')\""
+  },
+  "dependencies": {
+    "@cybercontrol/media-viewer": "workspace:*",
+    "@imgly/background-removal": "^1.7.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "axios": "^1.6.2",
+    "jspdf": "^4.2.1",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "^6.3.289"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.30.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.30.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

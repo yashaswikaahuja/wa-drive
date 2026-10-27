@@ -2,7 +2,7 @@
  * Background removal — try server remove.bg first, then client fallback.
  * Medicine for “BG button does nothing / fake white ✓”.
  */
-import api from '../../shared/api';
+import { api } from './hub';
 import { canvasToBlob, loadImageFromFile } from './imageOps';
 
 export type RemoveBgResult = {

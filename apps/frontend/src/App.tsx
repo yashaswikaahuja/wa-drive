@@ -5,8 +5,26 @@ import { extensionBridge } from './shared/extensionBridge';
 import Toasts from './shared/Toasts';
 import { API_URL } from './shared/api';
 import api from './shared/api';
+import { toast } from './shared/toast';
+import { getCachedBlob, printBlob } from './shared/fileCache';
+import PageHeader from './shared/PageHeader';
+import { useReveal } from './shared/useReveal';
+import { useIsNarrow } from './shared/useIsNarrow';
+import DrivePicker from './features/photo-tool/DrivePicker';
+import { configureMediaTools } from '@cybercontrol/media-tools/hub';
 import Login from './features/auth/Login';
 import Layout from './shared/Layout';
+
+configureMediaTools({
+  api,
+  toast,
+  printBlob,
+  getCachedBlob,
+  PageHeader,
+  useReveal,
+  useIsNarrow,
+  DrivePicker,
+});
 
 // Lazy-loaded routes — each becomes a separate chunk
 const Dashboard = lazy(() => import('./features/dashboard/Dashboard'));
@@ -19,18 +37,18 @@ const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
 const FormDirectory = lazy(() => import('./features/forms/FormDirectory'));
 const FileManager = lazy(() => import('./features/files/FileManager'));
 const PhotosHub = lazy(() => import('./features/photos/PhotosHub'));
-const MediaDeskHome = lazy(() => import('./features/media-tools/MediaDeskHome'));
-const PassportEditor = lazy(() => import('./features/media-tools/PassportEditor'));
-const PrintSheet = lazy(() => import('./features/media-tools/PrintSheet'));
-const DocumentPrintPage = lazy(() => import('./features/media-tools/DocumentPrintPage'));
-const PdfScan = lazy(() => import('./features/media-tools/PdfScan'));
-const PdfToolsHome = lazy(() => import('./features/media-tools/PdfToolsHome'));
-const PdfOrganize = lazy(() => import('./features/media-tools/PdfOrganize'));
-const PdfMerge = lazy(() => import('./features/media-tools/PdfMerge'));
-const PdfSplit = lazy(() => import('./features/media-tools/PdfSplit'));
-const PdfCompress = lazy(() => import('./features/media-tools/PdfCompress'));
-const PdfResize = lazy(() => import('./features/media-tools/PdfResize'));
-const AadhaarLayout = lazy(() => import('./features/media-tools/AadhaarLayout'));
+const MediaDeskHome = lazy(() => import('@cybercontrol/media-tools/MediaDeskHome'));
+const PassportEditor = lazy(() => import('@cybercontrol/media-tools/PassportEditor'));
+const PrintSheet = lazy(() => import('@cybercontrol/media-tools/PrintSheet'));
+const DocumentPrintPage = lazy(() => import('@cybercontrol/media-tools/DocumentPrintPage'));
+const PdfScan = lazy(() => import('@cybercontrol/media-tools/PdfScan'));
+const PdfToolsHome = lazy(() => import('@cybercontrol/media-tools/PdfToolsHome'));
+const PdfOrganize = lazy(() => import('@cybercontrol/media-tools/PdfOrganize'));
+const PdfMerge = lazy(() => import('@cybercontrol/media-tools/PdfMerge'));
+const PdfSplit = lazy(() => import('@cybercontrol/media-tools/PdfSplit'));
+const PdfCompress = lazy(() => import('@cybercontrol/media-tools/PdfCompress'));
+const PdfResize = lazy(() => import('@cybercontrol/media-tools/PdfResize'));
+const AadhaarLayout = lazy(() => import('@cybercontrol/media-tools/AadhaarLayout'));
 const SharedProfile = lazy(() => import('./features/customers/SharedProfile'));
 const Settings = lazy(() => import('./features/settings/Settings'));
 const Operators = lazy(() => import('./features/admin/Operators'));

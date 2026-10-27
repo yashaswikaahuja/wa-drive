@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
-import { isCardType as isCardTag } from '../media-tools/documentPrintLayout';
+import { isCardType as isCardTag } from '@cybercontrol/media-tools';
 import { DocTypePickerModal } from '../../shared/DocTypePicker';
 import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 import { toast } from '../../shared/toast';

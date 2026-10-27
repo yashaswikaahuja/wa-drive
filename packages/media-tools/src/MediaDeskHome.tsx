@@ -3,8 +3,7 @@
  */
 import { Link, useSearchParams } from 'react-router-dom';
 import { Images, FilePdf, Stack } from '@phosphor-icons/react';
-import PageHeader from '../../shared/PageHeader';
-import { useReveal } from '../../shared/useReveal';
+import { PageHeader, useReveal } from './hub';
 
 const JOBS = [
   {

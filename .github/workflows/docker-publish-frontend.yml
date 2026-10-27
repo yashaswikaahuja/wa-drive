@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/frontend/**'
       - 'packages/media-viewer/**'
+      - 'packages/media-tools/**'
       - '.github/workflows/docker-publish-frontend.yml'
   workflow_dispatch:
 

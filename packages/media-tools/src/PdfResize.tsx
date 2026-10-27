@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import PdfToolShell, { type ToolResult } from './PdfToolShell';
 import { PAPERS, resizeToPaper, type PaperId } from './pdfToolkit';
-import { toast } from '../../shared/toast';
+import { toast } from './hub';
 
 const CHOICES: PaperId[] = ['a4', 'a4-landscape', '4x6', '4x6-portrait', 'letter'];
 

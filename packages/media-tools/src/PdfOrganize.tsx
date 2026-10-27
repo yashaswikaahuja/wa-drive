@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, ArrowClockwise, Trash } from '@phosphor-icons/react';
 import PdfToolShell, { type ToolResult } from './PdfToolShell';
 import { extractPages, renderThumbnails, reorderIndices, rotatePages, type Thumb } from './pdfToolkit';
-import { toast } from '../../shared/toast';
+import { toast } from './hub';
 
 type Item = { srcIndex: number; rotate: number; thumb: Thumb };
 
