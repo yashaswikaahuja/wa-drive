@@ -271,6 +271,12 @@ jobs:
           pnpm --filter @cc/mapper run build:node
           pnpm --filter cybercontrol-extension-service run build:tsc
 
+      - name: Build extension-legacy-best JS emit for unit suites
+        run: |
+          # New unit suites (APE, HIM, navigation-contract, etc.) require the
+          # emitted .js files from extension-legacy-best/.ts sources.
+          node --experimental-strip-types extension-legacy-best/scripts/build-entries.ts
+
       - name: "CHECK-005: Unit and knowledge tests"
         run: node --experimental-strip-types extension-dev/tests/ci-unit.ts
 
@@ -283,9 +289,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: pnpm
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
 
       - name: "CHECK-011: Extension & browser boundary security"
         run: node --experimental-strip-types extension-dev/tests/security/run.ts
