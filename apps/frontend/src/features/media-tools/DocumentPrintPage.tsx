@@ -1179,7 +1179,7 @@ export default function DocumentPrintPage() {
   const backTo = from || '/app/whatsapp';
   const subtitle = useMemo(() => {
     const who = name || phone;
-    return who ? `For ${who}` : 'WhatsApp / Drive document → paper';
+    return who ? `Print Doc · ${who}` : 'Print Doc';
   }, [name, phone]);
   const paperSizeLabel = `${paper.label} · ${paper.wMm.toFixed(0)}×${paper.hMm.toFixed(0)} mm`;
 

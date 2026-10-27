@@ -569,7 +569,7 @@ export default function FileManager() {
           } catch { /* fall back to the single card */ }
         }
         closePreview();
-        navigate(`/app/photos/doc-print?${q}`);
+        navigate(`/app/photos/printdoc?${q}`);
       })();
       return;
     }
@@ -1818,10 +1818,11 @@ export default function FileManager() {
                 if (ctx.file.customerId) q.set('phone', ctx.file.customerId);
                 if (ctx.file.customerName) q.set('name', ctx.file.customerName);
                 q.set('from', '/app/files');
-                navigate(`/app/photos/scan?${q}`);
+                q.set('paper', 'a4');
+                navigate(`/app/photos/printdoc?${q}`);
               }}
             >
-              <FilePdf size={13} /> Open in PDF Tool
+              <FilePdf size={13} /> Open in Print Doc
             </button>
           )}
           <div className="my-1" style={{ borderTop: '1px solid hsl(var(--pt-border))' }} />

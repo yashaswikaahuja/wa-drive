@@ -16,10 +16,10 @@ const JOBS = [
     accent: 'hsl(var(--marigold))',
   },
   {
-    to: 'scan',
-    title: 'PDF Tool',
-    hindi: 'PDF',
-    desc: 'Scan pages, enhance, Aadhaar layout, multi-page PDF — Save to Drive',
+    to: 'printdoc',
+    title: 'Print Doc',
+    hindi: 'प्रिंट',
+    desc: 'Place a photo or PDF on A4 or 4×6, mark it up, and print',
     icon: FilePdf,
     accent: 'hsl(var(--confidence))',
   },
@@ -36,7 +36,7 @@ export default function MediaDeskHome() {
       <div style={reveal(0)}>
         <PageHeader
           title="Photos"
-          subtitle="Photo Editor and PDF Tool — files stay in File Manager / Drive."
+          subtitle="Photo Editor and Print Doc — files stay in File Manager / Drive."
         />
       </div>
 

@@ -340,13 +340,13 @@ router.get('/card-siblings/:phone/:fileId', authMiddleware, async (req: any, res
 });
 
 // POST /api/customers/upload — operator uploads / Photo·PDF Save for a customer
-// body.source: photo-editor | pdf-editor | manual-upload | generated (default manual-upload)
+// body.source: photo-editor | printdoc | pdf-editor | manual-upload | generated (default manual-upload)
 router.post('/upload', authMiddleware, upload.single('file') as any, async (req: any, res) => {
   const { phone, personName } = req.body;
   if (!phone) return res.status(400).json({ error: 'phone required' });
   if (!req.file) return res.status(400).json({ error: 'No file attached' });
 
-  const ALLOWED = new Set(['photo-editor', 'pdf-editor', 'manual-upload', 'generated']);
+  const ALLOWED = new Set(['photo-editor', 'printdoc', 'pdf-editor', 'manual-upload', 'generated']);
   const source = ALLOWED.has(String(req.body.source || '')) ? String(req.body.source) : 'manual-upload';
   let sourceMetadata: any = null;
   if (req.body.sourceMetadata) {

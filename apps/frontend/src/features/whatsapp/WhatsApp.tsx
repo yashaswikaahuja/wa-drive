@@ -43,7 +43,7 @@ function docPrintPath(driveId: string, msg?: { phone?: string; name?: string; fi
   q.set('from', DOCS_RETURN);
   q.set('paper', 'a4');
   if (msg?.tag) q.set('docType', msg.tag);
-  return `/app/photos/doc-print?${q}`;
+  return `/app/photos/printdoc?${q}`;
 }
 
 /**

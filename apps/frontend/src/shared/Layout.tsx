@@ -6,7 +6,7 @@ import VerifyBanner from './VerifyBanner';
 import LocationBanner from './LocationBanner';
 
 /** Full-bleed panes — no Layout main padding (avoids white gap above toolbars). */
-const FULL_BLEED = new Set(['/app/files', '/app/whatsapp', '/app/photos/doc-print']);
+const FULL_BLEED = new Set(['/app/files', '/app/whatsapp', '/app/photos/doc-print', '/app/photos/printdoc']);
 import {
   Users, ChatCircle, Camera, Gear, FolderOpen,
   UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass,

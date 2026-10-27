@@ -449,5 +449,5 @@ export function documentPrintPath(opts: {
   if (opts.from) q.set('from', opts.from);
   if (opts.paper && opts.paper !== 'a4') q.set('paper', opts.paper);
   if (opts.docType) q.set('docType', String(opts.docType));
-  return `/app/photos/doc-print?${q.toString()}`;
+  return `/app/photos/printdoc?${q.toString()}`;
 }

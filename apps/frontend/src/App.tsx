@@ -116,12 +116,13 @@ export default function App() {
           <Route path="/app/whatsapp" element={<Suspense fallback={<PageLoader />}><WhatsApp /></Suspense>} />
           <Route path="/app/forms" element={<Suspense fallback={<PageLoader />}><FormDirectory /></Suspense>} />
           <Route path="/app/files" element={<Suspense fallback={<PageLoader />}><FileManager /></Suspense>} />
-          {/* Photos = Photo Editor + PDF Tool (#317) */}
+          {/* Photos = Photo Editor + Print Doc */}
           <Route path="/app/photos" element={<Suspense fallback={<PageLoader />}><PhotosHub /></Suspense>}>
             <Route index element={<Suspense fallback={<PageLoader />}><MediaDeskHome /></Suspense>} />
             <Route path="portal" element={<Suspense fallback={<PageLoader />}><PassportEditor /></Suspense>} />
             <Route path="editor" element={<RedirectWithSearch to="/app/photos/portal" />} />
             <Route path="print" element={<Suspense fallback={<PageLoader />}><PrintSheet /></Suspense>} />
+            <Route path="printdoc" element={<Suspense fallback={<PageLoader />}><DocumentPrintPage /></Suspense>} />
             <Route path="doc-print" element={<Suspense fallback={<PageLoader />}><DocumentPrintPage /></Suspense>} />
             <Route path="scan" element={<Suspense fallback={<PageLoader />}><PdfScan /></Suspense>} />
             <Route path="aadhaar" element={<Suspense fallback={<PageLoader />}><AadhaarLayout /></Suspense>} />

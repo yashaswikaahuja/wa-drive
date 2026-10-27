@@ -15,7 +15,7 @@ export default function PhotosHub() {
       ? fromRaw
       : '';
   const backTo = from || '/app/photos';
-  const isDocPrint = loc.pathname.includes('/doc-print');
+  const isDocPrint = loc.pathname.includes('/doc-print') || loc.pathname.includes('/printdoc');
   const backLabel = from.includes('whatsapp')
     ? 'Documents'
     : from.includes('/files')

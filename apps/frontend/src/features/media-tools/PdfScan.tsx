@@ -225,7 +225,7 @@ export default function PdfScan() {
       fd.append('file', blob, name);
       fd.append('phone', phone.trim());
       fd.append('personName', docName || '');
-      fd.append('source', 'pdf-editor');
+      fd.append('source', 'printdoc');
       await api.post('/customers/upload', fd);
       toast.success(`Saved ${name} on server`);
     } catch (e: any) {
