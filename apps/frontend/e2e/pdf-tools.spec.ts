@@ -6,7 +6,7 @@ import { PDFDocument, rgb } from 'pdf-lib';
  * Each tool: deep-link a source PDF from "Drive", run its op, intercept the
  * Download, and verify the resulting PDF's page count with pdf-lib. Also asserts
  * no horizontal overflow at desktop + phone widths, and that Save posts
- * source=pdf-editor (so output never shows in WhatsApp).
+ * source=printdoc (so output never shows in WhatsApp).
  */
 
 const AUTH = {
@@ -103,7 +103,7 @@ test.describe('PDF Tools (desktop)', () => {
     await noOverflow(page);
   });
 
-  test('Split: keep 1-3 → 3-page PDF; Save posts source=pdf-editor', async ({ page }) => {
+  test('Split: keep 1-3 → 3-page PDF; Save posts source=printdoc', async ({ page }) => {
     test.setTimeout(60_000);
     await openTool(page, 'split');
     await page.locator('[data-pdf-ranges="1"]').fill('1-3');
@@ -111,7 +111,7 @@ test.describe('PDF Tools (desktop)', () => {
     expect(await downloadPageCount(page)).toBe(3);
     // Save routes with the hidden-from-WhatsApp provenance.
     await page.locator('[data-pdf-save="1"]').click();
-    await expect.poll(() => lastUpload.source, { timeout: 10000 }).toBe('pdf-editor');
+    await expect.poll(() => lastUpload.source, { timeout: 10000 }).toBe('printdoc');
     await noOverflow(page);
   });
 

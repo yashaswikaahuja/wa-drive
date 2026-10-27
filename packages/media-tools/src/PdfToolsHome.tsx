@@ -1,6 +1,6 @@
 /**
  * PDF Tools hub — five client-side tools. Outputs save back to the same Drive
- * customer folder (tagged pdf-editor, hidden from WhatsApp) or download.
+ * customer folder (tagged printdoc, hidden from WhatsApp) or download.
  */
 import { Link, useSearchParams } from 'react-router-dom';
 import {

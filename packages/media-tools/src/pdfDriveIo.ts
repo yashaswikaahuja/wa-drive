@@ -3,7 +3,7 @@
  *
  * Load: fetch a source PDF's bytes by Drive fileId (deep-linked from File Manager / WA).
  * Save: upload the result back to the SAME customer folder it came from, tagged
- *       source='pdf-editor' so it is stored as operator output and never appears
+ *       source='printdoc' so it is stored as operator output and never appears
  *       in the WhatsApp received-media view (which filters source='whatsapp').
  *       Provenance about the tool + source file is recorded in sourceMetadata.
  */
@@ -72,7 +72,7 @@ export async function savePdfToDrive(
   fd.append('file', blob, name);
   fd.append('phone', phone.trim());
   fd.append('personName', personName || '');
-  fd.append('source', 'pdf-editor');
+  fd.append('source', 'printdoc');
   fd.append('sourceMetadata', JSON.stringify({ ...meta, at: new Date().toISOString() }));
   const res = await api.post('/customers/upload', fd);
   return res.data?.fileId;
