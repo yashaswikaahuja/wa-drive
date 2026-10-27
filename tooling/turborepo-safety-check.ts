@@ -96,7 +96,8 @@ console.log('\nApplications must live under apps/ (libraries under packages/)');
 
 /** Root dirs allowed to contain their own package.json (non-product). */
 const ALLOWED_ROOT_PACKAGE_DIRS = new Set([
-  'corpus', // fixture snapshots only — not a product app
+  'corpus',               // fixture snapshots only — not a product app
+  'extension-legacy-best', // read-only legacy snapshot — not a product app or library
 ]);
 
 /** Nested tooling trees that may contain package.json (test harnesses, etc.). */
@@ -265,7 +266,7 @@ for (const rel of [
   'shared-bundle.js',
   'drivers-bundle.js',
   'sw/bg-bundle.js',
-  'application/fill-orchestrator.js',
+  'application/fill-orchestrator.ts',
 ]) {
   ok(existsSync(join(ROOT, 'apps/extension', rel)), `apps/extension/${rel} exists`);
 }
