@@ -237,6 +237,13 @@ handlers.set('browser_task_result', (_session, message) => {
     tabId: message.tabId || null,
     url: message.url || null,
     error: message.error || null,
+    title: message.title || null,
+    snapshotId: message.snapshotId || null,
+    fields: Array.isArray(message.fields) ? message.fields : null,
+    records: Array.isArray(message.records) ? message.records : null,
+    filled: message.filled == null ? null : message.filled,
+    skipped: message.skipped == null ? null : message.skipped,
+    failed: message.failed == null ? null : message.failed,
   });
 });
 

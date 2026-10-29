@@ -66,9 +66,138 @@
     } catch (e) { /* socket gone */ }
   }
 
+  function kernelScripts() {
+    var manifests = root.CcScriptManifests;
+    if (manifests && manifests.SEQUENTIAL_KERNEL_SCRIPTS && manifests.SEQUENTIAL_KERNEL_SCRIPTS.length) {
+      return manifests.SEQUENTIAL_KERNEL_SCRIPTS.slice();
+    }
+    return [
+      'shared-bundle.js',
+      'autofill/plugins-bundle.js',
+      'drivers-bundle.js',
+      'autofill/extractor-bundle.js',
+      'autofill/mapper-bundle.js',
+      'autofill/executor-bundle.js',
+    ];
+  }
+
+  function readFormPage() {
+    if (typeof extractFormFieldsWithFingerprint !== 'function') return { ok: false, error: 'extractor_not_loaded' };
+    var extracted = extractFormFieldsWithFingerprint();
+    var formFields = (extracted && extracted.formFields) || [];
+    var visible = formFields.filter(function (f) { return f && f.visible === true; });
+    var snapshotId = (extracted && extracted.snapshotId) || '';
+    return {
+      ok: true,
+      url: location.href,
+      title: document.title,
+      snapshotId: snapshotId,
+      fields: visible.map(function (f) {
+        return {
+          selector: f.selector || '',
+          label: f.label || '',
+          visualLabel: f.visualLabel || f.label || '',
+          type: f.type || 'text',
+          options: f.options || null,
+          placeholder: f.placeholder || '',
+          fieldId: f.fieldId || '',
+        };
+      }),
+    };
+  }
+
+  async function fillFormPage(incoming) {
+    if (typeof fillFormFieldsSequential !== 'function') return { ok: false, error: 'executor_not_loaded' };
+    var mapping = {};
+    var fbs = {};
+    var list = Array.isArray(incoming) ? incoming : [];
+    var skip = /captcha|otp|password|cvv|card number|\bpin\b/i;
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i];
+      if (!f || !f.selector || f.value == null || String(f.value) === '') continue;
+      var label = f.visualLabel || f.label || '';
+      if (skip.test(label) || skip.test(f.selector)) continue;
+      if (/^(button|submit|reset|image|file)$/i.test(f.type || '')) continue;
+      mapping[f.selector] = { value: String(f.value), type: f.type || 'text', label: label, visualLabel: label };
+      fbs[f.selector] = { label: label, visualLabel: label, source: 'operator' };
+    }
+    await fillFormFieldsSequential(mapping, fbs, {}, list);
+    var records = [];
+    try {
+      var raw = document.body && document.body.getAttribute('data-cc-records');
+      if (raw) records = JSON.parse(raw);
+    } catch (e) { /* records stay empty */ }
+    if (!records.length && Array.isArray((window as any).__ccFillRecords)) records = (window as any).__ccFillRecords;
+    function count(name) {
+      return records.filter(function (r) { return r && r.result === name; }).length;
+    }
+    return {
+      ok: true,
+      url: location.href,
+      filled: count('filled'),
+      skipped: count('skipped') + count('waiting_human'),
+      failed: count('failed') + count('error'),
+      records: records.map(function (r) {
+        return {
+          selector: r.selector || '',
+          label: r.label || '',
+          result: r.result || '',
+          failReason: r.failReason || '',
+          plannedValue: r.plannedValue != null ? r.plannedValue : r.value,
+          actualValue: r.actualValue != null ? r.actualValue : (r.actual != null ? r.actual : ''),
+        };
+      }),
+    };
+  }
+
+  async function pickTaskTab(tabId) {
+    if (tabId) {
+      try {
+        var exact = await chrome.tabs.get(Number(tabId));
+        if (exact && exact.id) return exact;
+      } catch (e) { /* tab closed */ }
+    }
+    var irctc = await chrome.tabs.query({ url: '*://*.irctc.co.in/*' });
+    if (irctc && irctc.length) return irctc[irctc.length - 1];
+    var active = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return (active && active[0]) || null;
+  }
+
+  async function runPageTask(taskId, tabId, func, args) {
+    var tab = await pickTaskTab(tabId);
+    if (!tab || !tab.id) {
+      replyBrowserTask(taskId, { ok: false, error: 'no_tab' });
+      return;
+    }
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: kernelScripts() });
+      var results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: func,
+        args: args || [],
+      });
+      var page = results && results[0] && results[0].result;
+      replyBrowserTask(taskId, Object.assign({ ok: false, tabId: tab.id, url: tab.url || null }, page || { error: 'no_result' }));
+    } catch (e) {
+      replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: (e && e.message) || 'page_task_failed' });
+    }
+  }
+
   function runBrowserTask(msg) {
-    if (!msg || msg.task !== 'open_url') {
+    if (!msg || !msg.task) {
       replyBrowserTask(msg && msg.taskId, { ok: false, error: 'unknown task' });
+      return;
+    }
+    if (msg.task === 'read_form') {
+      runPageTask(msg.taskId, msg.tabId, readFormPage, []);
+      return;
+    }
+    if (msg.task === 'fill_form') {
+      runPageTask(msg.taskId, msg.tabId, fillFormPage, [Array.isArray(msg.fields) ? msg.fields : []]);
+      return;
+    }
+    if (msg.task !== 'open_url') {
+      replyBrowserTask(msg.taskId, { ok: false, error: 'unknown task' });
       return;
     }
     var url = msg.url;

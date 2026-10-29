@@ -76,7 +76,7 @@ message_types_service_to_extension:
   - profiles_list      # response to profiles_list request
   - server_shutdown
   - error
-  - browser_task       # service asks the extension to act in the browser (open_url)
+  - browser_task       # service asks the extension to act (open_url, read_form, fill_form)
 
 # Visual snapshot on the existing fill_request / fill_mapping pair.
 # No new message type. The page sends only controls that are on screen.
