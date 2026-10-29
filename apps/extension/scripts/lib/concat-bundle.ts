@@ -7,6 +7,16 @@ import path from 'node:path';
 import * as esbuild from 'esbuild';
 
 /**
+ * Drop `export { ... }` left by esbuild's type strip.
+ * Concat bundles run as classic scripts (importScripts, popup <script>).
+ * One top-level export makes the whole file fail to parse, so names such as
+ * CcWssSession never get installed. The sources already assign those globals.
+ */
+function stripClassicExports(code) {
+  return code.replace(/^[ \t]*export\s*\{[^}]*\}\s*;?[ \t]*\r?\n?/gm, '');
+}
+
+/**
  * @param {{
  *   banner: string,
  *   srcDir: string,
@@ -40,9 +50,10 @@ export async function writeConcatBundle({ banner, srcDir, order, outfile, idempo
       });
       code = transformed.code;
     }
+    const classic = stripClassicExports(code);
     parts.push(`\n/* ==== ${name} ==== */\n`);
-    parts.push(code);
-    if (!code.endsWith('\n')) parts.push('\n');
+    parts.push(classic);
+    if (!classic.endsWith('\n')) parts.push('\n');
   }
 
   if (idempotentKey) {
@@ -51,6 +62,11 @@ export async function writeConcatBundle({ banner, srcDir, order, outfile, idempo
 
   fs.mkdirSync(path.dirname(outfile), { recursive: true });
   const body = parts.join('');
+  if (/^[ \t]*export\s/m.test(body)) {
+    throw new Error(
+      `${outfile} still contains a top-level export. importScripts and popup scripts are classic scripts and reject the whole file.`,
+    );
+  }
   fs.writeFileSync(outfile, body);
   const lines = body.split(/\n/).length;
   console.log('Wrote', outfile, lines, 'lines');

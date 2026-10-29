@@ -52,6 +52,7 @@ function handleWssMessage(msg, sendResponse) {
           fields: msg.fields || [],
           profile: msg.profile || {},
           profileId: msg.profileId || null,
+          snapshotId: msg.snapshotId || null,
         }, 25000);
         if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'fill_request_error');
         sendResponse({ ok: true, plan: resp, transport: 'wss' });

@@ -56,6 +56,7 @@ message_types_extension_to_service:
   - fill_request       # Stage C sequential fill plan (fields+profile → mapping)
   - fill_session       # Stage C durable session evidence
   - profiles_list      # Stage C UI profiles over WSS
+  - browser_task_result # extension finished a browser_task
 
 message_types_service_to_extension:
   - connected
@@ -75,6 +76,26 @@ message_types_service_to_extension:
   - profiles_list      # response to profiles_list request
   - server_shutdown
   - error
+  - browser_task       # service asks the extension to act in the browser (open_url)
+
+# Visual snapshot on the existing fill_request / fill_mapping pair.
+# No new message type. The page sends only controls that are on screen.
+fill_plan:
+  fill_request:
+    snapshotId: "page id for this visual snapshot (snap.<time>)"
+    fields:
+      selector: "DOM handle (name/id). Not the binding."
+      fieldId: "snapshotId.index after visual sort. Scoped to this snapshot."
+      visualLabel: "label the operator could see. The plan is bound to this."
+      label: "same reading as visualLabel when the extractor stamped the snapshot"
+  fill_mapping:
+    rule: >
+      Each mapping entry echoes snapshotId, fieldId, and visualLabel from the
+      field it plans. The page skips the write when the live label no longer
+      matches (record result skipped, failReason label_drift). It may send one
+      follow-up fill_request for those drifted selectors and for controls that
+      are on screen now but were not in the first snapshot. A second drift on
+      the same field stays skipped.
 
 safety:
   duplicate_id:

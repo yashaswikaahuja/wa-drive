@@ -80,6 +80,20 @@
               }
             }
             if (el) {
+              const plannedVisual = fieldData.visualLabel || filledBySource?.[selector]?.visualLabel || '';
+              if (plannedVisual && root.CcLabelStillMatches && typeof root.CcLabelStillMatches.matches === 'function' && !root.CcLabelStillMatches.matches(el, plannedVisual)) {
+                const liveVisual = typeof root.CcLabelStillMatches.read === 'function' ? root.CcLabelStillMatches.read(el) : '';
+                _ccRecords.push(_buildFillRecord({
+                  selector, value, type,
+                  label: plannedVisual,
+                  actualValue: liveVisual,
+                  result: 'skipped',
+                  failReason: 'label_drift',
+                  strategy: 'label-guard',
+                }, { rv: RUNTIME_VERSION }));
+                _flushRecords();
+                continue;
+              }
               el.scrollIntoView({ behavior: 'smooth', block: 'center' });
               await new Promise(r => setTimeout(r, 300));
             }

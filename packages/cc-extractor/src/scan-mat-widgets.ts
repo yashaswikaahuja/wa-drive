@@ -37,6 +37,11 @@
    */
   function scan(doc: any, existingFields: any, helpers: any, startIdx: any) {
     var isInSkipContext = helpers.isInSkipContext;
+    function blocked(el: any) {
+      if (isInSkipContext(el)) return true;
+      if (typeof helpers.isVisuallyPresent === 'function' && !helpers.isVisuallyPresent(el)) return true;
+      return false;
+    }
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
     var idx = typeof startIdx === 'number' ? startIdx : 10000;
@@ -69,7 +74,7 @@
 
     // ── mat-select and mat-form-field select ──
     doc.querySelectorAll('mat-select,mat-form-field select').forEach(function (el: any) {
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       if (el.tagName === 'SELECT' && isAlreadyCaptured(el, existingFields)) return;
       var label = matFieldLabel(el);
       if (!isGoodLabel(label)) return;
@@ -87,7 +92,7 @@
 
     // ── mat-checkbox ──
     doc.querySelectorAll('mat-checkbox').forEach(function (el: any) {
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       var label = matFieldLabel(el) || el.textContent.trim().slice(0, 40);
       if (!isGoodLabel(label)) return;
       var id = el.id || ('mat-cb-' + idx);
@@ -103,7 +108,7 @@
     // Prefer the GROUP question (mat-radio-group / mat-label / legend) over the
     // option text ("Yes"/"Male") so sessions/mappings stay organised like older fills.
     doc.querySelectorAll('mat-radio-button').forEach(function (el: any) {
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       var optionText = el.textContent.trim().slice(0, 40);
       if (!isGoodLabel(optionText)) return;
       var group = el.closest('mat-radio-group');

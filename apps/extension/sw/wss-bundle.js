@@ -118,7 +118,6 @@ if (typeof module !== "undefined" && module.exports) {
 } else if (typeof globalThis !== "undefined") {
   globalThis.CcReconnectManager = ReconnectManager;
 }
-export { ReconnectManager, DEFAULTS };
 
 /* ==== ws-client.ts ==== */
 const STATE = {
@@ -434,7 +433,6 @@ if (typeof module !== "undefined" && module.exports) {
   globalThis.CcWsClient = WsClient;
   globalThis.CcWsClientSTATE = STATE;
 }
-export { WsClient, STATE };
 
 /* ==== wss-session.ts ==== */
 (function(root) {
@@ -483,6 +481,38 @@ export { WsClient, STATE };
       console.warn("[CC][wss] publishState failed:", e.message);
     }
     return payload;
+  }
+  function replyBrowserTask(taskId, result) {
+    try {
+      if (_client && _client.state === "connected") {
+        _client.send("browser_task_result", Object.assign({ taskId }, result));
+      }
+    } catch (e) {
+    }
+  }
+  function runBrowserTask(msg) {
+    if (!msg || msg.task !== "open_url") {
+      replyBrowserTask(msg && msg.taskId, { ok: false, error: "unknown task" });
+      return;
+    }
+    var url = msg.url;
+    try {
+      var parsed = new URL(url);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        replyBrowserTask(msg.taskId, { ok: false, error: "url must be http or https" });
+        return;
+      }
+    } catch (e) {
+      replyBrowserTask(msg.taskId, { ok: false, error: "bad url" });
+      return;
+    }
+    chrome.tabs.create({ url, active: true }, function(tab) {
+      if (chrome.runtime.lastError || !tab) {
+        replyBrowserTask(msg.taskId, { ok: false, error: chrome.runtime.lastError && chrome.runtime.lastError.message || "failed to open tab" });
+        return;
+      }
+      replyBrowserTask(msg.taskId, { ok: true, tabId: tab.id, url: tab.pendingUrl || tab.url || url });
+    });
   }
   function ensureClient(wsUrl, token) {
     const WsClient = root.CcWsClient;
@@ -548,6 +578,10 @@ export { WsClient, STATE };
         });
       },
       onMessage: (msg) => {
+        if (msg && msg.type === "browser_task") {
+          runBrowserTask(msg);
+          return;
+        }
         if (msg && msg.type === "error") {
           publishState({
             state: _client ? _client.state : "suspended",

@@ -63,6 +63,11 @@
    */
   function scan(doc: any, existingFields: any, helpers: any, startIdx: any) {
     var isInSkipContext = helpers.isInSkipContext;
+    function blocked(el: any) {
+      if (isInSkipContext(el)) return true;
+      if (typeof helpers.isVisuallyPresent === 'function' && !helpers.isVisuallyPresent(el)) return true;
+      return false;
+    }
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
     var idx = typeof startIdx === 'number' ? startIdx : 10000;
@@ -74,7 +79,7 @@
     doc.querySelectorAll('[role="combobox"],[role="listbox"]').forEach(function (el: any) {
       // INPUT/SELECT comboboxes are handled by the standard scanner (incl. type=search #311)
       if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       var meta = ((el.id || '') + ' ' + (el.className || '')).toLowerCase();
       var label = getLabel(el) || el.getAttribute('aria-label') || '';
       // Soft-skip site search chrome; keep journey From/To comboboxes (#311)
@@ -110,7 +115,7 @@
     });
 
     ngCandidates.forEach(function (el: any) {
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       if (isAlreadyCaptured(el, existingFields.concat(formFields))) return;
       var label = resolveLabel(el, getLabel);
       if (!isGoodLabel(label)) return;

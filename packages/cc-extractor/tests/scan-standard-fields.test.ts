@@ -58,6 +58,17 @@ for (const kw of ['search', 'captcha', 'otp', 'csrf', 'recaptcha']) {
   assert(`id="${kw}" skipped`, formFields.length, 0);
 }
 
+// ── Not on screen ──────────────────────────────────────────────────────────────
+console.log('\nNot on screen');
+{
+  const hidden = makeInput({ name: 'aadhaar', _label: 'Aadhaar' });
+  const helpersHidden = Object.assign({}, helpers, {
+    isVisuallyPresent: () => false,
+  });
+  const { formFields } = scan(makeDoc([hidden]), helpersHidden);
+  assert('hidden aadhaar input is not captured', formFields.length, 0);
+}
+
 // ── Text input ────────────────────────────────────────────────────────────────
 console.log('\nText input');
 { const { formFields, labelList } = scan(makeDoc([makeInput({ id: 'fname', _label: 'First Name' })]), helpers);
@@ -70,6 +81,23 @@ console.log('\nText input');
 // ── No id, has name ───────────────────────────────────────────────────────────
 { const { formFields } = scan(makeDoc([makeInput({ name: 'city', _label: 'City' })]), helpers);
   assert('name-only selector=[name=city]', formFields[0].selector, '[name="city"]'); }
+
+// ── Positional selector uses the document index ───────────────────────────────
+console.log('\nPositional selector');
+{
+  const header = makeInput({ _skip: true, _label: 'From station' });
+  const name = makeInput({ _label: 'Full Name as per Govt. ID' });
+  const age = makeInput({ _label: 'Age' });
+  const gender = Object.assign(makeInput({ tagName: 'SELECT', type: '', _label: 'Passenger Gender' }), {
+    querySelectorAll: () => [{ textContent: 'FEMALE' }],
+  });
+  const { formFields } = scan(makeDoc([header, name, age, gender]), helpers);
+  const byLabel = {};
+  formFields.forEach((f) => { byLabel[f.label] = f.selector; });
+  assert('skipped header is not field 0', byLabel['From station'], undefined);
+  assert('name keeps document index 1', byLabel['Full Name as per Govt. ID'], 'form-field-1');
+  assert('gender keeps document index 3', byLabel['Passenger Gender'], 'form-field-3');
+}
 
 // ── Select ────────────────────────────────────────────────────────────────────
 console.log('\nSelect');

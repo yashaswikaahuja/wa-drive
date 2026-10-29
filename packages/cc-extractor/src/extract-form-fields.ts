@@ -32,6 +32,9 @@ function extractFormFieldsWithFingerprint() {
       return _fc.isGoodLabel ? _fc.isGoodLabel(s, ccDomUtils) :
         !!(s && s.trim().length >= 2 && /[a-zA-Z0-9]/.test(s));
     },
+    isVisuallyPresent: function (el) {
+      return _fc.isVisuallyPresent ? _fc.isVisuallyPresent(el) : true;
+    },
   };
 
   // Guard — bail early if no form context
@@ -64,6 +67,14 @@ function extractFormFieldsWithFingerprint() {
   // Sort by visual position (_el refs still present here)
   if (_sfv.sort) _sfv.sort(formFields);
 
+  var snapshotId = 'snap.' + Date.now().toString(36);
+  formFields.forEach(function (f: any, i: number) {
+    f.visible = true;
+    f.visualLabel = f.label || '';
+    f.fieldId = snapshotId + '.' + i;
+    f.snapshotId = snapshotId;
+  });
+
   // Fingerprint + strip _el
   var hostname = location.hostname;
   var title = (document.querySelector('h1,h2,legend,.form-title,.page-title')
@@ -84,6 +95,7 @@ function extractFormFieldsWithFingerprint() {
     formKey: result.formKey,
     semanticFormKey: result.semanticFormKey,
     pageModel: result.pageModel,
+    snapshotId: snapshotId,
   };
 }
 

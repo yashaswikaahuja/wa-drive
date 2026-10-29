@@ -62,11 +62,18 @@
         var extracted = extractFormFieldsWithFingerprint();
         var formFields = extracted.formFields, formKey = extracted.formKey, semanticFormKey = extracted.semanticFormKey;
         if (!formFields.length) return { ok: false, error: 'no fields detected' };
-        var visible = formFields.filter(function (f: any) { return f.visible !== false && f.hidden !== true; });
-        var fields = (visible.length ? visible : formFields).map(function (f: any) {
-          return { selector: f.selector, id: f.id || '', name: f.name || '', label: f.label || '', type: f.type || 'text', options: f.options || null, optionSelectors: f.optionSelectors || null, placeholder: f.placeholder || '' };
+        var visible = formFields.filter(function (f: any) { return f && f.visible === true; });
+        if (!visible.length) return { ok: false, error: 'no fields detected' };
+        var snapshotId = extracted.snapshotId || (visible[0] && visible[0].snapshotId) || '';
+        var fields = visible.map(function (f: any) {
+          return {
+            selector: f.selector, id: f.id || '', name: f.name || '', label: f.label || '',
+            visualLabel: f.visualLabel || f.label || '', fieldId: f.fieldId || '',
+            snapshotId: f.snapshotId || snapshotId, type: f.type || 'text',
+            options: f.options || null, optionSelectors: f.optionSelectors || null, placeholder: f.placeholder || '',
+          };
         });
-        return { ok: true, fields: fields, profile: prof, formKey: formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href };
+        return { ok: true, fields: fields, profile: prof, formKey: formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href, snapshotId: snapshotId };
       },
     });
 
@@ -75,15 +82,20 @@
       return { ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', (extracted && extracted.error) || 'Extract failed'), error: (extracted && extracted.error) || 'extract_failed' };
     }
 
-    // ── Stage 2: WSS Plan (HTTPS fallback) ────────────────────────────────────
-    progress('Planning over WSS...', 50);
-    var transport = 'wss';
-    var wssPlan = null;
-    try {
-      var planResp = await new Promise(function (resolve: (v?: any) => void) {
+    function requestWssPlan(fields, snapshotId) {
+      return new Promise(function (resolve: (v?: any) => void) {
         var timer = setTimeout(function () { resolve({ ok: false, error: 'wss_plan_timeout' }); }, 30000);
         chrome.runtime.sendMessage(
-          { type: 'WSS_FILL_REQUEST', formKey: extracted.semanticFormKey || extracted.formKey, semanticFormKey: extracted.semanticFormKey || extracted.formKey, hostname: extracted.hostname, fields: extracted.fields, profile: extracted.profile, profileId: (profile && profile.id) || null },
+          {
+            type: 'WSS_FILL_REQUEST',
+            formKey: extracted.semanticFormKey || extracted.formKey,
+            semanticFormKey: extracted.semanticFormKey || extracted.formKey,
+            hostname: extracted.hostname,
+            fields: fields,
+            profile: extracted.profile,
+            profileId: (profile && profile.id) || null,
+            snapshotId: snapshotId || extracted.snapshotId || '',
+          },
           function (resp) {
             clearTimeout(timer);
             if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
@@ -91,6 +103,14 @@
           }
         );
       });
+    }
+
+    // ── Stage 2: WSS Plan (HTTPS fallback) ────────────────────────────────────
+    progress('Planning over WSS...', 50);
+    var transport = 'wss';
+    var wssPlan = null;
+    try {
+      var planResp = await requestWssPlan(extracted.fields, extracted.snapshotId);
       if (planResp && planResp.ok && planResp.plan) {
         wssPlan = planResp.plan; transport = 'wss';
       } else {
@@ -281,11 +301,16 @@
               value: pval,
               type: fieldMeta.type || 'text',
               label: fieldMeta.label || '',
+              visualLabel: fieldMeta.visualLabel || fieldMeta.label || '',
+              fieldId: fieldMeta.fieldId || '',
+              snapshotId: fieldMeta.snapshotId || extracted.snapshotId || '',
               profileKey: aiKey,
               relation: aiRelation,
             };
             wssPlan.filledBySource[am.selector] = {
               label: fieldMeta.label || '',
+              visualLabel: fieldMeta.visualLabel || fieldMeta.label || '',
+              fieldId: fieldMeta.fieldId || '',
               profileKey: aiKey,
               relation: aiRelation,
               source: 'server-ai',
@@ -301,47 +326,157 @@
       console.warn('[CC] semantic-map skipped:', aiErr && aiErr.message ? aiErr.message : aiErr);
     }
 
+    // Runs in the page. replanOnly skips fuzzyMatch so a second pass writes only the new plan.
+    async function executeFill(prof, fields, wssMapping, wssFbs, adapters, profileId, fillTransport, replanOnly) {
+      if (typeof fillFormFieldsSequential !== 'function') return { ok: false, error: 'sequential_kernel_not_loaded' };
+      try { window._ccProfileId = profileId; } catch (e) {}
+      var mapping = Object.assign({}, wssMapping || {});
+      var fbs = Object.assign({}, wssFbs || {});
+      function choiceCovered(f: any) {
+        if (mapping[f.selector]) return true;
+        if (f.optionSelectors) { for (var i = 0; i < f.optionSelectors.length; i++) { if (mapping[f.optionSelectors[i]]) return true; } }
+        return false;
+      }
+      // #302: taught relations are materialized on the SW before executeScript.
+      // Residual unmapped fields fall through to fuzzyMatch / skip — never raw-dump saved keys here.
+      var unmapped = replanOnly ? [] : fields.filter(function (f: any) { return !choiceCovered(f); });
+      if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
+        var fz = fuzzyMatch(unmapped, prof);
+        for (var sel in (fz || {})) {
+          if (mapping[sel]) continue;
+          mapping[sel] = fz[sel];
+          fbs[sel] = { label: (fz[sel] && fz[sel].label) || '', source: 'label-primary', profileKey: (fz[sel] && fz[sel].profileKey) || null };
+        }
+      }
+      for (var fi = 0; fi < (fields || []).length; fi++) {
+        var bf = fields[fi];
+        if (!bf || !bf.selector || !mapping[bf.selector]) continue;
+        var bent = mapping[bf.selector];
+        if (!bent.visualLabel) bent.visualLabel = bf.visualLabel || bf.label || bent.label || '';
+        if (!bent.fieldId) bent.fieldId = bf.fieldId || '';
+        if (!bent.snapshotId) bent.snapshotId = bf.snapshotId || '';
+        if (fbs[bf.selector]) {
+          if (!fbs[bf.selector].visualLabel) fbs[bf.selector].visualLabel = bent.visualLabel;
+          if (!fbs[bf.selector].fieldId) fbs[bf.selector].fieldId = bent.fieldId;
+        }
+      }
+      var filledCount = await fillFormFieldsSequential(mapping, fbs, adapters || {}, fields);
+      var records = [];
+      try { var raw = document.body.getAttribute('data-cc-records'); if (raw) records = JSON.parse(raw); } catch (e) {}
+      if (!records.length && Array.isArray(window.__ccFillRecords)) records = window.__ccFillRecords;
+      var failed  = records.filter(function (rec: any) { return (rec.result === 'failed' || rec.result === 'error') || (rec.failReason && rec.result !== 'skipped' && rec.result !== 'waiting_human' && rec.result !== 'filled'); }).length;
+      var skipped = records.filter(function (rec: any) { return rec.result === 'skipped' || rec.result === 'waiting_human'; }).length;
+      var filled  = records.filter(function (rec: any) { return rec.result === 'filled'; }).length || filledCount || 0;
+      records = records.map(function (rec: any) { return Object.assign({}, rec, { hostname: rec.hostname || location.hostname, plannedValue: rec.plannedValue != null ? rec.plannedValue : rec.value, actualValue: rec.actualValue != null ? rec.actualValue : rec.actual, transport: fillTransport }); });
+      return { ok: true, filled: filled, failed: failed, skipped: skipped, fields: Object.keys(mapping).length, records: records, hostname: location.hostname, url: location.href, _mapping: mapping, _fbs: fbs, _fields: fields };
+    }
+
     // ── Stage 3: Execute in page ───────────────────────────────────────────────
     progress('Filling form (sequential)...', 70);
     var execResults = await chrome.scripting.executeScript({
       target: { tabId },
-      args: [extracted.profile, extracted.fields, wssPlan.mapping || {}, wssPlan.filledBySource || {}, wssPlan.adapters || {}, (profile && profile.id) || null, transport],
-      func: async function (prof, fields, wssMapping, wssFbs, adapters, profileId, fillTransport) {
-        if (typeof fillFormFieldsSequential !== 'function') return { ok: false, error: 'sequential_kernel_not_loaded' };
-        try { window._ccProfileId = profileId; } catch (e) {}
-        var mapping = Object.assign({}, wssMapping || {});
-        var fbs = Object.assign({}, wssFbs || {});
-        function choiceCovered(f: any) {
-          if (mapping[f.selector]) return true;
-          if (f.optionSelectors) { for (var i = 0; i < f.optionSelectors.length; i++) { if (mapping[f.optionSelectors[i]]) return true; } }
-          return false;
-        }
-        // #302: taught relations are materialized on the SW before executeScript.
-        // Residual unmapped fields fall through to fuzzyMatch / skip — never raw-dump saved keys here.
-        var unmapped = fields.filter(function (f: any) { return !choiceCovered(f); });
-        if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
-          var fz = fuzzyMatch(unmapped, prof);
-          for (var sel in (fz || {})) {
-            if (mapping[sel]) continue;
-            mapping[sel] = fz[sel];
-            fbs[sel] = { label: (fz[sel] && fz[sel].label) || '', source: 'label-primary', profileKey: (fz[sel] && fz[sel].profileKey) || null };
-          }
-        }
-        var filledCount = await fillFormFieldsSequential(mapping, fbs, adapters || {}, fields);
-        var records = [];
-        try { var raw = document.body.getAttribute('data-cc-records'); if (raw) records = JSON.parse(raw); } catch (e) {}
-        if (!records.length && Array.isArray(window.__ccFillRecords)) records = window.__ccFillRecords;
-        var failed  = records.filter(function (r: any) { return (r.result === 'failed' || r.result === 'error') || (r.failReason && r.result !== 'skipped' && r.result !== 'waiting_human' && r.result !== 'filled'); }).length;
-        var skipped = records.filter(function (r: any) { return r.result === 'skipped' || r.result === 'waiting_human'; }).length;
-        var filled  = records.filter(function (r: any) { return r.result === 'filled'; }).length || filledCount || 0;
-        records = records.map(function (r: any) { return Object.assign({}, r, { hostname: r.hostname || location.hostname, plannedValue: r.plannedValue != null ? r.plannedValue : r.value, actualValue: r.actualValue != null ? r.actualValue : r.actual, transport: fillTransport }); });
-        return { ok: true, filled: filled, failed: failed, skipped: skipped, fields: Object.keys(mapping).length, records: records, hostname: location.hostname, url: location.href, _mapping: mapping, _fbs: fbs, _fields: fields };
-      },
+      args: [extracted.profile, extracted.fields, wssPlan.mapping || {}, wssPlan.filledBySource || {}, wssPlan.adapters || {}, (profile && profile.id) || null, transport, false],
+      func: executeFill,
     });
 
     var r = (execResults && execResults[0] && execResults[0].result) || { ok: false, error: 'no_result' };
     if (!r.ok) {
       return { ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', r.error || 'Sequential fill failed'), error: r.error || 'sequential_failed' };
+    }
+
+    // fieldId changes every snapshot (snap.<time>.<index>). A control already
+    // planned is recognized by its selector. A new selector was not on screen
+    // the first time. A drifted selector is planned once more, and a second
+    // drift stays skipped. Skip this when WSS already failed: another fill_request
+    // would wait out the same 30s timeout.
+    if (transport === 'wss') {
+      var firstRecords = r.records || [];
+      var driftSelectors: any = {};
+      for (var di = 0; di < firstRecords.length; di++) {
+        var drec = firstRecords[di];
+        if (drec && drec.failReason === 'label_drift' && drec.selector) driftSelectors[drec.selector] = true;
+      }
+      var seenSelectors: any = {};
+      var firstFields = extracted.fields || [];
+      for (var si = 0; si < firstFields.length; si++) {
+        if (firstFields[si] && firstFields[si].selector) seenSelectors[firstFields[si].selector] = true;
+      }
+      try {
+        var reextract = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: function () {
+            if (typeof extractFormFieldsWithFingerprint !== 'function') return { ok: false, error: 'extractor_not_loaded' };
+            var extracted2 = extractFormFieldsWithFingerprint();
+            var formFields = (extracted2 && extracted2.formFields) || [];
+            var visible = formFields.filter(function (f: any) { return f && f.visible === true; });
+            var snapshotId = (extracted2 && extracted2.snapshotId) || (visible[0] && visible[0].snapshotId) || '';
+            var fields = visible.map(function (f: any) {
+              return {
+                selector: f.selector, id: f.id || '', name: f.name || '', label: f.label || '',
+                visualLabel: f.visualLabel || f.label || '', fieldId: f.fieldId || '',
+                snapshotId: f.snapshotId || snapshotId, type: f.type || 'text',
+                options: f.options || null, optionSelectors: f.optionSelectors || null, placeholder: f.placeholder || '',
+              };
+            });
+            return { ok: true, fields: fields, snapshotId: snapshotId };
+          },
+        });
+        var secondSnap = reextract && reextract[0] && reextract[0].result;
+        var candidates = [];
+        if (secondSnap && secondSnap.ok && secondSnap.fields) {
+          for (var ci = 0; ci < secondSnap.fields.length; ci++) {
+            var cf = secondSnap.fields[ci];
+            if (!cf || !cf.selector) continue;
+            if (driftSelectors[cf.selector] || !seenSelectors[cf.selector]) candidates.push(cf);
+          }
+        }
+        if (candidates.length) {
+          progress('Re-planning changed fields...', 78);
+          var replanResp = await requestWssPlan(candidates, secondSnap.snapshotId);
+          if (replanResp && replanResp.ok && replanResp.plan) {
+            var replanExec = await chrome.scripting.executeScript({
+              target: { tabId },
+              args: [extracted.profile, candidates, replanResp.plan.mapping || {}, replanResp.plan.filledBySource || {}, replanResp.plan.adapters || {}, (profile && profile.id) || null, 'wss', true],
+              func: executeFill,
+            });
+            var second = replanExec && replanExec[0] && replanExec[0].result;
+            if (second && second.ok) {
+              var secondSelectors: any = {};
+              var secondRecords = second.records || [];
+              for (var ri = 0; ri < secondRecords.length; ri++) {
+                if (secondRecords[ri] && secondRecords[ri].selector) secondSelectors[secondRecords[ri].selector] = true;
+              }
+              var secondMap = second._mapping || {};
+              for (var mk in secondMap) {
+                if (Object.prototype.hasOwnProperty.call(secondMap, mk)) secondSelectors[mk] = true;
+              }
+              var kept = firstRecords.filter(function (rec: any) { return rec && !secondSelectors[rec.selector]; });
+              r.records = kept.concat(secondRecords);
+              r.filled = r.records.filter(function (rec: any) { return rec && rec.result === 'filled'; }).length;
+              r.failed = r.records.filter(function (rec: any) { return rec && ((rec.result === 'failed' || rec.result === 'error') || (rec.failReason && rec.result !== 'skipped' && rec.result !== 'waiting_human' && rec.result !== 'filled')); }).length;
+              r.skipped = r.records.filter(function (rec: any) { return rec && (rec.result === 'skipped' || rec.result === 'waiting_human'); }).length;
+              r._mapping = Object.assign({}, r._mapping || {}, second._mapping || {});
+              r._fbs = Object.assign({}, r._fbs || {}, second._fbs || {});
+              var fieldBySel: any = {};
+              var mergedFields = [];
+              var fieldLists = [candidates, r._fields || []];
+              for (var li = 0; li < fieldLists.length; li++) {
+                for (var mfi = 0; mfi < fieldLists[li].length; mfi++) {
+                  var mf = fieldLists[li][mfi];
+                  if (!mf || !mf.selector || fieldBySel[mf.selector]) continue;
+                  fieldBySel[mf.selector] = true;
+                  mergedFields.push(mf);
+                }
+              }
+              r._fields = mergedFields;
+            }
+          } else {
+            console.warn('[CC] re-plan failed:', (replanResp && replanResp.error) || 'no_plan');
+          }
+        }
+      } catch (replanErr: any) {
+        console.warn('[CC] re-plan skipped:', replanErr && replanErr.message ? replanErr.message : replanErr);
+      }
     }
 
     // ── Stage 3b: Sync mappings to backend ───────────────────────────────────

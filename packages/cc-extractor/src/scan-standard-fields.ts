@@ -36,9 +36,45 @@
     return JOURNEY_RE.test(String(meta || '') + ' ' + String(label || ''));
   }
 
-  function makeSelector(el: any) {
+  // Same list as CcResolveCcSelector. form-field-N is an index into this
+  // query, not the count of fields the scanner kept. A header input that is
+  // skipped here is still input 0 on the page; numbering kept fields from 0
+  // made the filler read a different control and refuse the write.
+  var FORM_FIELD_QUERY = [
+    'input[type="text"]',
+    'input[type="email"]',
+    'input[type="tel"]',
+    'input[type="number"]',
+    'input[type="date"]',
+    'input[type="radio"]',
+    'input[type="checkbox"]',
+    'input:not([type])',
+    'textarea',
+    'select',
+  ].join(',');
+
+  function domFieldIndex(doc: any, el: any) {
+    if (!doc || !el || typeof doc.querySelectorAll !== 'function') return -1;
+    var all = doc.querySelectorAll(FORM_FIELD_QUERY);
+    for (var i = 0; i < all.length; i++) {
+      if (all[i] === el) return i;
+    }
+    return -1;
+  }
+
+  function makeSelector(el: any, doc: any) {
     if (el.id) return el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id;
     if (el.name) return '[name="' + el.name + '"]';
+    var fcn = el.getAttribute && (el.getAttribute('formcontrolname') || el.getAttribute('ng-reflect-name'));
+    if (fcn && doc && typeof doc.querySelectorAll === 'function') {
+      var fcnSel = '[formcontrolname="' + String(fcn).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]';
+      try {
+        var hits = doc.querySelectorAll(fcnSel);
+        if (hits && hits.length === 1) return fcnSel;
+      } catch (e) {}
+    }
+    var domIdx = domFieldIndex(doc, el);
+    if (domIdx >= 0) return 'form-field-' + domIdx;
     return null;
   }
 
@@ -84,6 +120,11 @@
     var isInSkipContext = helpers.isInSkipContext;
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
+    function blocked(el: any) {
+      if (isInSkipContext(el)) return true;
+      if (typeof helpers.isVisuallyPresent === 'function' && !helpers.isVisuallyPresent(el)) return true;
+      return false;
+    }
 
     var formFields = [];
     var labelList = [];
@@ -103,7 +144,7 @@
         var earlyMeta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
         if (!isJourneyMeta(earlyMeta, earlyLbl)) return;
       }
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
 
       var meta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
       if (SKIP_META_HARD_RE.test(meta)) return;
@@ -155,7 +196,7 @@
       } else if (!label && typeof window !== 'undefined' && window.ccDomUtils && window.ccDomUtils.humanizeAttr) {
         label = window.ccDomUtils.humanizeAttr(el.name || el.id || '') || '';
       }
-      var selector = makeSelector(el) || 'form-field-' + idx;
+      var selector = makeSelector(el, doc) || 'form-field-' + idx;
 
       // ── Select ──
       if (el.tagName === 'SELECT') {

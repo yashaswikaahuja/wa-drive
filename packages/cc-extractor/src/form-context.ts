@@ -51,6 +51,60 @@
    * @param {Element} el
    * @returns {boolean}
    */
+  /**
+   * True when the operator can see this control.
+   * A node with no box API is a Node test stub and is kept.
+   * A real element must have a paintable box, not be hidden, and not sit under another layer.
+   * A box below the viewport stays, because the operator can scroll to it.
+   */
+  function hitsControl(el: any, top: any) {
+    if (!top) return false;
+    if (top === el) return true;
+    if (el.contains && el.contains(top)) return true;
+    if (top.contains && top.contains(el)) return true;
+    var id = el.id;
+    if (id && top.getAttribute && top.getAttribute('for') === id) return true;
+    if (id && top.closest && top.closest('label[for="' + id + '"]')) return true;
+    return false;
+  }
+
+  function isVisuallyPresent(el: any, view?: any) {
+    if (!el) return false;
+    if (typeof el.getBoundingClientRect !== 'function') return true;
+    var box = el.getBoundingClientRect();
+    if (!box || box.width < 2 || box.height < 2) return false;
+    if (typeof el.getClientRects === 'function') {
+      var rects = el.getClientRects();
+      if (!rects || rects.length === 0) return false;
+    }
+    if (el.closest) {
+      if (el.closest('[hidden]')) return false;
+      if (el.closest('[aria-hidden="true"]')) return false;
+      var details = el.closest('details');
+      if (details && !details.open) return false;
+    }
+    var getStyle = (view && view.getComputedStyle) || (typeof window !== 'undefined' && window.getComputedStyle);
+    if (typeof getStyle === 'function') {
+      var style = getStyle(el);
+      if (style && (style.display === 'none' || style.visibility === 'hidden' || String(style.opacity) === '0')) return false;
+    }
+    var hit = view && view.elementFromPoint;
+    var iw = view && view.innerWidth;
+    var ih = view && view.innerHeight;
+    if (typeof hit !== 'function' && typeof document !== 'undefined' && document.elementFromPoint) {
+      hit = function (x: any, y: any) { return document.elementFromPoint(x, y); };
+      iw = window.innerWidth;
+      ih = window.innerHeight;
+    }
+    if (typeof hit === 'function' && iw && ih) {
+      var cx = box.left + box.width / 2;
+      var cy = box.top + box.height / 2;
+      var inView = cx >= 0 && cy >= 0 && cx <= iw && cy <= ih;
+      if (inView && !hitsControl(el, hit(cx, cy))) return false;
+    }
+    return true;
+  }
+
   function isInSkipContext(el: any) {
     if (!el || !el.closest) return false;
     if (el.closest('nav,header,footer,[role="navigation"],[role="banner"]')) return true;
@@ -107,7 +161,7 @@
     return labeled >= 2;
   }
 
-  root.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike };
+  root.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike, isVisuallyPresent };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 

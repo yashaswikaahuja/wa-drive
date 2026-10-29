@@ -25,6 +25,7 @@
 
 import { send, broadcast } from './server.js';
 import { buildFillMapping, persistFillSession } from './fill.js';
+import { resolveBrowserTask } from './browser-task.js';
 import { pool } from '../db/db.js';
 
 /**
@@ -228,6 +229,15 @@ handlers.set('teach_observation', (session, message, ctx) => {
       console.error(`[ws] recordTeachData error:`, err.message);
     }
   }
+});
+
+handlers.set('browser_task_result', (_session, message) => {
+  resolveBrowserTask(message.taskId, {
+    ok: message.ok === true,
+    tabId: message.tabId || null,
+    url: message.url || null,
+    error: message.error || null,
+  });
 });
 
 /**

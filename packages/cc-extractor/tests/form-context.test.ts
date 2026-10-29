@@ -17,7 +17,7 @@ const { code: src } = await esbuild.transform(srcTs, { loader: 'ts', target: 'es
 const root = {};
 const fn = new Function('globalThis', src);
 fn(root);
-const { isInSkipContext, isGoodLabel, hasFormContext } = root.CcFormContext;
+const { isInSkipContext, isGoodLabel, hasFormContext, isVisuallyPresent } = root.CcFormContext;
 
 let passed = 0;
 let failed = 0;
@@ -55,6 +55,57 @@ assert('[role=banner] skipped',      isInSkipContext(makeEl('[role="banner"]')),
 assert('main element not skipped',   isInSkipContext(makeEl('main')), false);
 assert('form element not skipped',   isInSkipContext(makeEl('form')), false);
 assert('div element not skipped',    isInSkipContext(makeEl('div')), false);
+
+// ── isVisuallyPresent ──────────────────────────────────────────────────────────
+console.log('\nisVisuallyPresent');
+
+function painted(extra) {
+  return Object.assign({
+    id: 'aadhaar',
+    getBoundingClientRect: () => ({ left: 10, top: 10, width: 120, height: 24 }),
+    getClientRects: () => [{}],
+    closest: () => null,
+  }, extra);
+}
+const view = {
+  innerWidth: 800,
+  innerHeight: 600,
+  getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
+  elementFromPoint: (x, y) => view._top,
+  _top: null,
+};
+
+{
+  const el = painted();
+  view._top = el;
+  assert('painted control is present', isVisuallyPresent(el, view), true);
+}
+assert('zero-size control is noise', isVisuallyPresent(painted({
+  getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }),
+}), view), false);
+{
+  const el = painted();
+  const covered = { id: 'overlay' };
+  view._top = covered;
+  assert('covered control is noise', isVisuallyPresent(el, view), false);
+  view._top = el;
+}
+{
+  const el = painted();
+  const hiddenView = Object.assign({}, view, {
+    getComputedStyle: () => ({ display: 'none', visibility: 'visible', opacity: '1' }),
+  });
+  assert('display:none is noise', isVisuallyPresent(el, hiddenView), false);
+}
+{
+  const el = painted({
+    getBoundingClientRect: () => ({ left: 10, top: 900, width: 120, height: 24 }),
+  });
+  view._top = { id: 'other' };
+  assert('control below the fold stays', isVisuallyPresent(el, view), true);
+  view._top = el;
+}
+assert('node stub without a box is kept', isVisuallyPresent({ closest: () => null }), true);
 
 // ── isGoodLabel ────────────────────────────────────────────────────────────────
 console.log('\nisGoodLabel');

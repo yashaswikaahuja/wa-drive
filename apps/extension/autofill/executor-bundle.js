@@ -656,6 +656,32 @@ if (typeof module !== "undefined") module.exports = root.CcSortFieldsByDomOrder;
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined") module.exports = root.CcVerifyFillValue;
 
+/* ==== label-still-matches.ts ==== */
+(function(root) {
+  "use strict";
+  function norm(s) {
+    return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function readVisualLabel(el, readLabel) {
+    if (typeof readLabel === "function") return readLabel(el) || "";
+    var utils = typeof window !== "undefined" && window.ccDomUtils;
+    if (utils && typeof utils.getLabel === "function") return utils.getLabel(el) || "";
+    if (!el) return "";
+    var aria = el.getAttribute && el.getAttribute("aria-label");
+    if (aria) return String(aria).trim();
+    return String(el.placeholder || "").trim();
+  }
+  function matches(el, expectedLabel, readLabel) {
+    var expected = norm(expectedLabel);
+    if (!expected) return true;
+    var live = norm(readVisualLabel(el, readLabel));
+    if (!live) return true;
+    return live === expected;
+  }
+  root.CcLabelStillMatches = { matches, norm, read: readVisualLabel };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatches;
+
 /* ==== detect-fill-strategy.ts ==== */
 (function(root2) {
   "use strict";
@@ -3031,7 +3057,7 @@ if (typeof module !== "undefined") module.exports = root.CcFillOneText;
     const fillOne = b.fillOne;
     k._seqChunks = k._seqChunks || ["baked-solid"];
     k.fillSequential = async function fillSequential() {
-      var _a, _b, _c, _d;
+      var _a, _b, _c, _d, _e;
       for (const [selector, fieldData] of entries) {
         const { value, type } = fieldData;
         let isNgDropdown = type === "ng-dropdown" || selector.startsWith("ng-dropdown-");
@@ -3058,16 +3084,32 @@ if (typeof module !== "undefined") module.exports = root.CcFillOneText;
           }
         }
         if (el) {
+          const plannedVisual = fieldData.visualLabel || ((_b = filledBySource == null ? void 0 : filledBySource[selector]) == null ? void 0 : _b.visualLabel) || "";
+          if (plannedVisual && root.CcLabelStillMatches && typeof root.CcLabelStillMatches.matches === "function" && !root.CcLabelStillMatches.matches(el, plannedVisual)) {
+            const liveVisual = typeof root.CcLabelStillMatches.read === "function" ? root.CcLabelStillMatches.read(el) : "";
+            _ccRecords.push(_buildFillRecord({
+              selector,
+              value,
+              type,
+              label: plannedVisual,
+              actualValue: liveVisual,
+              result: "skipped",
+              failReason: "label_drift",
+              strategy: "label-guard"
+            }, { rv: RUNTIME_VERSION }));
+            _flushRecords();
+            continue;
+          }
           el.scrollIntoView({ behavior: "smooth", block: "center" });
           await new Promise((r) => setTimeout(r, 300));
         }
         const _t0 = Date.now();
         const _fieldCtx = {
           type,
-          label: fieldData.label || ((_b = filledBySource[selector]) == null ? void 0 : _b.label) || selector,
-          profileKey: fieldData.profileKey || ((_c = filledBySource[selector]) == null ? void 0 : _c.profileKey) || "",
+          label: fieldData.label || ((_c = filledBySource[selector]) == null ? void 0 : _c.label) || selector,
+          profileKey: fieldData.profileKey || ((_d = filledBySource[selector]) == null ? void 0 : _d.profileKey) || "",
           selector,
-          matchBy: fieldData.matchBy || ((_d = filledBySource[selector]) == null ? void 0 : _d.matchBy) || "label"
+          matchBy: fieldData.matchBy || ((_e = filledBySource[selector]) == null ? void 0 : _e.matchBy) || "label"
         };
         const _selectLike2 = /^(select|dropdown|ng-dropdown|mat-select)$/.test(type || "");
         if (_selectLike2) console.log("[CC] route:", selector, "type:", type, "isNgDropdown:", isNgDropdown, "isDependent:", isDependent, "filled:", k.filled, "elTag:", el == null ? void 0 : el.tagName, "elType:", el == null ? void 0 : el.type);

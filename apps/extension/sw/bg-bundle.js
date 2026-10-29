@@ -171,7 +171,8 @@ function handleWssMessage(msg, sendResponse) {
           hostname: msg.hostname,
           fields: msg.fields || [],
           profile: msg.profile || {},
-          profileId: msg.profileId || null
+          profileId: msg.profileId || null,
+          snapshotId: msg.snapshotId || null
         }, 25e3);
         if ((resp == null ? void 0 : resp.type) === "error") throw new Error(resp.message || resp.code || "fill_request_error");
         sendResponse({ ok: true, plan: resp, transport: "wss" });

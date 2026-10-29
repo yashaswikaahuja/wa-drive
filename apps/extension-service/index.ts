@@ -30,6 +30,7 @@ import validateRouter from './src/http/routes/validate.js';
 import versionsRouter from './src/http/routes/versions.js';
 import syncRouter from './src/http/routes/sync.js';
 import fillRouter from './src/http/routes/fill.js';
+import browserTaskRouter from './src/http/routes/browser-task.js';
 import { ensureSchema } from './src/db/store.js';
 import { pool } from './src/db/db.js';
 import { mutateDoc, KEYS } from './src/db/store.js';
@@ -87,6 +88,7 @@ app.use('/api/versions', versionsRouter);
 app.use('/api/sync', syncRouter);
 // ActionPlan v3 product path: POST /api/fill-plan, POST /api/fill-observation
 app.use('/api', fillRouter);
+app.use('/api/browser-task', browserTaskRouter);
 
 // 404 fallthrough
 app.use((req: any, res: any) => res.status(404).json({ error: 'not found', path: req.path }));

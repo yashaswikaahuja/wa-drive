@@ -22,6 +22,54 @@
     ].filter(Boolean).join(" ");
     return JOURNEY_RE.test(blob);
   }
+  function hitsControl(el, top) {
+    if (!top) return false;
+    if (top === el) return true;
+    if (el.contains && el.contains(top)) return true;
+    if (top.contains && top.contains(el)) return true;
+    var id = el.id;
+    if (id && top.getAttribute && top.getAttribute("for") === id) return true;
+    if (id && top.closest && top.closest('label[for="' + id + '"]')) return true;
+    return false;
+  }
+  function isVisuallyPresent(el, view) {
+    if (!el) return false;
+    if (typeof el.getBoundingClientRect !== "function") return true;
+    var box = el.getBoundingClientRect();
+    if (!box || box.width < 2 || box.height < 2) return false;
+    if (typeof el.getClientRects === "function") {
+      var rects = el.getClientRects();
+      if (!rects || rects.length === 0) return false;
+    }
+    if (el.closest) {
+      if (el.closest("[hidden]")) return false;
+      if (el.closest('[aria-hidden="true"]')) return false;
+      var details = el.closest("details");
+      if (details && !details.open) return false;
+    }
+    var getStyle = view && view.getComputedStyle || typeof window !== "undefined" && window.getComputedStyle;
+    if (typeof getStyle === "function") {
+      var style = getStyle(el);
+      if (style && (style.display === "none" || style.visibility === "hidden" || String(style.opacity) === "0")) return false;
+    }
+    var hit = view && view.elementFromPoint;
+    var iw = view && view.innerWidth;
+    var ih = view && view.innerHeight;
+    if (typeof hit !== "function" && typeof document !== "undefined" && document.elementFromPoint) {
+      hit = function(x, y) {
+        return document.elementFromPoint(x, y);
+      };
+      iw = window.innerWidth;
+      ih = window.innerHeight;
+    }
+    if (typeof hit === "function" && iw && ih) {
+      var cx = box.left + box.width / 2;
+      var cy = box.top + box.height / 2;
+      var inView = cx >= 0 && cy >= 0 && cx <= iw && cy <= ih;
+      if (inView && !hitsControl(el, hit(cx, cy))) return false;
+    }
+    return true;
+  }
   function isInSkipContext(el) {
     if (!el || !el.closest) return false;
     if (el.closest('nav,header,footer,[role="navigation"],[role="banner"]')) return true;
@@ -52,7 +100,7 @@
     });
     return labeled >= 2;
   }
-  root2.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike };
+  root2.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike, isVisuallyPresent };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined" && module.exports) {
   module.exports = (typeof globalThis !== "undefined" ? globalThis : root).CcFormContext;
@@ -69,9 +117,40 @@ if (typeof module !== "undefined" && module.exports) {
   function isJourneyMeta(meta, label) {
     return JOURNEY_RE.test(String(meta || "") + " " + String(label || ""));
   }
-  function makeSelector(el) {
+  var FORM_FIELD_QUERY = [
+    'input[type="text"]',
+    'input[type="email"]',
+    'input[type="tel"]',
+    'input[type="number"]',
+    'input[type="date"]',
+    'input[type="radio"]',
+    'input[type="checkbox"]',
+    "input:not([type])",
+    "textarea",
+    "select"
+  ].join(",");
+  function domFieldIndex(doc, el) {
+    if (!doc || !el || typeof doc.querySelectorAll !== "function") return -1;
+    var all = doc.querySelectorAll(FORM_FIELD_QUERY);
+    for (var i = 0; i < all.length; i++) {
+      if (all[i] === el) return i;
+    }
+    return -1;
+  }
+  function makeSelector(el, doc) {
     if (el.id) return el.id.match(/^\d/) ? '[id="' + el.id + '"]' : "#" + el.id;
     if (el.name) return '[name="' + el.name + '"]';
+    var fcn = el.getAttribute && (el.getAttribute("formcontrolname") || el.getAttribute("ng-reflect-name"));
+    if (fcn && doc && typeof doc.querySelectorAll === "function") {
+      var fcnSel = '[formcontrolname="' + String(fcn).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"]';
+      try {
+        var hits = doc.querySelectorAll(fcnSel);
+        if (hits && hits.length === 1) return fcnSel;
+      } catch (e) {
+      }
+    }
+    var domIdx = domFieldIndex(doc, el);
+    if (domIdx >= 0) return "form-field-" + domIdx;
     return null;
   }
   function makeRadioSelector(el) {
@@ -106,6 +185,11 @@ if (typeof module !== "undefined" && module.exports) {
     var isInSkipContext = helpers.isInSkipContext;
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
+    function blocked(el) {
+      if (isInSkipContext(el)) return true;
+      if (typeof helpers.isVisuallyPresent === "function" && !helpers.isVisuallyPresent(el)) return true;
+      return false;
+    }
     var formFields = [];
     var labelList = [];
     var radioGroups = {};
@@ -120,7 +204,7 @@ if (typeof module !== "undefined" && module.exports) {
         var earlyMeta = ((el.id || "") + " " + (el.name || "") + " " + (el.className || "")).toLowerCase();
         if (!isJourneyMeta(earlyMeta, earlyLbl)) return;
       }
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       var meta = ((el.id || "") + " " + (el.name || "") + " " + (el.className || "")).toLowerCase();
       if (SKIP_META_HARD_RE.test(meta)) return;
       if (SKIP_META_SOFT_RE.test(meta) && !isJourneyMeta(meta, getLabel(el) || el.placeholder || "")) return;
@@ -178,7 +262,7 @@ if (typeof module !== "undefined" && module.exports) {
       } else if (!label && typeof window !== "undefined" && window.ccDomUtils && window.ccDomUtils.humanizeAttr) {
         label = window.ccDomUtils.humanizeAttr(el.name || el.id || "") || "";
       }
-      var selector = makeSelector(el) || "form-field-" + idx;
+      var selector = makeSelector(el, doc) || "form-field-" + idx;
       if (el.tagName === "SELECT") {
         var options = Array.from(el.querySelectorAll("option")).map(function(o) {
           return o.textContent.trim();
@@ -275,6 +359,11 @@ if (typeof module !== "undefined") module.exports = root.CcScanStandardFields;
   }
   function scan(doc, existingFields, helpers, startIdx) {
     var isInSkipContext = helpers.isInSkipContext;
+    function blocked(el) {
+      if (isInSkipContext(el)) return true;
+      if (typeof helpers.isVisuallyPresent === "function" && !helpers.isVisuallyPresent(el)) return true;
+      return false;
+    }
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
     var idx = typeof startIdx === "number" ? startIdx : 1e4;
@@ -304,7 +393,7 @@ if (typeof module !== "undefined") module.exports = root.CcScanStandardFields;
       return "";
     }
     doc.querySelectorAll("mat-select,mat-form-field select").forEach(function(el) {
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       if (el.tagName === "SELECT" && isAlreadyCaptured(el, existingFields)) return;
       var label = matFieldLabel(el);
       if (!isGoodLabel(label)) return;
@@ -325,7 +414,7 @@ if (typeof module !== "undefined") module.exports = root.CcScanStandardFields;
       });
     });
     doc.querySelectorAll("mat-checkbox").forEach(function(el) {
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       var label = matFieldLabel(el) || el.textContent.trim().slice(0, 40);
       if (!isGoodLabel(label)) return;
       var id = el.id || "mat-cb-" + idx;
@@ -343,7 +432,7 @@ if (typeof module !== "undefined") module.exports = root.CcScanStandardFields;
       });
     });
     doc.querySelectorAll("mat-radio-button").forEach(function(el) {
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       var optionText = el.textContent.trim().slice(0, 40);
       if (!isGoodLabel(optionText)) return;
       var group = el.closest("mat-radio-group");
@@ -425,6 +514,11 @@ if (typeof module !== "undefined") module.exports = root.CcScanMatWidgets;
   }
   function scan(doc, existingFields, helpers, startIdx) {
     var isInSkipContext = helpers.isInSkipContext;
+    function blocked(el) {
+      if (isInSkipContext(el)) return true;
+      if (typeof helpers.isVisuallyPresent === "function" && !helpers.isVisuallyPresent(el)) return true;
+      return false;
+    }
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
     var idx = typeof startIdx === "number" ? startIdx : 1e4;
@@ -433,7 +527,7 @@ if (typeof module !== "undefined") module.exports = root.CcScanMatWidgets;
     var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|city|date)\b/i;
     doc.querySelectorAll('[role="combobox"],[role="listbox"]').forEach(function(el) {
       if (el.tagName === "INPUT" || el.tagName === "SELECT") return;
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       var meta = ((el.id || "") + " " + (el.className || "")).toLowerCase();
       var label = getLabel(el) || el.getAttribute("aria-label") || "";
       if (/search|query|filter/i.test(meta) && !JOURNEY_RE.test(meta + " " + label)) return;
@@ -472,7 +566,7 @@ if (typeof module !== "undefined") module.exports = root.CcScanMatWidgets;
       if (container && container !== doc.body) ngCandidates.add(container);
     });
     ngCandidates.forEach(function(el) {
-      if (isInSkipContext(el)) return;
+      if (blocked(el)) return;
       if (isAlreadyCaptured(el, existingFields.concat(formFields))) return;
       var label = resolveLabel(el, getLabel);
       if (!isGoodLabel(label)) return;
@@ -744,6 +838,9 @@ function extractFormFieldsWithFingerprint() {
     },
     isGoodLabel: function(s) {
       return _fc.isGoodLabel ? _fc.isGoodLabel(s, ccDomUtils) : !!(s && s.trim().length >= 2 && /[a-zA-Z0-9]/.test(s));
+    },
+    isVisuallyPresent: function(el) {
+      return _fc.isVisuallyPresent ? _fc.isVisuallyPresent(el) : true;
     }
   };
   if (_fc.hasFormContext && !_fc.hasFormContext(doc, ccDomUtils)) {
@@ -767,6 +864,13 @@ function extractFormFieldsWithFingerprint() {
     labelList = labelList.concat(ng.labelList);
   }
   if (_sfv.sort) _sfv.sort(formFields);
+  var snapshotId = "snap." + Date.now().toString(36);
+  formFields.forEach(function(f, i) {
+    f.visible = true;
+    f.visualLabel = f.label || "";
+    f.fieldId = snapshotId + "." + i;
+    f.snapshotId = snapshotId;
+  });
   var hostname = location.hostname;
   var title = (((_a = document.querySelector("h1,h2,legend,.form-title,.page-title")) == null ? void 0 : _a.textContent) || document.title || "").trim().slice(0, 50);
   var result = { formKey: "", semanticFormKey: "", pageModel: null };
@@ -782,7 +886,8 @@ function extractFormFieldsWithFingerprint() {
     formFields,
     formKey: result.formKey,
     semanticFormKey: result.semanticFormKey,
-    pageModel: result.pageModel
+    pageModel: result.pageModel,
+    snapshotId
   };
 }
 function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, formKey) {

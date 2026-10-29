@@ -464,6 +464,22 @@ export async function buildFillMapping( msg: any, workspaceId: any) {
     console.log(`[wss-fill] scrubbed ${scrubbed} identity→travel mapping(s)`);
   }
 
+  // Bind each planned write to the label the operator could see.
+  const fieldBySelector = new Map(
+    fields.filter((f: any) => f && f.selector).map((f: any) => [f.selector, f])
+  );
+  for (const [sel, entry] of Object.entries(mapping) as [string, any][]) {
+    const f = fieldBySelector.get(sel);
+    if (!f || !entry) continue;
+    entry.visualLabel = f.visualLabel || f.label || entry.label || '';
+    entry.fieldId = f.fieldId || null;
+    entry.snapshotId = msg.snapshotId || f.snapshotId || null;
+    if (filledBySource[sel]) {
+      filledBySource[sel].visualLabel = entry.visualLabel;
+      filledBySource[sel].fieldId = entry.fieldId;
+    }
+  }
+
   const plannedCount = Object.keys(mapping).length;
   const exactTaughtCount = resolved.exactTaughtCount || 0;
   const preferMapsOnly = !!resolved.preferMapsOnly;
@@ -485,6 +501,7 @@ export async function buildFillMapping( msg: any, workspaceId: any) {
     savedMappings: saved,
     plannedCount,
     fieldCount: fields.length,
+    snapshotId: msg.snapshotId || null,
     taughtMappedCount: countMapped(saved),
     transport: 'wss',
   };
