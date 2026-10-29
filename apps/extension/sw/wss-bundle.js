@@ -608,9 +608,67 @@ if (typeof module !== "undefined" && module.exports) {
       replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: e && e.message || "page_task_failed" });
     }
   }
+  async function clickByText(spec) {
+    var want = String(spec && spec.text || "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!want) return { ok: false, error: "text required" };
+    var extra = want === "search trains" ? ["search"] : [];
+    var wants = [want].concat(extra);
+    var nodes = document.querySelectorAll('button, a, input[type="submit"], input[type="button"], [role="button"], .search_btn');
+    var partial = null;
+    var partialLabel = "";
+    for (var n = 0; n < wants.length; n++) {
+      var needle = wants[n];
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        var label = (el.innerText || el.value || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+        var norm = label.toLowerCase();
+        if (!norm) continue;
+        if (norm === needle) {
+          el.click();
+          await new Promise(function(r) {
+            setTimeout(r, 800);
+          });
+          return { ok: true, url: location.href, clicked: label.slice(0, 80) };
+        }
+        if (!partial && norm.indexOf(needle) !== -1) {
+          partial = el;
+          partialLabel = label;
+        }
+      }
+      if (partial) break;
+    }
+    if (!partial) return { ok: false, error: "not_found", url: location.href };
+    partial.click();
+    await new Promise(function(r) {
+      setTimeout(r, 800);
+    });
+    return { ok: true, url: location.href, clicked: partialLabel.slice(0, 80) };
+  }
+  async function runClick(taskId, tabId, text) {
+    var tab = await pickTaskTab(tabId);
+    if (!tab || !tab.id) {
+      replyBrowserTask(taskId, { ok: false, error: "no_tab" });
+      return;
+    }
+    try {
+      var results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: clickByText,
+        args: [{ text }]
+      });
+      var page = results && results[0] && results[0].result;
+      replyBrowserTask(taskId, Object.assign({ ok: false, tabId: tab.id, url: tab.url || null }, page || { error: "no_result" }));
+    } catch (e) {
+      replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: e && e.message || "click_failed" });
+    }
+  }
   function runBrowserTask(msg) {
     if (!msg || !msg.task) {
       replyBrowserTask(msg && msg.taskId, { ok: false, error: "unknown task" });
+      return;
+    }
+    if (msg.task === "click") {
+      runClick(msg.taskId, msg.tabId, msg.text || "");
       return;
     }
     if (msg.task === "read_form") {

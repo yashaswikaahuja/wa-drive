@@ -71,6 +71,17 @@ router.post('/', authMiddleware, async (req: any, res: any) => {
     if (!allowedPageUrl(url)) return res.status(400).json({ error: 'url must be http or https' });
     return deliver(req, res, { type: 'browser_task', task: 'open_url', url, taskId }, 15000);
   }
+  if (task === 'click') {
+    const text = req.body && req.body.text ? String(req.body.text).trim() : '';
+    if (!text || text.length > 80) return res.status(400).json({ error: 'text required' });
+    return deliver(req, res, {
+      type: 'browser_task',
+      task: 'click',
+      text,
+      tabId: req.body.tabId || null,
+      taskId,
+    }, 20000);
+  }
   if (task === 'read_form') {
     return deliver(req, res, {
       type: 'browser_task',
