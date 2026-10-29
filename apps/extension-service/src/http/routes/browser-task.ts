@@ -73,11 +73,21 @@ router.post('/', authMiddleware, async (req: any, res: any) => {
   }
   if (task === 'click') {
     const text = req.body && req.body.text ? String(req.body.text).trim() : '';
-    if (!text || text.length > 80) return res.status(400).json({ error: 'text required' });
+    const raw = req.body && req.body.control;
+    const control = raw && typeof raw === 'object' ? {
+      selector: raw.selector ? String(raw.selector).slice(0, 300) : '',
+      label: raw.label ? String(raw.label).slice(0, 180) : '',
+      visualLabel: raw.visualLabel ? String(raw.visualLabel).slice(0, 180) : (raw.label ? String(raw.label).slice(0, 180) : ''),
+      type: 'button',
+    } : null;
+    if ((!text || text.length > 80) && !(control && (control.selector || control.visualLabel))) {
+      return res.status(400).json({ error: 'text or control required' });
+    }
     return deliver(req, res, {
       type: 'browser_task',
       task: 'click',
       text,
+      control,
       tabId: req.body.tabId || null,
       taskId,
     }, 20000);

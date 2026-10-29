@@ -24,6 +24,7 @@ await writeConcatBundle({
     'sort-fields-by-dom-order.ts',
     'verify-fill-value.ts',
     'label-still-matches.ts',
+    'click-control.ts',
     'detect-fill-strategy.ts',
     'post-fill-corrections.ts',
     'fill-one-ng.ts',

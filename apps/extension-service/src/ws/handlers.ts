@@ -245,6 +245,8 @@ handlers.set('browser_task_result', (_session, message) => {
     skipped: message.skipped == null ? null : message.skipped,
     failed: message.failed == null ? null : message.failed,
     clicked: message.clicked || null,
+    selector: message.selector || null,
+    reason: message.reason || null,
   });
 });
 

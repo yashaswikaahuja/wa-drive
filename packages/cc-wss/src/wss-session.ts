@@ -87,7 +87,7 @@
     var formFields = (extracted && extracted.formFields) || [];
     var visible = formFields.filter(function (f) { return f && f.visible === true; });
     var snapshotId = (extracted && extracted.snapshotId) || '';
-    return {
+    var page = {
       ok: true,
       url: location.href,
       title: document.title,
@@ -104,6 +104,12 @@
         };
       }),
     };
+    try {
+      var clickApi = (typeof globalThis !== 'undefined') ? (globalThis as any).CcClickControl : null;
+      var buttons = clickApi && typeof clickApi.list === 'function' ? clickApi.list(document) : [];
+      for (var b = 0; b < buttons.length; b++) page.fields.push(buttons[b]);
+    } catch (e) { /* buttons stay out of the snapshot */ }
+    return page;
   }
 
   async function fillFormPage(incoming) {
@@ -117,17 +123,42 @@
       if (!f || !f.selector || f.value == null || String(f.value) === '') continue;
       var label = f.visualLabel || f.label || '';
       if (skip.test(label) || skip.test(f.selector)) continue;
-      if (/^(button|submit|reset|image|file)$/i.test(f.type || '')) continue;
+      if (/^(button|submit)$/i.test(f.type || '')) continue;
+      if (/^(reset|image|file)$/i.test(f.type || '')) continue;
       mapping[f.selector] = { value: String(f.value), type: f.type || 'text', label: label, visualLabel: label };
       fbs[f.selector] = { label: label, visualLabel: label, source: 'operator' };
     }
     await fillFormFieldsSequential(mapping, fbs, {}, list);
+    var clickRecords = [];
+    var clickApi = (typeof globalThis !== 'undefined') ? (globalThis as any).CcClickControl : null;
+    if (clickApi && typeof clickApi.press === 'function') {
+      for (var c = 0; c < list.length; c++) {
+        var buttonField = list[c];
+        if (!buttonField || !/^(button|submit)$/i.test(buttonField.type || '')) continue;
+        var buttonLabel = buttonField.visualLabel || buttonField.label || '';
+        if (skip.test(buttonLabel)) continue;
+        var beforeMark = location.href + '|' + document.title + '|' + ((document.body && document.body.innerText) ? document.body.innerText.length : 0);
+        var pressed = clickApi.press(buttonField, document);
+        await new Promise(function (r) { setTimeout(r, 700); });
+        var afterMark = location.href + '|' + document.title + '|' + ((document.body && document.body.innerText) ? document.body.innerText.length : 0);
+        var changed = beforeMark !== afterMark;
+        clickRecords.push({
+          selector: (pressed && pressed.selector) || buttonField.selector || '',
+          label: buttonLabel,
+          result: pressed && pressed.pressed && changed ? 'clicked' : 'no_effect',
+          failReason: pressed && pressed.pressed ? (changed ? '' : 'no_effect') : ((pressed && pressed.reason) || 'not_found'),
+          plannedValue: buttonLabel,
+          actualValue: (pressed && pressed.clicked) || '',
+        });
+      }
+    }
     var records = [];
     try {
       var raw = document.body && document.body.getAttribute('data-cc-records');
       if (raw) records = JSON.parse(raw);
     } catch (e) { /* records stay empty */ }
     if (!records.length && Array.isArray((window as any).__ccFillRecords)) records = (window as any).__ccFillRecords;
+    records = records.concat(clickRecords);
     function count(name) {
       return records.filter(function (r) { return r && r.result === name; }).length;
     }
@@ -183,56 +214,35 @@
     }
   }
 
-  async function clickByText(spec) {
-    var want = String((spec && spec.text) || '').replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!want) return { ok: false, error: 'text required' };
-    var extra = want === 'search trains' ? ['search'] : [];
-    var wants = [want].concat(extra);
-    var nodes = document.querySelectorAll('button, a, input[type="submit"], input[type="button"], [role="button"], .search_btn');
-    var partial = null;
-    var partialLabel = '';
-    for (var n = 0; n < wants.length; n++) {
-      var needle = wants[n];
-      for (var i = 0; i < nodes.length; i++) {
-        var el = nodes[i];
-        var label = (el.innerText || el.value || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim();
-        var norm = label.toLowerCase();
-        if (!norm) continue;
-        if (norm === needle) {
-          el.click();
-          await new Promise(function (r) { setTimeout(r, 800); });
-          return { ok: true, url: location.href, clicked: label.slice(0, 80) };
-        }
-        if (!partial && norm.indexOf(needle) !== -1) {
-          partial = el;
-          partialLabel = label;
-        }
+  async function clickFromJson(spec) {
+    var api = (typeof globalThis !== 'undefined') ? (globalThis as any).CcClickControl : null;
+    if (!api || typeof api.list !== 'function' || typeof api.press !== 'function') {
+      return { ok: false, error: 'click_control_not_loaded' };
+    }
+    var entry = spec && spec.control;
+    if (!entry || !entry.selector && !(entry && (entry.label || entry.visualLabel))) {
+      var want = api.norm ? api.norm(spec && spec.text) : String((spec && spec.text) || '').toLowerCase();
+      var buttons = api.list(document) || [];
+      entry = null;
+      for (var i = 0; i < buttons.length; i++) {
+        var live = api.norm ? api.norm(buttons[i].visualLabel || buttons[i].label) : '';
+        if (want && live === want) { entry = buttons[i]; break; }
       }
-      if (partial) break;
     }
-    if (!partial) return { ok: false, error: 'not_found', url: location.href };
-    partial.click();
-    await new Promise(function (r) { setTimeout(r, 800); });
-    return { ok: true, url: location.href, clicked: partialLabel.slice(0, 80) };
-  }
-
-  async function runClick(taskId, tabId, text) {
-    var tab = await pickTaskTab(tabId);
-    if (!tab || !tab.id) {
-      replyBrowserTask(taskId, { ok: false, error: 'no_tab' });
-      return;
-    }
-    try {
-      var results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: clickByText,
-        args: [{ text: text }],
-      });
-      var page = results && results[0] && results[0].result;
-      replyBrowserTask(taskId, Object.assign({ ok: false, tabId: tab.id, url: tab.url || null }, page || { error: 'no_result' }));
-    } catch (e) {
-      replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: (e && e.message) || 'click_failed' });
-    }
+    if (!entry) return { ok: false, error: 'not_found', url: location.href };
+    var beforeMark = location.href + '|' + document.title + '|' + ((document.body && document.body.innerText) ? document.body.innerText.length : 0);
+    var pressed = api.press(entry, document);
+    await new Promise(function (r) { setTimeout(r, 900); });
+    var afterMark = location.href + '|' + document.title + '|' + ((document.body && document.body.innerText) ? document.body.innerText.length : 0);
+    var changed = beforeMark !== afterMark;
+    return {
+      ok: !!(pressed && pressed.pressed && changed),
+      url: location.href,
+      clicked: (pressed && pressed.clicked) || '',
+      selector: (pressed && pressed.selector) || entry.selector || '',
+      label: entry.visualLabel || entry.label || '',
+      reason: pressed && pressed.pressed ? (changed ? '' : 'no_effect') : ((pressed && pressed.reason) || 'not_found'),
+    };
   }
 
   function runBrowserTask(msg) {
@@ -241,7 +251,7 @@
       return;
     }
     if (msg.task === 'click') {
-      runClick(msg.taskId, msg.tabId, msg.text || '');
+      runPageTask(msg.taskId, msg.tabId, clickFromJson, [{ text: msg.text || '', control: msg.control || null }]);
       return;
     }
     if (msg.task === 'read_form') {
