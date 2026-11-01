@@ -80,7 +80,7 @@ Bring one control into view. `selector` comes from the latest `read_form`.
 { "selector": "form-field-8" }
 ```
 
-The result includes `scrollY`, `scrollHeight`, `clientHeight`, `scrollRoot` (`window` or `element`), and `moved`. Scroll acts on the overflowing root, including a nested `overflow:auto` pane. `to: "bottom"` retries while lazy content grows. `moved` false means that root was already at that edge.
+The result includes `scrollY`, `scrollHeight`, `clientHeight`, `scrollRoot` (`window` or `element`), and `moved`. Scroll probes whether the window actually moves, then uses a nested overflow pane if it does not, skipping a narrow left nav (DemoQA). `to: "bottom"` retries while lazy content grows. `moved` false means that root was already at that edge.
 
 ### `history`
 

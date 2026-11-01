@@ -1,7 +1,8 @@
 /**
  * Page scroll for browser_task. Self-contained so chrome.scripting can serialize it.
- * Scrolls the overflowing root (nested overflow:auto on DemoQA, window on
- * infinite_scroll) and retries to:bottom while lazy content grows.
+ * Scrolls the overflowing root: the window when the page itself can move,
+ * otherwise a nested overflow:auto pane. Skips a narrow left nav (DemoQA).
+ * Retries to:bottom while lazy content grows.
  */
 async function scrollPage(spec: any) {
   var g = typeof globalThis !== 'undefined' ? globalThis : this;
@@ -27,22 +28,67 @@ async function scrollPage(spec: any) {
   function isWindowRoot(el: any) {
     return el === doc.scrollingElement || el === doc.documentElement || el === doc.body;
   }
-  function findRoot() {
+  function isChromePane(el: any) {
+    if (!el) return false;
+    if (el.closest && el.closest('nav,aside,header,footer,[role="navigation"],[role="banner"],.left-pannel,.left-panel')) return true;
+    var w = el.clientWidth || 0;
+    var vw = win.innerWidth || 0;
+    return vw > 0 && w > 0 && w < vw * 0.4;
+  }
+  function isPane(el: any) {
+    if (!el || isWindowRoot(el)) return false;
+    if (overflowY(el)) return true;
+    if (!win.getComputedStyle) return false;
+    try {
+      var oy = String((win.getComputedStyle(el) || {}).overflowY || '');
+      if (oy !== 'hidden') return false;
+      var w = el.clientWidth || 0;
+      var vw = win.innerWidth || 0;
+      return vw > 0 && w > vw * 0.5;
+    } catch (e) {
+      return false;
+    }
+  }
+  function windowActuallyScrolls() {
     var scrolling = doc.scrollingElement || doc.documentElement;
-    var best = scrolling;
-    var bestDelta = delta(best);
+    if (delta(scrolling) <= 32) return false;
+    if (typeof win.scrollTo !== 'function') return false;
+    var y0 = win.scrollY || 0;
+    var probe = y0 > 8 ? y0 - 8 : y0 + 8;
+    try { win.scrollTo(0, probe); } catch (e) { return false; }
+    var y1 = win.scrollY || 0;
+    try { win.scrollTo(0, y0); } catch (e2) { /* restore best-effort */ }
+    return Math.abs(y1 - y0) > 1;
+  }
+  function findNested() {
+    var best = null;
+    var bestDelta = 0;
+    var fallback = null;
+    var fallbackDelta = 0;
     var nodes = [];
     try { nodes = doc.querySelectorAll('div,main,section,article,aside,body,html'); } catch (e) { nodes = []; }
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
-      if (!overflowY(el)) continue;
+      if (!isPane(el)) continue;
       var d = delta(el);
+      if (d > fallbackDelta + 8) {
+        fallback = el;
+        fallbackDelta = d;
+      }
+      if (isChromePane(el)) continue;
       if (d > bestDelta + 8) {
         best = el;
         bestDelta = d;
       }
     }
-    return best || scrolling;
+    if (best && bestDelta > 32) return best;
+    if (fallback && fallbackDelta > 32) return fallback;
+    return null;
+  }
+  function findRoot() {
+    var scrolling = doc.scrollingElement || doc.documentElement;
+    if (windowActuallyScrolls()) return scrolling;
+    return findNested() || scrolling;
   }
   function pos(root: any) {
     if (!root) return { x: 0, y: 0 };
@@ -95,41 +141,51 @@ async function scrollPage(spec: any) {
     return null;
   }
 
-  var root = findRoot();
-  var before = pos(root);
-  var selector = spec && spec.selector ? String(spec.selector) : '';
-  if (selector) {
-    var target = resolve(selector);
-    if (!target) return { ok: false, error: 'not_found' };
-    try { target.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e4) { /* stay */ }
-  } else if (spec && spec.to === 'top') {
-    setPos(root, 0, 0);
-  } else if (spec && spec.to === 'bottom') {
-    for (var n = 0; n < 8; n++) {
-      var h = root && root.scrollHeight || 0;
-      setPos(root, 0, h);
-      await wait(220);
-      var grown = (root && root.scrollHeight || 0) > h + 2;
-      if (!grown) break;
+  async function apply(targetRoot: any, from: any) {
+    var selector = spec && spec.selector ? String(spec.selector) : '';
+    if (selector) {
+      var target = resolve(selector);
+      if (!target) return { missing: true };
+      try { target.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e4) { /* stay */ }
+      return { missing: false };
     }
-  } else {
+    if (spec && spec.to === 'top') {
+      setPos(targetRoot, 0, 0);
+      return { missing: false };
+    }
+    if (spec && spec.to === 'bottom') {
+      for (var n = 0; n < 8; n++) {
+        var h = targetRoot && targetRoot.scrollHeight || 0;
+        setPos(targetRoot, 0, h);
+        await wait(220);
+        var grown = (targetRoot && targetRoot.scrollHeight || 0) > h + 2;
+        if (!grown) break;
+      }
+      return { missing: false };
+    }
     var dx = Number(spec && spec.dx) || 0;
     var dy = Number(spec && spec.dy) || 0;
-    setPos(root, before.x + dx, before.y + dy);
-    var afterTry = pos(root);
-    if (afterTry.x === before.x && afterTry.y === before.y && !isWindowRoot(root)) {
-      if (typeof win.scrollBy === 'function') win.scrollBy(dx, dy);
-    }
+    setPos(targetRoot, from.x + dx, from.y + dy);
+    return { missing: false };
   }
+
+  var root = findRoot();
+  var before = pos(root);
+  var applied = await apply(root, before);
+  if (applied.missing) return { ok: false, error: 'not_found' };
   var after = pos(root);
   var moved = after.x !== before.x || after.y !== before.y;
-  if (!moved && spec && spec.to === 'bottom') {
-    var still = findRoot();
-    if (still && still !== root) {
-      setPos(still, 0, still.scrollHeight || 0);
-      root = still;
-      after = pos(root);
-      moved = after.x !== before.x || after.y !== before.y;
+  if (!moved && !(spec && spec.selector)) {
+    var alt = isWindowRoot(root) ? findNested() : (doc.scrollingElement || doc.documentElement);
+    if (alt && alt !== root) {
+      var altBefore = pos(alt);
+      await apply(alt, altBefore);
+      var altAfter = pos(alt);
+      if (altAfter.x !== altBefore.x || altAfter.y !== altBefore.y) {
+        root = alt;
+        after = altAfter;
+        moved = true;
+      }
     }
   }
   return {

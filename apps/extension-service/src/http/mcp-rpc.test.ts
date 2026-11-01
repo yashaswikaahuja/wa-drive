@@ -360,4 +360,82 @@ assert.equal(nested.scrollRoot, 'element');
 assert.equal(nested.moved, true);
 assert.equal(inner.scrollTop, 0);
 
+const sidebar = {
+  tagName: 'DIV',
+  className: 'left-pannel',
+  scrollHeight: 4000,
+  clientHeight: 600,
+  clientWidth: 220,
+  scrollTop: 316,
+  scrollLeft: 0,
+  closest(sel) { return String(sel).indexOf('left-pannel') !== -1 ? sidebar : null; },
+};
+const page = { scrollHeight: 1369, clientHeight: 700, scrollTop: 316, scrollLeft: 0 };
+(globalThis as any).document = {
+  title: 'DEMOQA',
+  scrollingElement: page,
+  documentElement: page,
+  body: page,
+  querySelectorAll: () => [sidebar],
+  querySelector: () => null,
+};
+(globalThis as any).window = {
+  scrollX: 0,
+  scrollY: 316,
+  innerHeight: 700,
+  innerWidth: 1280,
+  getComputedStyle: (el) => el === sidebar ? { overflowY: 'auto' } : { overflowY: 'visible' },
+  scrollTo(x, y) { this.scrollX = x; this.scrollY = y; },
+  scrollBy(dx, dy) { this.scrollY += dy; },
+};
+(globalThis as any).location = { href: 'https://demoqa.com/text-box' };
+const pageScroll = await scrollPage({ dy: 400 });
+assert.equal(pageScroll.ok, true);
+assert.equal(pageScroll.scrollRoot, 'window');
+assert.equal(pageScroll.moved, true);
+assert.equal(pageScroll.scrollY, 716);
+assert.equal(sidebar.scrollTop, 316);
+
+const stuckWin = {
+  scrollX: 0,
+  scrollY: 0,
+  innerHeight: 598,
+  innerWidth: 1280,
+  getComputedStyle: (el) => {
+    if (el === sidebar) return { overflowY: 'auto' };
+    if (el && el.id === 'main') return { overflowY: 'auto' };
+    return { overflowY: 'visible' };
+  },
+  scrollTo() { /* DemoQA html/body do not move */ },
+  scrollBy() {},
+};
+const mainPane = {
+  id: 'main',
+  tagName: 'DIV',
+  scrollHeight: 1369,
+  clientHeight: 598,
+  clientWidth: 980,
+  scrollTop: 0,
+  scrollLeft: 0,
+  closest() { return null; },
+};
+const deadPage = { scrollHeight: 1369, clientHeight: 598, scrollTop: 0, scrollLeft: 0 };
+(globalThis as any).document = {
+  title: 'DEMOQA',
+  scrollingElement: deadPage,
+  documentElement: deadPage,
+  body: deadPage,
+  querySelectorAll: () => [sidebar, mainPane],
+  querySelector: () => null,
+};
+(globalThis as any).window = stuckWin;
+(globalThis as any).location = { href: 'https://demoqa.com/text-box' };
+const innerPage = await scrollPage({ dy: 400 });
+assert.equal(innerPage.ok, true);
+assert.equal(innerPage.scrollRoot, 'element');
+assert.equal(innerPage.moved, true);
+assert.equal(innerPage.scrollY, 400);
+assert.equal(mainPane.scrollTop, 400);
+assert.equal(sidebar.scrollTop, 316);
+
 console.log('MCP_RPC_OK');
