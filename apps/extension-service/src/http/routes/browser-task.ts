@@ -23,13 +23,13 @@ function newTaskId() {
   return `task.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** One fill at a time per workspace so the 88s clock starts after the previous fill. */
-const fillLocks = new Map<string, Promise<void>>();
+/** One browser task at a time per workspace so a scroll cannot steal the socket from a fill. */
+const workspaceLocks = new Map<string, Promise<void>>();
 
-function enqueueFill<T>(workspaceId: string, run: () => Promise<T>): Promise<T> {
-  const prev = fillLocks.get(workspaceId) || Promise.resolve();
+function enqueueWorkspace<T>(workspaceId: string, run: () => Promise<T>): Promise<T> {
+  const prev = workspaceLocks.get(workspaceId) || Promise.resolve();
   const job = prev.then(run, run);
-  fillLocks.set(workspaceId, job.then(() => undefined, () => undefined));
+  workspaceLocks.set(workspaceId, job.then(() => undefined, () => undefined));
   return job;
 }
 
@@ -285,10 +285,7 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
     return { status: 400, payload: { error: 'unsupported task' } };
   }
 
-  if (task === 'fill' || task === 'fill_form') {
-    return enqueueFill(workspaceId, () => dispatchAndWait(workspaceId, message, timeoutMs));
-  }
-  return dispatchAndWait(workspaceId, message, timeoutMs);
+  return enqueueWorkspace(workspaceId, () => dispatchAndWait(workspaceId, message, timeoutMs));
 }
 
 router.post('/', authMiddleware, async (req: any, res: any) => {
