@@ -524,6 +524,37 @@ if (typeof module !== "undefined") module.exports = root.CcSettleAfterAct;
     "textarea",
     "select"
   ].join(",");
+  function queryDeep(d, selector) {
+    if (!d || !selector) return null;
+    var hit = null;
+    try {
+      hit = d.querySelector(selector);
+    } catch (e) {
+      hit = null;
+    }
+    if (hit) return hit;
+    var frames = [];
+    try {
+      frames = d.querySelectorAll("iframe,frame");
+    } catch (e2) {
+      return null;
+    }
+    for (var i = 0; i < frames.length; i++) {
+      var frame = frames[i];
+      var tag = String(frame && frame.tagName || "").toLowerCase();
+      if (tag && tag !== "iframe" && tag !== "frame") continue;
+      var child = null;
+      try {
+        child = frame.contentDocument;
+      } catch (e3) {
+        child = null;
+      }
+      if (!child) continue;
+      hit = queryDeep(child, selector);
+      if (hit) return hit;
+    }
+    return null;
+  }
   function resolveCcSelector(selector, doc) {
     var d = doc || (typeof document !== "undefined" ? document : null);
     if (!d) return null;
@@ -537,7 +568,7 @@ if (typeof module !== "undefined") module.exports = root.CcSettleAfterAct;
       var dropdowns = d.querySelectorAll("div.ng-dropdown");
       return dropdowns[ngIdx] || null;
     }
-    return d.querySelector(selector);
+    return queryDeep(d, selector);
   }
   root2.CcResolveCcSelector = {
     resolveCcSelector,
@@ -1180,6 +1211,10 @@ if (typeof module !== "undefined") module.exports = globalThis.CcChooseAutocompl
   }
   function readValue(el) {
     if (!el) return "";
+    var ceAttr = el.getAttribute && el.getAttribute("contenteditable");
+    if (el.isContentEditable === true || ceAttr != null && (String(ceAttr).toLowerCase().trim() === "true" || String(ceAttr).trim() === "")) {
+      return String(el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+    }
     return el.value != null ? String(el.value) : "";
   }
   function liveDeps(doc) {
@@ -2254,6 +2289,26 @@ if (typeof module !== "undefined") module.exports = root.CcFillOneMat;
 (function(root2) {
   "use strict";
   function fillText(el, value) {
+    var ceAttr = el && el.getAttribute && el.getAttribute("contenteditable");
+    var ce = !!(el && (el.isContentEditable === true || ceAttr != null && (String(ceAttr).toLowerCase().trim() === "true" || String(ceAttr).trim() === "")));
+    if (ce) {
+      try {
+        el.focus();
+      } catch (e0) {
+      }
+      var text = String(value == null ? "" : value);
+      if (typeof el.innerText === "string") el.innerText = text;
+      else el.textContent = text;
+      try {
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      } catch (e1) {
+      }
+      try {
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch (e2) {
+      }
+      return 1;
+    }
     var isTextarea = el.tagName === "TEXTAREA";
     var niv = isTextarea ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value") : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
     if (typeof window.keystrokeFillSync === "function") {

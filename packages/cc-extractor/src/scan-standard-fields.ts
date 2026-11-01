@@ -24,7 +24,9 @@
   var INPUT_SELECTOR = (
     'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
     // type=search included for OTA From/To widgets (#311)
-    'input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
+    'input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select,' +
+    // iframe bodies (TinyMCE on The Internet) — not added to FORM_FIELD_QUERY so form-field-N stays stable
+    '[contenteditable="true"],[contenteditable=""]'
   );
 
   // Site chrome / security — NOT journey search. "search" alone is OK when journey-like (#311).
@@ -54,6 +56,17 @@
     if (/(^|[^a-z])(search_query|search|query)([^a-z]|$)/.test(meta) && !/(^|[^a-z])filter([^a-z]|$)/.test(meta)) return true;
     var hint = String(el.placeholder || (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title'))) || '').toLowerCase();
     return /^\s*search\b/.test(hint);
+  }
+
+  function isContentEditable(el: any) {
+    if (!el) return false;
+    var tag = String(el.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return false;
+    if (el.isContentEditable === true) return true;
+    var raw = el.getAttribute && el.getAttribute('contenteditable');
+    if (raw == null) return false;
+    raw = String(raw).toLowerCase().trim();
+    return raw === 'true' || raw === '';
   }
 
   function uniqueSearchSelector(el: any, doc: any) {
@@ -180,6 +193,29 @@
       if (t === 'hidden' || t === 'submit' || t === 'button' ||
           t === 'password' || t === 'image' || t === 'reset') return;
       if (blocked(el)) return;
+      if (isContentEditable(el)) {
+        if (el.parentElement && isContentEditable(el.parentElement)) return;
+        var ceLabel = getLabel(el);
+        if (!ceLabel && helpers.humanizeAttr) ceLabel = helpers.humanizeAttr(el.id || el.className || '') || '';
+        if (!ceLabel) ceLabel = el.id ? String(el.id) : 'Editor';
+        var ceSelector = makeSelector(el, doc);
+        if (!ceSelector && el.id) ceSelector = el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id;
+        if (!ceSelector) ceSelector = '[contenteditable="true"]';
+        formFields.push({
+          selector: ceSelector,
+          id: el.id || '',
+          name: el.name || '',
+          value: String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 200),
+          placeholder: '',
+          label: ceLabel,
+          type: 'contenteditable',
+          index: idx,
+          options: null,
+          _el: el,
+        });
+        idx++;
+        return;
+      }
 
       var meta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
       var pageSearch = isPageSearch(el);

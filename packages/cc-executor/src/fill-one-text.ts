@@ -27,6 +27,17 @@
    * @returns {1|0}  1 = filled, 0 = failed
    */
   function fillText(el: any, value: any) {
+    var ceAttr = el && el.getAttribute && el.getAttribute('contenteditable');
+    var ce = !!(el && (el.isContentEditable === true || (ceAttr != null && (String(ceAttr).toLowerCase().trim() === 'true' || String(ceAttr).trim() === ''))));
+    if (ce) {
+      try { el.focus(); } catch (e0) { /* stay */ }
+      var text = String(value == null ? '' : value);
+      if (typeof el.innerText === 'string') el.innerText = text;
+      else el.textContent = text;
+      try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e1) { /* stay */ }
+      try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e2) { /* stay */ }
+      return 1;
+    }
     var isTextarea = el.tagName === 'TEXTAREA';
     var niv = isTextarea
       ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')

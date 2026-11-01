@@ -175,6 +175,20 @@ assert('#f3 resolves',           resolve('#f3')?.id, 'f3');
 assert('#ng0 resolves',          resolve('#ng0')?.id, 'ng0');
 assertNull('#doesNotExist → null', resolve('#doesNotExist'));
 
+const innerEl = makeEl({ id: 'tinymce', tag: 'body' });
+const innerDoc = {
+  querySelector(sel) { return sel === '#tinymce' || sel === '[contenteditable="true"]' ? innerEl : null; },
+  querySelectorAll() { return []; },
+};
+const hostWithIframe = {
+  querySelector() { return null; },
+  querySelectorAll(sel) {
+    if (String(sel).includes('iframe')) return [{ tagName: 'IFRAME', contentDocument: innerDoc }];
+    return [];
+  },
+};
+assert('iframe #tinymce resolves', resolveCcSelector('#tinymce', hostWithIframe)?.id, 'tinymce');
+
 // ── No document available ─────────────────────────────────────────────────────
 console.log('\nNo document:');
 assertNull('null doc → null', resolveCcSelector('form-field-0', null));

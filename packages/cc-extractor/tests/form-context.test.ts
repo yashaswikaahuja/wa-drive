@@ -17,7 +17,7 @@ const { code: src } = await esbuild.transform(srcTs, { loader: 'ts', target: 'es
 const root = {};
 const fn = new Function('globalThis', src);
 fn(root);
-const { isInSkipContext, isGoodLabel, hasFormContext, isVisuallyPresent } = root.CcFormContext;
+const { isInSkipContext, isGoodLabel, hasFormContext, isVisuallyPresent, sameOriginDocs } = root.CcFormContext;
 
 let passed = 0;
 let failed = 0;
@@ -178,6 +178,29 @@ assert('ccDomUtils.getLabel used when provided',
   hasFormContext(makeDocNoForm([inputWithLabel, inputWithLabel]), ccDomUtils), true);
 assert('ccDomUtils.getLabel — no label = no context',
   hasFormContext(makeDocNoForm([inputNoLabel, inputNoLabel]), ccDomUtils), false);
+
+const editorDoc = {
+  querySelectorAll(sel) {
+    if (sel === 'form') return [];
+    if (String(sel).includes('contenteditable')) {
+      return [{ tagName: 'BODY', isContentEditable: true, getAttribute: (k) => k === 'contenteditable' ? 'true' : null }];
+    }
+    return [];
+  },
+};
+assert('contenteditable body is form context', hasFormContext(editorDoc), true);
+
+const iframeHost = {
+  querySelectorAll(sel) {
+    if (sel === 'form') return [];
+    if (sel === 'iframe,frame') {
+      return [{ tagName: 'IFRAME', contentDocument: editorDoc }];
+    }
+    return [];
+  },
+};
+assert('TinyMCE iframe contentDocument is form context', hasFormContext(iframeHost), true);
+assert('sameOriginDocs walks iframe', sameOriginDocs(iframeHost).length, 2);
 
 // ── Summary ────────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);

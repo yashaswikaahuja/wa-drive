@@ -75,6 +75,10 @@
 
   function readValue(el: any) {
     if (!el) return '';
+    var ceAttr = el.getAttribute && el.getAttribute('contenteditable');
+    if (el.isContentEditable === true || (ceAttr != null && (String(ceAttr).toLowerCase().trim() === 'true' || String(ceAttr).trim() === ''))) {
+      return String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+    }
     return el.value != null ? String(el.value) : '';
   }
 

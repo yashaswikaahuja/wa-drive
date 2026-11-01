@@ -101,9 +101,67 @@
     const t = s.trim();
     return t.length >= 2 && /[a-zA-Z0-9]/.test(t);
   }
-  function hasFormContext(doc, ccDomUtils) {
+  function isAdFrameUrl(url) {
+    return /doubleclick|googlesyndication|googleads|adservice|adnxs|adplus|facebook\.com\/tr|hotjar|clarity\.ms/i.test(String(url || ""));
+  }
+  function sameOriginDocs(rootDoc) {
+    var out = [];
+    function walk(doc) {
+      if (!doc || out.indexOf(doc) !== -1) return;
+      var href = "";
+      try {
+        href = doc.location && doc.location.href || "";
+      } catch (e) {
+        href = "";
+      }
+      if (isAdFrameUrl(href)) return;
+      out.push(doc);
+      var frames = [];
+      try {
+        frames = doc.querySelectorAll("iframe,frame");
+      } catch (e2) {
+        return;
+      }
+      for (var i = 0; i < frames.length; i++) {
+        var frame = frames[i];
+        var tag = String(frame && frame.tagName || "").toLowerCase();
+        if (tag && tag !== "iframe" && tag !== "frame") continue;
+        var child = null;
+        try {
+          child = frame.contentDocument;
+        } catch (e3) {
+          child = null;
+        }
+        if (child) walk(child);
+      }
+    }
+    walk(rootDoc);
+    return out;
+  }
+  function hasContentEditable(doc) {
+    var nodes = [];
+    try {
+      nodes = doc.querySelectorAll('[contenteditable="true"],[contenteditable=""],[contenteditable]');
+    } catch (e) {
+      return false;
+    }
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var tag = String(el && el.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") continue;
+      if (el && el.isContentEditable === true) return true;
+      var raw = el && el.getAttribute && el.getAttribute("contenteditable");
+      if (raw == null) continue;
+      raw = String(raw).toLowerCase().trim();
+      if (raw === "true" || raw === "") return true;
+    }
+    return false;
+  }
+  function hasLocalFormContext(doc, ccDomUtils) {
+    if (!doc || typeof doc.querySelectorAll !== "function") return false;
     const forms = doc.querySelectorAll("form");
     if (forms.length > 0) return true;
+    if (hasContentEditable(doc)) return true;
     const inputs = doc.querySelectorAll(
       'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input[type="number"],input:not([type]),textarea,select,input[type="checkbox"],input[type="radio"],[role="combobox"],[role="checkbox"],[role="radio"]'
     );
@@ -115,7 +173,14 @@
     });
     return labeled >= 1;
   }
-  root2.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike, isVisuallyPresent };
+  function hasFormContext(doc, ccDomUtils) {
+    var docs = sameOriginDocs(doc);
+    for (var i = 0; i < docs.length; i++) {
+      if (hasLocalFormContext(docs[i], ccDomUtils)) return true;
+    }
+    return false;
+  }
+  root2.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike, isVisuallyPresent, sameOriginDocs };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined" && module.exports) {
   module.exports = (typeof globalThis !== "undefined" ? globalThis : root).CcFormContext;
@@ -124,7 +189,7 @@ if (typeof module !== "undefined" && module.exports) {
 /* ==== scan-standard-fields.ts ==== */
 (function(root2) {
   "use strict";
-  var INPUT_SELECTOR = 'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select';
+  var INPUT_SELECTOR = 'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select,[contenteditable="true"],[contenteditable=""]';
   var SKIP_META_HARD_RE = /captcha|otp|token|csrf|recaptcha/i;
   var SKIP_META_SOFT_RE = /search|query|filter/i;
   var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|onward|return|leaving|going|city|date)\b/i;
@@ -142,6 +207,16 @@ if (typeof module !== "undefined" && module.exports) {
     if (/(^|[^a-z])(search_query|search|query)([^a-z]|$)/.test(meta) && !/(^|[^a-z])filter([^a-z]|$)/.test(meta)) return true;
     var hint = String(el.placeholder || el.getAttribute && (el.getAttribute("aria-label") || el.getAttribute("title")) || "").toLowerCase();
     return /^\s*search\b/.test(hint);
+  }
+  function isContentEditable(el) {
+    if (!el) return false;
+    var tag = String(el.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return false;
+    if (el.isContentEditable === true) return true;
+    var raw = el.getAttribute && el.getAttribute("contenteditable");
+    if (raw == null) return false;
+    raw = String(raw).toLowerCase().trim();
+    return raw === "true" || raw === "";
   }
   function uniqueSearchSelector(el, doc) {
     if (!doc || typeof doc.querySelectorAll !== "function") return null;
@@ -247,6 +322,29 @@ if (typeof module !== "undefined" && module.exports) {
       var t = el.type;
       if (t === "hidden" || t === "submit" || t === "button" || t === "password" || t === "image" || t === "reset") return;
       if (blocked(el)) return;
+      if (isContentEditable(el)) {
+        if (el.parentElement && isContentEditable(el.parentElement)) return;
+        var ceLabel = getLabel(el);
+        if (!ceLabel && helpers.humanizeAttr) ceLabel = helpers.humanizeAttr(el.id || el.className || "") || "";
+        if (!ceLabel) ceLabel = el.id ? String(el.id) : "Editor";
+        var ceSelector = makeSelector(el, doc);
+        if (!ceSelector && el.id) ceSelector = el.id.match(/^\d/) ? '[id="' + el.id + '"]' : "#" + el.id;
+        if (!ceSelector) ceSelector = '[contenteditable="true"]';
+        formFields.push({
+          selector: ceSelector,
+          id: el.id || "",
+          name: el.name || "",
+          value: String(el.innerText || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 200),
+          placeholder: "",
+          label: ceLabel,
+          type: "contenteditable",
+          index: idx,
+          options: null,
+          _el: el
+        });
+        idx++;
+        return;
+      }
       var meta = ((el.id || "") + " " + (el.name || "") + " " + (el.className || "")).toLowerCase();
       var pageSearch = isPageSearch(el);
       if (SKIP_META_HARD_RE.test(meta)) return;
@@ -993,33 +1091,39 @@ function extractFormFieldsWithFingerprint() {
       return _fc.isGoodLabel ? _fc.isGoodLabel(s, ccDomUtils) : !!(s && s.trim().length >= 2 && /[a-zA-Z0-9]/.test(s));
     },
     isVisuallyPresent: function(el) {
-      return _fc.isVisuallyPresent ? _fc.isVisuallyPresent(el) : true;
+      if (!_fc.isVisuallyPresent) return true;
+      var view = el && el.ownerDocument && el.ownerDocument.defaultView || void 0;
+      return _fc.isVisuallyPresent(el, view);
     }
   };
+  var docs = _fc.sameOriginDocs ? _fc.sameOriginDocs(doc) : [doc];
   if (_fc.hasFormContext && !_fc.hasFormContext(doc, ccDomUtils)) {
     return { formFields: [], formKey: "" };
   }
   var formFields = [];
   var labelList = [];
-  if (_ssf.scan) {
-    var std = _ssf.scan(doc, helpers);
-    formFields = formFields.concat(std.formFields);
-    labelList = labelList.concat(std.labelList);
-  }
-  if (_smw.scan) {
-    var mat = _smw.scan(doc, formFields, helpers, 1e4);
-    formFields = formFields.concat(mat.formFields);
-    labelList = labelList.concat(mat.labelList);
-  }
-  if (_sng.scan) {
-    var ng = _sng.scan(doc, formFields, helpers, 1e4 + formFields.length);
-    formFields = formFields.concat(ng.formFields);
-    labelList = labelList.concat(ng.labelList);
-  }
-  if (_scw.scan) {
-    var custom = _scw.scan(doc, formFields, helpers, 2e4 + formFields.length);
-    formFields = formFields.concat(custom.formFields);
-    labelList = labelList.concat(custom.labelList);
+  for (var d = 0; d < docs.length; d++) {
+    var one = docs[d];
+    if (_ssf.scan) {
+      var std = _ssf.scan(one, helpers);
+      formFields = formFields.concat(std.formFields);
+      labelList = labelList.concat(std.labelList);
+    }
+    if (_smw.scan) {
+      var mat = _smw.scan(one, formFields, helpers, 1e4 + formFields.length);
+      formFields = formFields.concat(mat.formFields);
+      labelList = labelList.concat(mat.labelList);
+    }
+    if (_sng.scan) {
+      var ng = _sng.scan(one, formFields, helpers, 1e4 + formFields.length);
+      formFields = formFields.concat(ng.formFields);
+      labelList = labelList.concat(ng.labelList);
+    }
+    if (_scw.scan) {
+      var custom = _scw.scan(one, formFields, helpers, 2e4 + formFields.length);
+      formFields = formFields.concat(custom.formFields);
+      labelList = labelList.concat(custom.labelList);
+    }
   }
   if (_sfv.sort) _sfv.sort(formFields);
   var snapshotId = "snap." + Date.now().toString(36);

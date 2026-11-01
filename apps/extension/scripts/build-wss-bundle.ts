@@ -9,6 +9,6 @@ await writeConcatBundle({
  * Rebuild: pnpm --filter cybercontrol-extension build
  */`,
   srcDir: packageSrc('@cc/wss'),
-  order: ['reconnect-manager.ts', 'ws-client.ts', 'page-shot.ts', 'pointer-keys.ts', 'wss-session.ts'],
+  order: ['reconnect-manager.ts', 'ws-client.ts', 'page-shot.ts', 'pointer-keys.ts', 'scroll-page.ts', 'wss-session.ts'],
   outfile: path.join(extensionRoot, 'sw/wss-bundle.js'),
 });

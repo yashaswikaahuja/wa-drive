@@ -110,6 +110,27 @@ console.log('\nTextarea:');
   globalLike.window.keystrokeFillSync = null;
 }
 
+// ── contenteditable ───────────────────────────────────────────────────────────
+console.log('\nContenteditable:');
+{
+  const events = [];
+  const el = {
+    tagName: 'BODY',
+    isContentEditable: true,
+    innerText: '',
+    textContent: '',
+    getAttribute: (k) => k === 'contenteditable' ? 'true' : null,
+    focus: function () { this.focused = true; },
+    dispatchEvent: function (e) { events.push(e.type || e); },
+  };
+  globalLike.window.keystrokeFillSync = () => false;
+  const r = fillText(el, 'Your content goes here.');
+  ok('contenteditable returns 1', r === 1);
+  ok('innerText set', el.innerText === 'Your content goes here.');
+  ok('skips keystrokeFillSync', events.includes('input'));
+  globalLike.window.keystrokeFillSync = null;
+}
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -37,6 +37,7 @@ function slimFields(fields: any) {
       type: field.type ? String(field.type).slice(0, 40) : 'text',
       label: field.label ? String(field.label).slice(0, 180) : '',
       visualLabel: field.visualLabel ? String(field.visualLabel).slice(0, 180) : (field.label ? String(field.label).slice(0, 180) : ''),
+      frameId: Number.isFinite(Number(field.frameId)) ? Number(field.frameId) : null,
     });
   }
   return slim;
@@ -54,7 +55,16 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
   if (task === 'open_url') {
     const url = body && body.url;
     if (!allowedPageUrl(url)) return { status: 400, payload: { error: 'url must be http or https' } };
-    message = { type: 'browser_task', task: 'open_url', url, taskId };
+    const tabId = Number(body && body.tabId) || 0;
+    const newTab = !(tabId || body && body.newTab === false);
+    message = {
+      type: 'browser_task',
+      task: 'open_url',
+      url,
+      tabId: tabId || null,
+      newTab,
+      taskId,
+    };
     timeoutMs = 15000;
   } else if (task === 'click') {
     const text = body && body.text ? String(body.text).trim() : '';
@@ -64,6 +74,7 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
       label: raw.label ? String(raw.label).slice(0, 180) : '',
       visualLabel: raw.visualLabel ? String(raw.visualLabel).slice(0, 180) : (raw.label ? String(raw.label).slice(0, 180) : ''),
       type: 'button',
+      frameId: Number.isFinite(Number(raw.frameId)) ? Number(raw.frameId) : null,
     } : null;
     if ((!text || text.length > 80) && !(control && (control.selector || control.visualLabel))) {
       return { status: 400, payload: { error: 'text or control required' } };
@@ -137,6 +148,11 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
   } else if (task === 'list_tabs') {
     message = { type: 'browser_task', task: 'list_tabs', taskId };
     timeoutMs = 10000;
+  } else if (task === 'close_tab') {
+    const tabId = Number(body && body.tabId);
+    if (!tabId) return { status: 400, payload: { error: 'tabId required' } };
+    message = { type: 'browser_task', task: 'close_tab', tabId, taskId };
+    timeoutMs = 10000;
   } else if (task === 'focus_tab') {
     const tabId = Number(body && body.tabId);
     if (!tabId) return { status: 400, payload: { error: 'tabId required' } };
@@ -185,6 +201,7 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
       x: hasPoint ? Math.max(-8000, Math.min(8000, x)) : null,
       y: hasPoint ? Math.max(-8000, Math.min(8000, y)) : null,
       selector,
+      frameId: Number.isFinite(Number(body && body.frameId)) ? Number(body.frameId) : null,
       button,
       count,
       taskId,
@@ -205,6 +222,7 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
       task: 'keyboard',
       tabId: body && body.tabId || null,
       selector: body && body.selector ? String(body.selector).slice(0, 300) : '',
+      frameId: Number.isFinite(Number(body && body.frameId)) ? Number(body.frameId) : null,
       text,
       key,
       keys,

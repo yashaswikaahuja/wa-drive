@@ -6,6 +6,22 @@ function pointerClickAt(spec: any) {
   var g = typeof globalThis !== 'undefined' ? globalThis : this;
   var doc = g.document;
   if (!doc) return { ok: false, error: 'no_document' };
+  function queryDeep(rootDoc: any, sel: any) {
+    if (!rootDoc || !sel) return null;
+    var hit = null;
+    try { hit = rootDoc.querySelector(sel); } catch (e0) { hit = null; }
+    if (hit) return hit;
+    var frames: any = [];
+    try { frames = rootDoc.querySelectorAll('iframe,frame'); } catch (e1) { return null; }
+    for (var i = 0; i < frames.length; i++) {
+      var child = null;
+      try { child = frames[i].contentDocument; } catch (e2) { child = null; }
+      if (!child) continue;
+      hit = queryDeep(child, sel);
+      if (hit) return hit;
+    }
+    return null;
+  }
   function resolve(sel: any) {
     if (!sel) return null;
     try {
@@ -22,7 +38,7 @@ function pointerClickAt(spec: any) {
         if (byClick) return byClick;
       }
     } catch (e2) { /* fall through */ }
-    try { return doc.querySelector(sel); } catch (e3) { return null; }
+    return queryDeep(doc, sel);
   }
   function labelOf(el: any) {
     if (!el) return '';
@@ -130,6 +146,22 @@ function keyboardPress(spec: any) {
     pageup: { key: 'PageUp', code: 'PageUp', keyCode: 33 },
     pagedown: { key: 'PageDown', code: 'PageDown', keyCode: 34 },
   };
+  function queryDeep(rootDoc: any, sel: any) {
+    if (!rootDoc || !sel) return null;
+    var hit = null;
+    try { hit = rootDoc.querySelector(sel); } catch (e0) { hit = null; }
+    if (hit) return hit;
+    var frames: any = [];
+    try { frames = rootDoc.querySelectorAll('iframe,frame'); } catch (e1) { return null; }
+    for (var i = 0; i < frames.length; i++) {
+      var child = null;
+      try { child = frames[i].contentDocument; } catch (e2) { child = null; }
+      if (!child) continue;
+      hit = queryDeep(child, sel);
+      if (hit) return hit;
+    }
+    return null;
+  }
   function resolve(sel: any) {
     if (!sel) return null;
     try {
@@ -146,7 +178,7 @@ function keyboardPress(spec: any) {
         if (byClick) return byClick;
       }
     } catch (e2) { /* fall through */ }
-    try { return doc.querySelector(sel); } catch (e3) { return null; }
+    return queryDeep(doc, sel);
   }
   function tagOf(el: any) {
     return String(el && el.tagName || '').toLowerCase();

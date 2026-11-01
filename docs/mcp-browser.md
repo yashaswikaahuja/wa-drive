@@ -52,6 +52,14 @@ Brings one of those tabs to the front. Pass the `tabId` from `list_tabs`.
 
 Other tools accept the same `tabId` when more than one web page is open. With no `tabId`, they use the most recently used web page.
 
+### `close_tab`
+
+Closes one tab from `list_tabs`. Pass that `tabId`. Use this after `open_url` so the bench does not leave extra tabs open.
+
+```json
+{ "tabId": 269204060 }
+```
+
 ### `scroll`
 
 Moves the page. `dy` is pixels downward. A negative `dy` moves up. `dx` moves sideways.
@@ -72,7 +80,7 @@ Bring one control into view. `selector` comes from the latest `read_form`.
 { "selector": "form-field-8" }
 ```
 
-The result includes `scrollY`, `scrollHeight`, `clientHeight`, and `moved`. `moved` false means the page was already at that edge.
+The result includes `scrollY`, `scrollHeight`, `clientHeight`, `scrollRoot` (`window` or `element`), and `moved`. Scroll acts on the overflowing root, including a nested `overflow:auto` pane. `to: "bottom"` retries while lazy content grows. `moved` false means that root was already at that edge.
 
 ### `history`
 
@@ -86,7 +94,7 @@ Goes back, forward, or reloads the web tab.
 
 ### `mouse_click`
 
-Clicks the GUI with the mouse. `x` and `y` are visible-screen CSS pixels, the same space as a `snapshot` rect. `selector` from the latest `read_form` clicks the center of that control instead.
+Clicks the GUI with the mouse. `x` and `y` are visible-screen CSS pixels. A snapshot JPEG can be smaller than the screen; convert with `cssX = imageX * scaleX` and `cssY = imageY * scaleY` from that snapshot. `selector` from the latest `read_form` clicks the center of that control instead. Copy `frameId` from the read when the control is inside an iframe.
 
 ```json
 { "x": 640, "y": 24 }
@@ -110,14 +118,22 @@ Types on the keyboard in the focused control, or presses a named key. Pass `sele
 { "key": "Escape" }
 ```
 
-`key` is one of `Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`, `PageUp`, `PageDown`, or a single character. `keys` is a short sequence of those. `ctrl`, `alt`, `shift`, and `meta` are modifiers. It does not type into a password, CAPTCHA, or OTP box.
+`key` is one of `Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`, `PageUp`, `PageDown`, or a single character. `keys` is a short sequence of those. `ctrl`, `alt`, `shift`, and `meta` are modifiers. It does not type into a password, CAPTCHA, or OTP box. Copy `frameId` from `read_form` when the control is inside an iframe.
 
 ### `open_url`
 
-Opens an `http` or `https` URL in a new tab in that Chrome.
+Opens an `http` or `https` URL. Default is a new tab. Pass `tabId` or `newTab: false` to load the URL in an already open tab so `history` back/forward has a stack.
 
 ```json
 { "url": "https://www.irctc.co.in/nget/train-search" }
+```
+
+```json
+{ "url": "https://the-internet.herokuapp.com/iframe", "tabId": 269204060 }
+```
+
+```json
+{ "url": "https://demoqa.com/text-box", "newTab": false }
 ```
 
 ### `snapshot`
@@ -146,7 +162,7 @@ One area. `selector` is a field or button from the latest `read_form`. `rect` is
 { "rect": { "x": 120, "y": 80, "width": 360, "height": 48 } }
 ```
 
-The result is a JPEG plus `url`, `scope`, `width`, `height`, and `clipped`. `not_found` means that selector is not on the page. `open_a_form_page` means the active tab is not a normal web page. `unknown task` means the operator needs to reload the unpacked extension.
+The result is a JPEG plus `url`, `scope`, `width`, `height` (JPEG pixels), `cssWidth`, `cssHeight` (CSS pixels of the captured area), `scaleX`, `scaleY`, `clickSpace: "css"`, and `clipped`. `mouse_click` uses CSS pixels: `cssX = imageX * scaleX`. `not_found` means that selector is not on the page. `open_a_form_page` means the active tab is not a normal web page. `unknown task` means the operator needs to reload the unpacked extension.
 
 ### `read_form`
 
@@ -162,7 +178,8 @@ Each item has:
 
 - `selector` — the handle for a later `fill_form` or `click`
 - `label` and `visualLabel` — the text the operator sees
-- `type` — `text`, `checkbox-group`, `button`, and similar
+- `type` — `text`, `checkbox-group`, `button`, `contenteditable`, and similar
+- `frameId` — Chrome frame id when the isolated world ran in that frame. Same-origin editors such as TinyMCE `about:blank` are read through the parent `contentDocument`; copy `frameId` when it is present, and `fill_form` / `keyboard` still find `#tinymce` from the parent tab.
 - `role` — `button` on controls that are clicked, absent on typed fields
 
 Selectors such as `form-field-1` and `cc-button-6` are positions in that read. They change when the page changes. After navigation, a new dialog, or a click that rebuilds the card, call `read_form` again and use the new selectors.
@@ -243,7 +260,7 @@ Then `read_form` again. Continue when the field shows that choice. A record of `
 
 ## How to control a page
 
-1. `list_tabs` when more than one page may be open. `focus_tab` with the `tabId` you want. `open_url` opens a new tab.
+1. `list_tabs` when more than one page may be open. `focus_tab` with the `tabId` you want. `open_url` opens a new tab unless you pass `tabId` or `newTab: false`. `close_tab` closes extras.
 2. `read_form`. Choose fields and controls from that list only. Do not invent selectors.
 3. `snapshot` when you need to see the screen. `scroll` when the control is below the visible screen, then snapshot again.
 4. `fill_form` for text. `click` for named buttons. `mouse_click` for a point on the snapshot or a selector. `keyboard` to type or press Enter, Tab, Escape, and arrows.

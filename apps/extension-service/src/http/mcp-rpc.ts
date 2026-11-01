@@ -8,10 +8,14 @@ const SUPPORTED = ['2025-03-26', '2024-11-05'];
 const tools = [
   {
     name: 'open_url',
-    description: 'Open an http(s) URL in the Chrome where this workspace’s CyberControl extension is signed in.',
+    description: 'Open an http(s) URL in the Chrome where this workspace’s CyberControl extension is signed in. Default is a new tab. Pass tabId or newTab false to load the URL in an already open tab so history back/forward works.',
     inputSchema: {
       type: 'object',
-      properties: { url: { type: 'string', description: 'http or https URL.' } },
+      properties: {
+        url: { type: 'string', description: 'http or https URL.' },
+        tabId: { type: 'number', description: 'Navigate this open tab instead of opening a new one.' },
+        newTab: { type: 'boolean', description: 'Default true. Set false to load the URL in the current tab.' },
+      },
       required: ['url'],
       additionalProperties: false,
     },
@@ -42,6 +46,7 @@ const tools = [
               type: { type: 'string' },
               label: { type: 'string' },
               visualLabel: { type: 'string' },
+              frameId: { type: 'number', description: 'Frame from read_form. Required for iframe fields.' },
             },
             required: ['selector', 'value'],
           },
@@ -65,6 +70,7 @@ const tools = [
             selector: { type: 'string' },
             label: { type: 'string' },
             visualLabel: { type: 'string' },
+            frameId: { type: 'number' },
           },
         },
       },
@@ -101,7 +107,7 @@ const tools = [
   },
   {
     name: 'snapshot',
-    description: 'Photograph the open page so you can see the GUI. Omit scope for the visible screen. scope "page" stitches the whole page, capped at six screens. Pass selector (from read_form) or rect {x, y, width, height} in visible-screen pixels to photograph one area. Does not type or click.',
+    description: 'Photograph the open page so you can see the GUI. Omit scope for the visible screen. scope "page" stitches the whole page, capped at six screens. Pass selector (from read_form) or rect {x, y, width, height} in visible-screen CSS pixels to photograph one area. The JPEG may be smaller than the screen: width/height are JPEG pixels, cssWidth/cssHeight are CSS pixels, scaleX/scaleY convert JPEG coordinates to mouse_click CSS pixels (cssX = imageX * scaleX). Does not type or click.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -124,8 +130,18 @@ const tools = [
   },
   {
     name: 'list_tabs',
-    description: 'List the open Chrome tabs for this extension: tabId, title, url without the query string, and active. Use a tabId with focus_tab, read_form, snapshot, scroll, mouse_click, or keyboard.',
+    description: 'List the open Chrome tabs for this extension: tabId, title, url without the query string, and active. Use a tabId with focus_tab, close_tab, read_form, snapshot, scroll, mouse_click, or keyboard.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'close_tab',
+    description: 'Close one open Chrome tab by tabId from list_tabs. Does not close the last remaining tab in a window if Chrome refuses.',
+    inputSchema: {
+      type: 'object',
+      properties: { tabId: { type: 'number' } },
+      required: ['tabId'],
+      additionalProperties: false,
+    },
   },
   {
     name: 'focus_tab',
@@ -139,7 +155,7 @@ const tools = [
   },
   {
     name: 'scroll',
-    description: 'Scroll the page. Pass dy for pixels down (negative scrolls up), to "top" or "bottom", or a selector from read_form to bring that control into view. Returns the new scroll position.',
+    description: 'Scroll the overflowing root (the window or a nested overflow:auto pane). Pass dy for pixels down (negative scrolls up), to "top" or "bottom", or a selector from read_form to bring that control into view. to bottom retries while lazy content grows. Returns scroll position, scrollRoot, and moved.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -175,6 +191,7 @@ const tools = [
         x: { type: 'number', description: 'Visible-screen CSS pixel X.' },
         y: { type: 'number', description: 'Visible-screen CSS pixel Y.' },
         selector: { type: 'string', description: 'Control from read_form. Clicks its center.' },
+        frameId: { type: 'number', description: 'Frame from read_form for iframe fields.' },
         button: { type: 'string', enum: ['left', 'right', 'middle'] },
         count: { type: 'number', description: '1 for a single click, 2 for a double-click.' },
       },
@@ -189,6 +206,7 @@ const tools = [
       properties: {
         tabId: { type: 'number' },
         selector: { type: 'string' },
+        frameId: { type: 'number', description: 'Frame from read_form for iframe fields.' },
         text: { type: 'string' },
         key: { type: 'string' },
         keys: { type: 'array', items: { type: 'string' } },
@@ -269,8 +287,8 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
           'On an IRCTC train list, Book Now stays inactive until a class and an availability cell have been clicked. Read between those clicks.',
           'Dropdowns: if read_form includes options, fill_form with that type and value equal to one option. If options is null, click the dropdown, read_form, then click the choice. Read again before a dependent dropdown such as District after State.',
           'list_profiles and read_profile show the customers in this workspace. fill runs the extension Fill button for one profileId on the open page. It uses saved mappings and that profile. Call it once, then read_form to see what landed.',
-          'snapshot photographs the GUI when read_form is not enough. Call it with no arguments for the visible screen, scope page for the whole page, or a selector or rect for one area. It does not type or click.',
-          'list_tabs shows the open tabs. focus_tab switches to a tabId. scroll moves the page by dy pixels, to top or bottom, or onto a selector. history goes back, forward, or reloads. mouse_click presses at visible-screen x,y (from a snapshot) or at a selector. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first. After any of those, read_form or snapshot before the next click or fill.',
+          'snapshot photographs the GUI when read_form is not enough. Call it with no arguments for the visible screen, scope page for the whole page, or a selector or rect for one area. It does not type or click. The JPEG can be smaller than the screen: mouse_click x,y are CSS pixels, cssX = imageX * scaleX from the snapshot result.',
+          'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first. read_form includes iframe fields with frameId; copy frameId on fill_form, click, keyboard, and mouse_click. After any of those, read_form or snapshot before the next click or fill.',
         ].join(' '),
       }),
     };
@@ -287,7 +305,13 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
     const args = params.arguments || {};
     if (name === 'open_url') {
       if (!args.url) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'url required' }, true)) };
-      const out = await run(workspaceId, { task: 'open_url', url: args.url });
+      const tabId = Number(args.tabId) || 0;
+      const out = await run(workspaceId, {
+        task: 'open_url',
+        url: args.url,
+        tabId: tabId || null,
+        newTab: args.newTab === false || tabId ? false : true,
+      });
       return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(out.payload, out.status >= 400)) };
     }
     if (name === 'read_form') {
@@ -334,6 +358,12 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
       const out = await run(workspaceId, { task: 'list_tabs' });
       return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(out.payload, out.status >= 400)) };
     }
+    if (name === 'close_tab') {
+      const tabId = Number(args.tabId);
+      if (!tabId) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'tabId required' }, true)) };
+      const out = await run(workspaceId, { task: 'close_tab', tabId });
+      return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(out.payload, out.status >= 400)) };
+    }
     if (name === 'focus_tab') {
       const tabId = Number(args.tabId);
       if (!tabId) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'tabId required' }, true)) };
@@ -367,6 +397,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
         x: hasPoint ? Number(args.x) : null,
         y: hasPoint ? Number(args.y) : null,
         selector,
+        frameId: Number(args.frameId) || null,
         button: args.button === 'right' || args.button === 'middle' ? args.button : 'left',
         count: Number(args.count) === 2 ? 2 : 1,
       });
@@ -381,6 +412,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
         task: 'keyboard',
         tabId: args.tabId || null,
         selector: args.selector || '',
+        frameId: Number(args.frameId) || null,
         text,
         key,
         keys,

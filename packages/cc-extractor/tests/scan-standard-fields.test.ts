@@ -209,6 +209,23 @@ console.log('\nCheckbox grouping');
   assert('options=[Reading,Sports]', JSON.stringify(formFields[0].options), JSON.stringify(['Reading','Sports']));
 }
 
+// ── Contenteditable (iframe body) ────────────────────────────────────────────
+console.log('\nContenteditable');
+{
+  const body = {
+    tagName: 'BODY', type: '', id: 'tinymce', name: '', value: '', className: '',
+    placeholder: '', _label: '', _skip: false, isContentEditable: true,
+    innerText: 'hello', textContent: 'hello',
+    getAttribute: (k) => k === 'contenteditable' ? 'true' : '',
+    closest: () => null, querySelectorAll: () => [],
+  };
+  const doc = { querySelectorAll(s) { return s.includes('contenteditable') ? [body] : []; } };
+  const { formFields } = scan(doc, helpers);
+  assert('contenteditable captured', formFields.length, 1);
+  assert('type=contenteditable', formFields[0].type, 'contenteditable');
+  assert('selector=#tinymce', formFields[0].selector, '#tinymce');
+}
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { respondToMcp } from './mcp-rpc.ts';
 import '../../../../packages/cc-wss/src/page-shot.ts';
 import '../../../../packages/cc-wss/src/pointer-keys.ts';
+import '../../../../packages/cc-wss/src/scroll-page.ts';
 
 const calls = [];
 const run = async (workspaceId, body) => {
@@ -16,7 +17,7 @@ assert.equal(init.body.result.serverInfo.name, 'cybercontrol-browser');
 
 const listed = await respondToMcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, 'ws', run);
 const names = listed.body.result.tools.map((tool) => tool.name);
-assert.deepEqual(names, ['open_url', 'read_form', 'fill_form', 'click', 'list_profiles', 'read_profile', 'fill', 'snapshot', 'list_tabs', 'focus_tab', 'scroll', 'history', 'mouse_click', 'keyboard']);
+assert.deepEqual(names, ['open_url', 'read_form', 'fill_form', 'click', 'list_profiles', 'read_profile', 'fill', 'snapshot', 'list_tabs', 'close_tab', 'focus_tab', 'scroll', 'history', 'mouse_click', 'keyboard']);
 
 const note = await respondToMcp({ jsonrpc: '2.0', method: 'notifications/initialized' }, 'ws', run);
 assert.equal(note.kind, 'accept');
@@ -33,7 +34,19 @@ const opened = await respondToMcp({
 assert.equal(calls.length, 1);
 assert.equal(calls[0].workspaceId, 'ws-1');
 assert.equal(calls[0].body.task, 'open_url');
+assert.equal(calls[0].body.newTab, true);
 assert.equal(JSON.parse(opened.body.result.content[0].text).ok, true);
+
+const reused = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '4b',
+  method: 'tools/call',
+  params: { name: 'open_url', arguments: { url: 'https://the-internet.herokuapp.com/iframe', tabId: 12 } },
+}, 'ws-1', run);
+assert.equal(calls[calls.length - 1].body.task, 'open_url');
+assert.equal(calls[calls.length - 1].body.tabId, 12);
+assert.equal(calls[calls.length - 1].body.newTab, false);
+assert.equal(JSON.parse(reused.body.result.content[0].text).ok, true);
 
 const bad = await respondToMcp({
   jsonrpc: '2.0',
@@ -42,7 +55,7 @@ const bad = await respondToMcp({
   params: { name: 'open_url', arguments: {} },
 }, 'ws-1', run);
 assert.equal(bad.body.result.isError, true);
-assert.equal(calls.length, 1);
+assert.equal(calls.length, 2);
 
 const failing = async () => ({ status: 409, payload: { error: 'no_extension_connected' } });
 const refused = await respondToMcp({
@@ -101,7 +114,25 @@ assert.equal(shot.body.result.content[1].data, 'abc');
 assert.equal(shot.body.result.content[1].mimeType, 'image/jpeg');
 assert.equal(JSON.parse(shot.body.result.content[0].text).result.image, undefined);
 
+const closed = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '9b',
+  method: 'tools/call',
+  params: { name: 'close_tab', arguments: { tabId: 12 } },
+}, 'ws-9', run);
+assert.equal(calls[calls.length - 1].body.task, 'close_tab');
+assert.equal(calls[calls.length - 1].body.tabId, 12);
+assert.equal(JSON.parse(closed.body.result.content[0].text).ok, true);
+
 const beforeNav = calls.length;
+const missingClose = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '9c',
+  method: 'tools/call',
+  params: { name: 'close_tab', arguments: {} },
+}, 'ws-9', run);
+assert.equal(missingClose.body.result.isError, true);
+
 const missingTab = await respondToMcp({
   jsonrpc: '2.0',
   id: 10,
@@ -249,5 +280,36 @@ assert.equal(keyed.ok, true);
 assert.equal(inputEl.value, 'govind');
 assert.equal(keyed.typed, 'govind');
 assert.equal(keyed.key, 'Enter');
+
+const scrollPage = (globalThis as any).CcScrollPage.scrollPage;
+const inner = {
+  tagName: 'DIV',
+  scrollHeight: 4000,
+  clientHeight: 600,
+  scrollTop: 80,
+  scrollLeft: 0,
+};
+(globalThis as any).document = {
+  title: 'DemoQA',
+  scrollingElement: { scrollHeight: 700, clientHeight: 700 },
+  documentElement: { scrollHeight: 700, clientHeight: 700 },
+  body: { scrollHeight: 700 },
+  querySelectorAll: () => [inner],
+  querySelector: () => null,
+};
+(globalThis as any).window = {
+  scrollX: 0,
+  scrollY: 0,
+  innerHeight: 700,
+  getComputedStyle: (el) => el === inner ? { overflowY: 'auto' } : { overflowY: 'visible' },
+  scrollTo(x, y) { this.scrollX = x; this.scrollY = y; },
+  scrollBy(dx, dy) { this.scrollY += dy; },
+};
+(globalThis as any).location = { href: 'https://demoqa.com/text-box' };
+const nested = await scrollPage({ to: 'top' });
+assert.equal(nested.ok, true);
+assert.equal(nested.scrollRoot, 'element');
+assert.equal(nested.moved, true);
+assert.equal(inner.scrollTop, 0);
 
 console.log('MCP_RPC_OK');

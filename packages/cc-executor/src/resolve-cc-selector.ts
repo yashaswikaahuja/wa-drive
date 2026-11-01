@@ -43,6 +43,26 @@
    * @param {Document} [doc] - document to query against (defaults to global document)
    * @returns {Element|null}
    */
+  function queryDeep(d: any, selector: any) {
+    if (!d || !selector) return null;
+    var hit = null;
+    try { hit = d.querySelector(selector); } catch (e) { hit = null; }
+    if (hit) return hit;
+    var frames: any = [];
+    try { frames = d.querySelectorAll('iframe,frame'); } catch (e2) { return null; }
+    for (var i = 0; i < frames.length; i++) {
+      var frame = frames[i];
+      var tag = String((frame && frame.tagName) || '').toLowerCase();
+      if (tag && tag !== 'iframe' && tag !== 'frame') continue;
+      var child = null;
+      try { child = frame.contentDocument; } catch (e3) { child = null; }
+      if (!child) continue;
+      hit = queryDeep(child, selector);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
   function resolveCcSelector(selector: any, doc: any) {
     var d = doc || (typeof document !== 'undefined' ? document : null);
     if (!d) return null;
@@ -59,7 +79,7 @@
       return dropdowns[ngIdx] || null;
     }
 
-    return d.querySelector(selector);
+    return queryDeep(d, selector);
   }
 
   root.CcResolveCcSelector = {
