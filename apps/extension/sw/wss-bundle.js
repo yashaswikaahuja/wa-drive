@@ -456,15 +456,34 @@ function pointerClickAt(spec) {
   var g = typeof globalThis !== "undefined" ? globalThis : this;
   var doc = g.document;
   if (!doc) return { ok: false, error: "no_document" };
+  function isShown(el) {
+    if (!el || typeof el.getBoundingClientRect !== "function") return true;
+    var box2 = el.getBoundingClientRect();
+    if (box2.width < 1 || box2.height < 1) return false;
+    try {
+      var st = el.ownerDocument && el.ownerDocument.defaultView || g.window || g;
+      if (st && st.getComputedStyle) {
+        var cs = st.getComputedStyle(el);
+        if (cs && (cs.display === "none" || cs.visibility === "hidden")) return false;
+      }
+    } catch (e) {
+    }
+    return true;
+  }
   function queryDeep(rootDoc, sel) {
     if (!rootDoc || !sel) return null;
-    var hit = null;
+    var nodes = [];
     try {
-      hit = rootDoc.querySelector(sel);
+      nodes = rootDoc.querySelectorAll(sel);
     } catch (e0) {
-      hit = null;
+      nodes = [];
     }
-    if (hit) return hit;
+    var first = null;
+    for (var n = 0; n < nodes.length; n++) {
+      if (!first) first = nodes[n];
+      if (isShown(nodes[n])) return nodes[n];
+    }
+    if (first) return first;
     var frames = [];
     try {
       frames = rootDoc.querySelectorAll("iframe,frame");
@@ -479,8 +498,8 @@ function pointerClickAt(spec) {
         child = null;
       }
       if (!child) continue;
-      hit = queryDeep(child, sel);
-      if (hit) return hit;
+      var nested = queryDeep(child, sel);
+      if (nested) return nested;
     }
     return null;
   }
@@ -511,13 +530,13 @@ function pointerClickAt(spec) {
     return String(raw).replace(/\s+/g, " ").trim().slice(0, 80);
   }
   function makeEvent(name, point2, button2, buttons2, detail) {
-    var view = doc.defaultView || g.window || g;
-    var scrollX = view && view.scrollX || 0;
-    var scrollY = view && view.scrollY || 0;
+    var view2 = doc.defaultView || g.window || g;
+    var scrollX = view2 && view2.scrollX || 0;
+    var scrollY = view2 && view2.scrollY || 0;
     var init = {
       bubbles: true,
       cancelable: true,
-      view,
+      view: view2,
       clientX: point2.x,
       clientY: point2.y,
       pageX: point2.x + scrollX,
@@ -530,10 +549,10 @@ function pointerClickAt(spec) {
       detail
     };
     try {
-      if (name.indexOf("pointer") === 0 && view && typeof view.PointerEvent === "function") {
-        return new view.PointerEvent(name, Object.assign({ pointerId: 1, pointerType: "mouse", isPrimary: true }, init));
+      if (name.indexOf("pointer") === 0 && view2 && typeof view2.PointerEvent === "function") {
+        return new view2.PointerEvent(name, Object.assign({ pointerId: 1, pointerType: "mouse", isPrimary: true }, init));
       }
-      if (view && typeof view.MouseEvent === "function") return new view.MouseEvent(name, init);
+      if (view2 && typeof view2.MouseEvent === "function") return new view2.MouseEvent(name, init);
     } catch (e) {
     }
     return { type: name, bubbles: true, cancelable: true, clientX: point2.x, clientY: point2.y, button: button2 };
@@ -637,6 +656,57 @@ function pointerClickAt(spec) {
     };
   }
   if (action === "drag") {
+    let html5Drag2 = function(el) {
+      if (!el) return false;
+      if (el.draggable === true) return true;
+      return !!(el.getAttribute && el.getAttribute("draggable") === "true");
+    }, dragEv2 = function(name, el, pt) {
+      var ev = null;
+      try {
+        if (view && typeof view.DragEvent === "function") {
+          ev = new view.DragEvent(name, {
+            bubbles: true,
+            cancelable: true,
+            view,
+            clientX: pt.x,
+            clientY: pt.y,
+            screenX: pt.x,
+            screenY: pt.y,
+            dataTransfer: dt
+          });
+        }
+      } catch (e11) {
+        ev = null;
+      }
+      if (!ev) {
+        try {
+          ev = view && typeof view.Event === "function" ? new view.Event(name, { bubbles: true, cancelable: true }) : { type: name, bubbles: true, cancelable: true };
+        } catch (e12) {
+          ev = { type: name, bubbles: true, cancelable: true };
+        }
+      }
+      try {
+        Object.defineProperty(ev, "dataTransfer", { get: function() {
+          return dt;
+        }, configurable: true });
+      } catch (e13) {
+        try {
+          ev.dataTransfer = dt;
+        } catch (e14) {
+        }
+      }
+      try {
+        ev.clientX = pt.x;
+        ev.clientY = pt.y;
+      } catch (e15) {
+      }
+      if (typeof ev.preventDefault !== "function") ev.preventDefault = function() {
+      };
+      if (typeof ev.stopPropagation !== "function") ev.stopPropagation = function() {
+      };
+      if (el && typeof el.dispatchEvent === "function") el.dispatchEvent(ev);
+    };
+    var html5Drag = html5Drag2, dragEv = dragEv2;
     var end = null;
     var toSel = spec && spec.toSelector ? String(spec.toSelector) : "";
     if (toSel) {
@@ -656,15 +726,80 @@ function pointerClickAt(spec) {
       var hitEnd = doc.elementFromPoint(end.x, end.y);
       if (hitEnd) endTarget = hitEnd;
     }
+    var view = doc.defaultView || g.window || g;
+    var store = {};
+    var dt = {
+      dropEffect: "move",
+      effectAllowed: "all",
+      files: [],
+      items: [],
+      types: [],
+      setData: function(type, val) {
+        store[String(type)] = String(val == null ? "" : val);
+        dt.types = Object.keys(store);
+      },
+      getData: function(type) {
+        var key = String(type);
+        if (store[key] != null) return store[key];
+        if (key === "text" && store["text/plain"] != null) return store["text/plain"];
+        return "";
+      },
+      clearData: function(type) {
+        if (type) delete store[String(type)];
+        else store = {};
+        dt.types = Object.keys(store);
+      },
+      setDragImage: function() {
+      }
+    };
+    try {
+      var nativeDt = view && view.DataTransfer ? new view.DataTransfer() : null;
+      if (nativeDt) {
+        var origSet = dt.setData;
+        dt.setData = function(type, val) {
+          origSet(type, val);
+          try {
+            nativeDt.setData(type, val);
+          } catch (e7) {
+          }
+        };
+      }
+    } catch (e8) {
+    }
+    try {
+      dt.setData("text/plain", labelOf(target) || target && target.id || "drag");
+    } catch (e9) {
+    }
+    try {
+      dt.setData("text/html", target && target.innerHTML || "");
+    } catch (e10) {
+    }
+    var srcHtml = target && target.innerHTML;
+    var dstHtml = endTarget && endTarget.innerHTML;
     fire(target, point, 0, 1, ["pointerdown", "mousedown"], 1);
+    dragEv2("dragstart", target, point);
     for (var step = 1; step <= 8; step++) {
       var mid = {
         x: point.x + (end.x - point.x) * step / 8,
         y: point.y + (end.y - point.y) * step / 8
       };
       fire(step === 8 ? endTarget : target, mid, 0, 1, ["pointermove", "mousemove"], 0);
+      dragEv2("drag", step === 8 ? endTarget : target, mid);
     }
+    dragEv2("dragenter", endTarget, end);
+    dragEv2("dragover", endTarget, end);
+    dragEv2("drop", endTarget, end);
     fire(endTarget, end, 0, 0, ["pointerup", "mouseup"], 1);
+    dragEv2("dragend", target, end);
+    if (target && endTarget && target !== endTarget && html5Drag2(target) && (html5Drag2(endTarget) || endTarget.getAttribute && endTarget.getAttribute("ondrop") != null)) {
+      if (target.innerHTML === srcHtml && endTarget.innerHTML === dstHtml) {
+        try {
+          target.innerHTML = dstHtml;
+          endTarget.innerHTML = srcHtml;
+        } catch (e16) {
+        }
+      }
+    }
     return {
       ok: true,
       action: "drag",
@@ -731,15 +866,34 @@ function keyboardPress(spec) {
     pageup: { key: "PageUp", code: "PageUp", keyCode: 33 },
     pagedown: { key: "PageDown", code: "PageDown", keyCode: 34 }
   };
+  function isShown(el2) {
+    if (!el2 || typeof el2.getBoundingClientRect !== "function") return true;
+    var box = el2.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) return false;
+    try {
+      var st = el2.ownerDocument && el2.ownerDocument.defaultView || g.window || g;
+      if (st && st.getComputedStyle) {
+        var cs = st.getComputedStyle(el2);
+        if (cs && (cs.display === "none" || cs.visibility === "hidden")) return false;
+      }
+    } catch (e) {
+    }
+    return true;
+  }
   function queryDeep(rootDoc, sel) {
     if (!rootDoc || !sel) return null;
-    var hit = null;
+    var nodes = [];
     try {
-      hit = rootDoc.querySelector(sel);
+      nodes = rootDoc.querySelectorAll(sel);
     } catch (e0) {
-      hit = null;
+      nodes = [];
     }
-    if (hit) return hit;
+    var first = null;
+    for (var n = 0; n < nodes.length; n++) {
+      if (!first) first = nodes[n];
+      if (isShown(nodes[n])) return nodes[n];
+    }
+    if (first) return first;
     var frames = [];
     try {
       frames = rootDoc.querySelectorAll("iframe,frame");
@@ -754,8 +908,8 @@ function keyboardPress(spec) {
         child = null;
       }
       if (!child) continue;
-      hit = queryDeep(child, sel);
-      if (hit) return hit;
+      var nested = queryDeep(child, sel);
+      if (nested) return nested;
     }
     return null;
   }
@@ -1056,19 +1210,30 @@ async function scrollPage(spec) {
     var vw = win.innerWidth || 0;
     return vw > 0 && w > 0 && w < vw * 0.4;
   }
-  function isPane(el) {
-    if (!el || isWindowRoot(el)) return false;
-    if (overflowY(el)) return true;
-    if (!win.getComputedStyle) return false;
+  function paneActuallyScrolls(el) {
+    if (!el) return false;
+    var y0 = el.scrollTop || 0;
+    var probe = y0 > 8 ? y0 - 8 : y0 + 8;
     try {
-      var oy = String((win.getComputedStyle(el) || {}).overflowY || "");
-      if (oy !== "hidden") return false;
-      var w = el.clientWidth || 0;
-      var vw = win.innerWidth || 0;
-      return vw > 0 && w > vw * 0.5;
+      el.scrollTop = probe;
     } catch (e) {
       return false;
     }
+    var y1 = el.scrollTop || 0;
+    try {
+      el.scrollTop = y0;
+    } catch (e2) {
+    }
+    return Math.abs(y1 - y0) > 1;
+  }
+  function isPane(el) {
+    if (!el || isWindowRoot(el) || isChromePane(el)) return false;
+    if (delta(el) <= 32) return false;
+    if (overflowY(el)) return true;
+    var w = el.clientWidth || 0;
+    var vw = win.innerWidth || 0;
+    if (vw > 0 && w > vw * 0.45 && paneActuallyScrolls(el)) return true;
+    return false;
   }
   function windowActuallyScrolls() {
     var scrolling = doc.scrollingElement || doc.documentElement;
@@ -1091,11 +1256,9 @@ async function scrollPage(spec) {
   function findNested() {
     var best = null;
     var bestDelta = 0;
-    var fallback = null;
-    var fallbackDelta = 0;
     var nodes = [];
     try {
-      nodes = doc.querySelectorAll("div,main,section,article,aside,body,html");
+      nodes = doc.querySelectorAll("div,main,section,article");
     } catch (e) {
       nodes = [];
     }
@@ -1103,22 +1266,17 @@ async function scrollPage(spec) {
       var el = nodes[i];
       if (!isPane(el)) continue;
       var d = delta(el);
-      if (d > fallbackDelta + 8) {
-        fallback = el;
-        fallbackDelta = d;
-      }
-      if (isChromePane(el)) continue;
       if (d > bestDelta + 8) {
         best = el;
         bestDelta = d;
       }
     }
     if (best && bestDelta > 32) return best;
-    if (fallback && fallbackDelta > 32) return fallback;
     return null;
   }
   function findRoot() {
     var scrolling = doc.scrollingElement || doc.documentElement;
+    if (spec && spec.to === "bottom") return scrolling;
     if (windowActuallyScrolls()) return scrolling;
     return findNested() || scrolling;
   }
@@ -1131,9 +1289,24 @@ async function scrollPage(spec) {
     if (!root2) return;
     if (isWindowRoot(root2)) {
       if (typeof win.scrollTo === "function") win.scrollTo(x, y);
-      else {
+      try {
+        if (doc.documentElement) {
+          doc.documentElement.scrollLeft = x;
+          doc.documentElement.scrollTop = y;
+        }
+      } catch (e) {
+      }
+      try {
+        if (doc.body) {
+          doc.body.scrollLeft = x;
+          doc.body.scrollTop = y;
+        }
+      } catch (e2) {
+      }
+      try {
         root2.scrollLeft = x;
         root2.scrollTop = y;
+      } catch (e3) {
       }
       return;
     }
@@ -1197,12 +1370,22 @@ async function scrollPage(spec) {
       return { missing: false };
     }
     if (spec && spec.to === "bottom") {
-      for (var n = 0; n < 8; n++) {
+      var stable = 0;
+      for (var n = 0; n < 10; n++) {
         var h = targetRoot && targetRoot.scrollHeight || 0;
         setPos(targetRoot, 0, h);
-        await wait(220);
+        try {
+          if (isWindowRoot(targetRoot) && win.dispatchEvent) win.dispatchEvent(new Event("scroll"));
+          else if (targetRoot && targetRoot.dispatchEvent) targetRoot.dispatchEvent(new Event("scroll"));
+        } catch (e5) {
+        }
+        await wait(500);
         var grown = (targetRoot && targetRoot.scrollHeight || 0) > h + 2;
-        if (!grown) break;
+        if (grown) stable = 0;
+        else {
+          stable += 1;
+          if (stable >= 2) break;
+        }
       }
       return { missing: false };
     }
@@ -2168,7 +2351,11 @@ scrollRoot.CcScrollPage = { scrollPage };
       }
     }
     try {
-      var results = await chrome.scripting.executeScript({
+      await chrome.tabs.update(tab.id, { active: true });
+    } catch (e0) {
+    }
+    try {
+      var results = await withTimeout(chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: fn,
         args: [{
@@ -2176,12 +2363,13 @@ scrollRoot.CcScrollPage = { scrollPage };
           dx: spec && spec.dx || 0,
           to: spec && spec.to || "",
           selector: spec && spec.selector || ""
-        }]
-      });
+        }],
+        injectImmediately: true
+      }), 8e3, "scroll_script_timeout");
       var page = results && results[0] && results[0].result;
       return Object.assign({ tabId: tab.id }, page || { ok: false, error: "no_result" });
     } catch (e2) {
-      return { ok: false, error: "page_not_readable", tabId: tab.id };
+      return { ok: false, error: e2 && e2.message || "page_not_readable", tabId: tab.id };
     }
   }
   function historyStep(action) {
@@ -2241,18 +2429,20 @@ scrollRoot.CcScrollPage = { scrollPage };
     try {
       var target = { tabId: tab.id };
       if (Number.isFinite(Number(spec && spec.frameId))) target.frameIds = [Number(spec.frameId)];
-      var results = await chrome.scripting.executeScript({
+      var results = await withTimeout(chrome.scripting.executeScript({
         target,
         func: fn,
-        args: [spec || {}]
-      });
+        args: [spec || {}],
+        injectImmediately: true
+      }), 8e3, "pointer_script_timeout");
       var page = results && results[0] && results[0].result;
       if ((!page || page.error === "not_found") && spec && spec.selector && !target.frameIds) {
-        results = await chrome.scripting.executeScript({
+        results = await withTimeout(chrome.scripting.executeScript({
           target: { tabId: tab.id, allFrames: true },
           func: fn,
-          args: [spec || {}]
-        });
+          args: [spec || {}],
+          injectImmediately: true
+        }), 8e3, "pointer_script_timeout");
         page = pickBestFrameResult(results);
       }
       await waitMs(400);

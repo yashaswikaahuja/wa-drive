@@ -35,19 +35,23 @@ async function scrollPage(spec: any) {
     var vw = win.innerWidth || 0;
     return vw > 0 && w > 0 && w < vw * 0.4;
   }
+  function paneActuallyScrolls(el: any) {
+    if (!el) return false;
+    var y0 = el.scrollTop || 0;
+    var probe = y0 > 8 ? y0 - 8 : y0 + 8;
+    try { el.scrollTop = probe; } catch (e) { return false; }
+    var y1 = el.scrollTop || 0;
+    try { el.scrollTop = y0; } catch (e2) { /* restore */ }
+    return Math.abs(y1 - y0) > 1;
+  }
   function isPane(el: any) {
-    if (!el || isWindowRoot(el)) return false;
+    if (!el || isWindowRoot(el) || isChromePane(el)) return false;
+    if (delta(el) <= 32) return false;
     if (overflowY(el)) return true;
-    if (!win.getComputedStyle) return false;
-    try {
-      var oy = String((win.getComputedStyle(el) || {}).overflowY || '');
-      if (oy !== 'hidden') return false;
-      var w = el.clientWidth || 0;
-      var vw = win.innerWidth || 0;
-      return vw > 0 && w > vw * 0.5;
-    } catch (e) {
-      return false;
-    }
+    var w = el.clientWidth || 0;
+    var vw = win.innerWidth || 0;
+    if (vw > 0 && w > vw * 0.45 && paneActuallyScrolls(el)) return true;
+    return false;
   }
   function windowActuallyScrolls() {
     var scrolling = doc.scrollingElement || doc.documentElement;
@@ -63,30 +67,25 @@ async function scrollPage(spec: any) {
   function findNested() {
     var best = null;
     var bestDelta = 0;
-    var fallback = null;
-    var fallbackDelta = 0;
     var nodes = [];
-    try { nodes = doc.querySelectorAll('div,main,section,article,aside,body,html'); } catch (e) { nodes = []; }
+    try { nodes = doc.querySelectorAll('div,main,section,article'); } catch (e) { nodes = []; }
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       if (!isPane(el)) continue;
       var d = delta(el);
-      if (d > fallbackDelta + 8) {
-        fallback = el;
-        fallbackDelta = d;
-      }
-      if (isChromePane(el)) continue;
       if (d > bestDelta + 8) {
         best = el;
         bestDelta = d;
       }
     }
     if (best && bestDelta > 32) return best;
-    if (fallback && fallbackDelta > 32) return fallback;
     return null;
   }
   function findRoot() {
     var scrolling = doc.scrollingElement || doc.documentElement;
+    // Lazy pages (the-internet infinite_scroll) append to the document.
+    // Start at the window so to:bottom can grow the page.
+    if (spec && spec.to === 'bottom') return scrolling;
     if (windowActuallyScrolls()) return scrolling;
     return findNested() || scrolling;
   }
@@ -99,10 +98,9 @@ async function scrollPage(spec: any) {
     if (!root) return;
     if (isWindowRoot(root)) {
       if (typeof win.scrollTo === 'function') win.scrollTo(x, y);
-      else {
-        root.scrollLeft = x;
-        root.scrollTop = y;
-      }
+      try { if (doc.documentElement) { doc.documentElement.scrollLeft = x; doc.documentElement.scrollTop = y; } } catch (e) { /* stay */ }
+      try { if (doc.body) { doc.body.scrollLeft = x; doc.body.scrollTop = y; } } catch (e2) { /* stay */ }
+      try { root.scrollLeft = x; root.scrollTop = y; } catch (e3) { /* stay */ }
       return;
     }
     root.scrollLeft = x;
@@ -154,12 +152,21 @@ async function scrollPage(spec: any) {
       return { missing: false };
     }
     if (spec && spec.to === 'bottom') {
-      for (var n = 0; n < 8; n++) {
+      var stable = 0;
+      for (var n = 0; n < 10; n++) {
         var h = targetRoot && targetRoot.scrollHeight || 0;
         setPos(targetRoot, 0, h);
-        await wait(220);
+        try {
+          if (isWindowRoot(targetRoot) && win.dispatchEvent) win.dispatchEvent(new Event('scroll'));
+          else if (targetRoot && targetRoot.dispatchEvent) targetRoot.dispatchEvent(new Event('scroll'));
+        } catch (e5) { /* stay */ }
+        await wait(500);
         var grown = (targetRoot && targetRoot.scrollHeight || 0) > h + 2;
-        if (!grown) break;
+        if (grown) stable = 0;
+        else {
+          stable += 1;
+          if (stable >= 2) break;
+        }
       }
       return { missing: false };
     }

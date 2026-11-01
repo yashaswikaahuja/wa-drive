@@ -6,19 +6,37 @@ function pointerClickAt(spec: any) {
   var g = typeof globalThis !== 'undefined' ? globalThis : this;
   var doc = g.document;
   if (!doc) return { ok: false, error: 'no_document' };
+  function isShown(el: any) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return true;
+    var box = el.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) return false;
+    try {
+      var st = (el.ownerDocument && el.ownerDocument.defaultView) || g.window || g;
+      if (st && st.getComputedStyle) {
+        var cs = st.getComputedStyle(el);
+        if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return false;
+      }
+    } catch (e) { /* keep */ }
+    return true;
+  }
   function queryDeep(rootDoc: any, sel: any) {
     if (!rootDoc || !sel) return null;
-    var hit = null;
-    try { hit = rootDoc.querySelector(sel); } catch (e0) { hit = null; }
-    if (hit) return hit;
+    var nodes: any = [];
+    try { nodes = rootDoc.querySelectorAll(sel); } catch (e0) { nodes = []; }
+    var first = null;
+    for (var n = 0; n < nodes.length; n++) {
+      if (!first) first = nodes[n];
+      if (isShown(nodes[n])) return nodes[n];
+    }
+    if (first) return first;
     var frames: any = [];
     try { frames = rootDoc.querySelectorAll('iframe,frame'); } catch (e1) { return null; }
     for (var i = 0; i < frames.length; i++) {
       var child = null;
       try { child = frames[i].contentDocument; } catch (e2) { child = null; }
       if (!child) continue;
-      hit = queryDeep(child, sel);
-      if (hit) return hit;
+      var nested = queryDeep(child, sel);
+      if (nested) return nested;
     }
     return null;
   }
@@ -176,15 +194,108 @@ function pointerClickAt(spec: any) {
       var hitEnd = doc.elementFromPoint(end.x, end.y);
       if (hitEnd) endTarget = hitEnd;
     }
+    var view = doc.defaultView || g.window || g;
+    var store: any = {};
+    var dt: any = {
+      dropEffect: 'move',
+      effectAllowed: 'all',
+      files: [],
+      items: [],
+      types: [],
+      setData: function (type: any, val: any) {
+        store[String(type)] = String(val == null ? '' : val);
+        dt.types = Object.keys(store);
+      },
+      getData: function (type: any) {
+        var key = String(type);
+        if (store[key] != null) return store[key];
+        if (key === 'text' && store['text/plain'] != null) return store['text/plain'];
+        return '';
+      },
+      clearData: function (type: any) {
+        if (type) delete store[String(type)];
+        else store = {};
+        dt.types = Object.keys(store);
+      },
+      setDragImage: function () {},
+    };
+    try {
+      var nativeDt = view && view.DataTransfer ? new view.DataTransfer() : null;
+      if (nativeDt) {
+        var origSet = dt.setData;
+        dt.setData = function (type: any, val: any) {
+          origSet(type, val);
+          try { nativeDt.setData(type, val); } catch (e7) { /* stay */ }
+        };
+      }
+    } catch (e8) { /* fake transfer still works */ }
+    try { dt.setData('text/plain', labelOf(target) || (target && target.id) || 'drag'); } catch (e9) { /* stay */ }
+    try { dt.setData('text/html', (target && target.innerHTML) || ''); } catch (e10) { /* stay */ }
+    function html5Drag(el: any) {
+      if (!el) return false;
+      if (el.draggable === true) return true;
+      return !!(el.getAttribute && el.getAttribute('draggable') === 'true');
+    }
+    function dragEv(name: any, el: any, pt: any) {
+      var ev: any = null;
+      try {
+        if (view && typeof view.DragEvent === 'function') {
+          ev = new view.DragEvent(name, {
+            bubbles: true,
+            cancelable: true,
+            view: view,
+            clientX: pt.x,
+            clientY: pt.y,
+            screenX: pt.x,
+            screenY: pt.y,
+            dataTransfer: dt,
+          });
+        }
+      } catch (e11) { ev = null; }
+      if (!ev) {
+        try {
+          ev = view && typeof view.Event === 'function'
+            ? new view.Event(name, { bubbles: true, cancelable: true })
+            : { type: name, bubbles: true, cancelable: true };
+        } catch (e12) {
+          ev = { type: name, bubbles: true, cancelable: true };
+        }
+      }
+      try {
+        Object.defineProperty(ev, 'dataTransfer', { get: function () { return dt; }, configurable: true });
+      } catch (e13) {
+        try { ev.dataTransfer = dt; } catch (e14) { /* stay */ }
+      }
+      try { ev.clientX = pt.x; ev.clientY = pt.y; } catch (e15) { /* stay */ }
+      if (typeof ev.preventDefault !== 'function') ev.preventDefault = function () {};
+      if (typeof ev.stopPropagation !== 'function') ev.stopPropagation = function () {};
+      if (el && typeof el.dispatchEvent === 'function') el.dispatchEvent(ev);
+    }
+    var srcHtml = target && target.innerHTML;
+    var dstHtml = endTarget && endTarget.innerHTML;
     fire(target, point, 0, 1, ['pointerdown', 'mousedown'], 1);
+    dragEv('dragstart', target, point);
     for (var step = 1; step <= 8; step++) {
       var mid = {
         x: point.x + (end.x - point.x) * step / 8,
         y: point.y + (end.y - point.y) * step / 8,
       };
       fire(step === 8 ? endTarget : target, mid, 0, 1, ['pointermove', 'mousemove'], 0);
+      dragEv('drag', step === 8 ? endTarget : target, mid);
     }
+    dragEv('dragenter', endTarget, end);
+    dragEv('dragover', endTarget, end);
+    dragEv('drop', endTarget, end);
     fire(endTarget, end, 0, 0, ['pointerup', 'mouseup'], 1);
+    dragEv('dragend', target, end);
+    if (target && endTarget && target !== endTarget && html5Drag(target) && (html5Drag(endTarget) || (endTarget.getAttribute && endTarget.getAttribute('ondrop') != null))) {
+      if (target.innerHTML === srcHtml && endTarget.innerHTML === dstHtml) {
+        try {
+          target.innerHTML = dstHtml;
+          endTarget.innerHTML = srcHtml;
+        } catch (e16) { /* page handler already moved the nodes */ }
+      }
+    }
     return {
       ok: true,
       action: 'drag',
@@ -248,19 +359,37 @@ function keyboardPress(spec: any) {
     pageup: { key: 'PageUp', code: 'PageUp', keyCode: 33 },
     pagedown: { key: 'PageDown', code: 'PageDown', keyCode: 34 },
   };
+  function isShown(el: any) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return true;
+    var box = el.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) return false;
+    try {
+      var st = (el.ownerDocument && el.ownerDocument.defaultView) || g.window || g;
+      if (st && st.getComputedStyle) {
+        var cs = st.getComputedStyle(el);
+        if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return false;
+      }
+    } catch (e) { /* keep */ }
+    return true;
+  }
   function queryDeep(rootDoc: any, sel: any) {
     if (!rootDoc || !sel) return null;
-    var hit = null;
-    try { hit = rootDoc.querySelector(sel); } catch (e0) { hit = null; }
-    if (hit) return hit;
+    var nodes: any = [];
+    try { nodes = rootDoc.querySelectorAll(sel); } catch (e0) { nodes = []; }
+    var first = null;
+    for (var n = 0; n < nodes.length; n++) {
+      if (!first) first = nodes[n];
+      if (isShown(nodes[n])) return nodes[n];
+    }
+    if (first) return first;
     var frames: any = [];
     try { frames = rootDoc.querySelectorAll('iframe,frame'); } catch (e1) { return null; }
     for (var i = 0; i < frames.length; i++) {
       var child = null;
       try { child = frames[i].contentDocument; } catch (e2) { child = null; }
       if (!child) continue;
-      hit = queryDeep(child, sel);
-      if (hit) return hit;
+      var nested = queryDeep(child, sel);
+      if (nested) return nested;
     }
     return null;
   }

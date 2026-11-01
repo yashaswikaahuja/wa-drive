@@ -22,7 +22,7 @@ const tools = [
   },
   {
     name: 'read_form',
-    description: 'Read input fields and pressable controls on the signed-in Chrome tab. Omit tabId to use the open IRCTC tab, or the active tab when IRCTC is not open. Selectors expire when the page changes; read again before the next fill or click.',
+    description: 'Read input fields and pressable controls on the signed-in Chrome tab. Omit tabId to use the open IRCTC tab, or the active tab when IRCTC is not open. Includes hover figures (type hover), drag handles (type drag), and drop targets (type drop). Duplicate ids in hidden tab panes are omitted; the listed selector is scoped to the visible pane. Selectors expire when the page changes; read again before the next fill or click.',
     inputSchema: {
       type: 'object',
       properties: { tabId: { type: 'number', description: 'Chrome tab id. Omit to use the IRCTC tab.' } },
@@ -31,7 +31,7 @@ const tools = [
   },
   {
     name: 'fill_form',
-    description: 'Type into fields from the latest read_form. Each field needs selector and value. For a dropdown whose options are already listed, set type to dropdown, select, ng-dropdown, or mat-select and set value to one option string. For a slider (type slider or range), set value to the number. Does not solve CAPTCHA or submit payment.',
+    description: 'Type into fields from the latest read_form. Each field needs selector and value. For a dropdown whose options are already listed, set type to dropdown, select, ng-dropdown, or mat-select and set value to one option string. For a slider (type slider or range), set value to the number. One fill_form at a time per workspace; a second call waits for the first. Does not solve CAPTCHA or submit payment.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -94,7 +94,7 @@ const tools = [
   },
   {
     name: 'fill',
-    description: 'Run the extension Fill button on the open page for one profile. The extension plans from saved mappings and that profile, then types in Chrome. Does not solve CAPTCHA or submit payment.',
+    description: 'Run the extension Fill button on the open page for one profile. The extension plans from saved mappings and that profile, then types in Chrome. One fill at a time per workspace; a second call waits for the first. Does not solve CAPTCHA or submit payment.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -219,7 +219,7 @@ const tools = [
   },
   {
     name: 'drag',
-    description: 'Drag from one point or selector to another. Pass x,y and x2,y2 in visible-screen CSS pixels, or selector and toSelector. Use this for sliders that do not take a typed value. Then read_form or snapshot.',
+    description: 'Drag from one point or selector to another. Pass x,y and x2,y2 in visible-screen CSS pixels, or selector and toSelector. Fires HTML5 dragstart/drop with dataTransfer so native draggable columns swap. Use this for sliders, jQuery handles, and HTML5 drop targets. Then read_form or snapshot.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -325,7 +325,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
           'Dropdowns: if read_form includes options, fill_form with that type and value equal to one option. If options is null, click the dropdown, read_form, then click the choice. Read again before a dependent dropdown such as District after State.',
           'list_profiles and read_profile show the customers in this workspace. fill runs the extension Fill button for one profileId on the open page. It uses saved mappings and that profile. Call it once, then read_form to see what landed.',
           'snapshot photographs the GUI when read_form is not enough. Call it with no arguments for the visible screen, scope page for the whole page, or a selector or rect for one area. It does not type or click. The JPEG can be smaller than the screen: mouse_click x,y are CSS pixels, cssX = imageX * scaleX from the snapshot result.',
-          'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. action hover or drag on mouse_click works even when hover and drag are missing from the tool list. hover moves the mouse over a point or selector. drag moves from x,y to x2,y2 or from selector to toSelector. click also finds visible links by text; a link that navigates is success (moved true) even if the old frame is gone. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first; arrows move a range slider. read_form includes iframe fields with frameId, hover figures (type hover), and drag handles (type drag); copy frameId on fill_form, click, keyboard, mouse_click, hover, and drag. After any of those, read_form or snapshot before the next click or fill.',
+          'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector; it never uses a left nav, and to bottom stays on the window so infinite pages can grow. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. action hover or drag on mouse_click works even when hover and drag are missing from the tool list. hover moves the mouse over a point or selector. drag moves from x,y to x2,y2 or from selector to toSelector and fires HTML5 dragstart/drop. click also finds visible links by text; a link that navigates is success (moved true) even if the old frame is gone. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first; arrows move a range slider. read_form includes iframe fields with frameId, hover figures (type hover), drag handles (type drag), and drop targets (type drop); duplicate ids in hidden tab panes are omitted. fill and fill_form run one at a time per workspace. copy frameId on fill_form, click, keyboard, mouse_click, hover, and drag. After any of those, read_form or snapshot before the next click or fill.',
         ].join(' '),
       }),
     };

@@ -12,7 +12,7 @@ MCP URL:
 
 Add that URL in the LLM app with no pasted token. The app opens a browser window. The operator signs in with the CyberControl email or phone and password. The app then holds the session and calls the tools below.
 
-If a tool returns `no_extension_connected`, the extension is not on the workspace socket. Ask the operator to open Chrome, confirm the CyberControl extension is signed in, and try again. `extension_timeout` means the extension did not answer in time. `fill` waits up to 88s, `fill_form` up to 80s, and a whole-page `snapshot` up to 45s. Read the page again before repeating the same action.
+If a tool returns `no_extension_connected`, the extension is not on the workspace socket. Ask the operator to open Chrome, confirm the CyberControl extension is signed in, and try again. `extension_timeout` means the extension did not answer in time. `fill` waits up to 88s, `fill_form` up to 80s, and a whole-page `snapshot` up to 45s. The workspace runs one `fill` or `fill_form` at a time; a second call waits for the first so both do not hit `DeadlineExceeded`. Read the page again before repeating the same action.
 
 ## Profiles and Fill
 
@@ -26,7 +26,7 @@ If a tool returns `no_extension_connected`, the extension is not on the workspac
 { "profileId": "the id from list_profiles" }
 ```
 
-Call `fill` once. Then `read_form` and use the `records` in the result. Each record has `result` (`filled`, `skipped`, `failed`), `label`, `plannedValue`, and `actualValue`. Do not send a second `fill` for the same page until you have read what the first one did.
+Call `fill` once. Then `read_form` and use the `records` in the result. Each record has `result` (`filled`, `skipped`, `failed`), `label`, `plannedValue`, and `actualValue`. Do not send a second `fill` for the same page until you have read what the first one did. Two fills that start together still run one after the other on this workspace.
 
 `fill` does not solve a CAPTCHA, type a card number, or press the final pay button. If the extension is not signed in, the result is `extension_not_signed_in`. If this tool returns `unknown task`, the operator needs to reload the unpacked extension so it can receive Fill from the MCP server.
 
@@ -80,7 +80,7 @@ Bring one control into view. `selector` comes from the latest `read_form`.
 { "selector": "form-field-8" }
 ```
 
-The result includes `scrollY`, `scrollHeight`, `clientHeight`, `scrollRoot` (`window` or `element`), and `moved`. Scroll probes whether the window actually moves, then uses a nested overflow pane if it does not, skipping a narrow left nav (DemoQA). `to: "bottom"` retries while lazy content grows. `moved` false means that root was already at that edge.
+The result includes `scrollY`, `scrollHeight`, `clientHeight`, `scrollRoot` (`window` or `element`), and `moved`. Scroll probes whether the window actually moves, then uses a nested overflow pane if it does not. It never uses a narrow left nav (DemoQA `.left-pannel`). `to: "bottom"` always starts at the window so lazy pages (The Internet `infinite_scroll`) can grow, then retries while content is appended. `moved` false means that root was already at that edge.
 
 ### `history`
 
@@ -122,7 +122,7 @@ Then `read_form` or `snapshot`.
 
 ### `drag`
 
-Drags from one point or selector to another. Use this for a slider that does not take a typed value.
+Drags from one point or selector to another. Use this for a slider that does not take a typed value, a jQuery handle, or a native HTML5 `draggable` (The Internet `/drag_and_drop`). The extension fires `dragstart` / `drop` with a `dataTransfer`, not only mouse moves.
 
 ```json
 { "x": 120, "y": 80, "x2": 260, "y2": 80 }
@@ -206,9 +206,9 @@ Each item has:
 
 - `selector` — the handle for a later `fill_form` or `click`
 - `label` and `visualLabel` — the text the operator sees
-- `type` — `text`, `checkbox-group`, `button`, `link`, `hover`, `drag`, `slider`, `contenteditable`, and similar
+- `type` — `text`, `checkbox-group`, `button`, `link`, `hover`, `drag`, `drop`, `slider`, `contenteditable`, and similar
 - `frameId` — Chrome frame id when the isolated world ran in that frame. Same-origin editors such as TinyMCE `about:blank` are read through the parent `contentDocument`; copy `frameId` when it is present, and `fill_form` / `keyboard` still find `#tinymce` from the parent tab.
-- `role` — `button` on controls that are clicked, `link` / `hover` / `drag` on those targets, absent on typed fields
+- `role` — `button` on controls that are clicked, `link` / `hover` / `drag` / `drop` on those targets, absent on typed fields
 
 Selectors such as `form-field-1` and `cc-button-6` are positions in that read. They change when the page changes. After navigation, a new dialog, or a click that rebuilds the card, call `read_form` again and use the new selectors.
 
@@ -230,13 +230,13 @@ Types into fields from the latest read. It does not press buttons.
 }
 ```
 
-Every field needs `selector` and a non-empty `value`. Empty values are dropped. Send at most 80 fields. Copy `label` and `visualLabel` from the read so the extension can refuse a field whose label changed. A slider from `read_form` has `type` `slider`; set `value` to the number.
+Every field needs `selector` and a non-empty `value`. Empty values are dropped. Send at most 80 fields. Copy `label` and `visualLabel` from the read so the extension can refuse a field whose label changed. A slider from `read_form` has `type` `slider`; set `value` to the number. Parallel `fill_form` calls on the same workspace wait in line.
 
 For a station box, a short value such as `SURAT` is what you type. The page may then replace it with a longer station line. Read the page again and confirm the box before leaving that field.
 
 ### `click`
 
-Presses one control from the latest read. Visible links are type `link` and can be pressed by the same text, including the home “Dropdown” link on The Internet. A link that unloads the page still returns `ok: true` with `moved: true` and the new URL; `Frame with ID 0 was removed` was a false miss. Hover figures are type `hover` (captions on The Internet `/hovers`). Drag handles are type `drag` (`#column-a` on `/drag_and_drop`).
+Presses one control from the latest read. Visible links are type `link` and can be pressed by the same text, including the home “Dropdown” link on The Internet. A link that unloads the page still returns `ok: true` with `moved: true` and the new URL; `Frame with ID 0 was removed` was a false miss. Hover figures are type `hover` (captions on The Internet `/hovers`). Drag handles are type `drag` (`#column-a` on `/drag_and_drop`). Drop targets are type `drop` (DemoQA `#droppable`). Duplicate ids in hidden tab panes are omitted; the listed selector is scoped to the visible pane (`#droppableExample-tabpane-simple #droppable`).
 
 By visible text:
 

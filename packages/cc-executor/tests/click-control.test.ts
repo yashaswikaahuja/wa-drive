@@ -237,5 +237,51 @@ assert('hover flagged', hovered.hovered, true);
 assert('hover mouseenter', figure.events.indexOf('mouseenter') !== -1, true);
 assert('hover did not click', figure.events.indexOf('native-click') === -1, true);
 
+console.log('\nDrop targets are listed; hidden duplicate ids are skipped');
+function pane(id, active) {
+  return {
+    id,
+    className: active ? 'tab-pane active show' : 'tab-pane',
+    parentElement: null,
+    getAttribute(name) { return name === 'aria-hidden' ? (active ? 'false' : 'true') : null; },
+  };
+}
+const simplePane = pane('droppableExample-tabpane-simple', true);
+const acceptPane = pane('droppableExample-tabpane-accept', false);
+const visibleDrop = choice('DIV', 'Drop here', { className: 'droppable ui-droppable', id: 'droppable' });
+visibleDrop.parentElement = simplePane;
+visibleDrop.closest = function (sel) {
+  const s = String(sel);
+  if (s.indexOf('tab-pane') !== -1 || s.indexOf('tabpanel') !== -1) return simplePane;
+  if (s.indexOf('hidden') !== -1) return simplePane.getAttribute('aria-hidden') === 'true' ? simplePane : null;
+  return null;
+};
+const hiddenDrop = choice('DIV', 'Drop here', { className: 'droppable ui-droppable', id: 'droppable' });
+hiddenDrop.parentElement = acceptPane;
+hiddenDrop.closest = function (sel) {
+  const s = String(sel);
+  if (s.indexOf('tab-pane') !== -1 || s.indexOf('tabpanel') !== -1) return acceptPane;
+  if (s.indexOf('hidden') !== -1) return acceptPane;
+  return null;
+};
+const dropDoc2 = {
+  querySelectorAll(sel) {
+    const s = String(sel);
+    if (s === '#droppableExample-tabpane-simple #droppable') return [visibleDrop];
+    if (s === '#droppable') return [visibleDrop, hiddenDrop];
+    if (s.indexOf('button') !== -1) return [visibleDrop, hiddenDrop];
+    if (s.indexOf('.') !== -1) {
+      const cls = s.split('.')[1];
+      return [visibleDrop, hiddenDrop].filter((b) => String(b.className).split(/\s+/).indexOf(cls) !== -1);
+    }
+    return [];
+  },
+};
+const dropFields = api.list(dropDoc2);
+assert('one visible drop target', dropFields.length, 1);
+assert('drop type', dropFields[0].type, 'drop');
+assert('drop label', dropFields[0].visualLabel, 'Drop here');
+assert('drop selector is pane-scoped', dropFields[0].selector, '#droppableExample-tabpane-simple #droppable');
+
 if (failed) { console.error('\n' + failed + ' failed'); process.exit(1); }
 console.log('\n' + passed + ' passed');

@@ -889,8 +889,9 @@
         await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: kernelScripts() });
       } catch (e) { /* selector falls back to querySelector */ }
     }
+    try { await chrome.tabs.update(tab.id, { active: true }); } catch (e0) { /* stay */ }
     try {
-      var results = await chrome.scripting.executeScript({
+      var results = await withTimeout(chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: fn,
         args: [{
@@ -899,11 +900,12 @@
           to: spec && spec.to || '',
           selector: spec && spec.selector || '',
         }],
-      });
+        injectImmediately: true,
+      }), 8000, 'scroll_script_timeout');
       var page = results && results[0] && results[0].result;
       return Object.assign({ tabId: tab.id }, page || { ok: false, error: 'no_result' });
     } catch (e2) {
-      return { ok: false, error: 'page_not_readable', tabId: tab.id };
+      return { ok: false, error: (e2 && e2.message) || 'page_not_readable', tabId: tab.id };
     }
   }
 
@@ -959,18 +961,20 @@
     try {
       var target: any = { tabId: tab.id };
       if (Number.isFinite(Number(spec && spec.frameId))) target.frameIds = [Number(spec.frameId)];
-      var results = await chrome.scripting.executeScript({
+      var results = await withTimeout(chrome.scripting.executeScript({
         target: target,
         func: fn,
         args: [spec || {}],
-      });
+        injectImmediately: true,
+      }), 8000, 'pointer_script_timeout');
       var page = results && results[0] && results[0].result;
       if ((!page || page.error === 'not_found') && spec && spec.selector && !target.frameIds) {
-        results = await chrome.scripting.executeScript({
+        results = await withTimeout(chrome.scripting.executeScript({
           target: { tabId: tab.id, allFrames: true },
           func: fn,
           args: [spec || {}],
-        });
+          injectImmediately: true,
+        }), 8000, 'pointer_script_timeout');
         page = pickBestFrameResult(results);
       }
       await waitMs(400);

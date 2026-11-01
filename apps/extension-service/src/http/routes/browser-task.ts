@@ -23,6 +23,40 @@ function newTaskId() {
   return `task.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** One fill at a time per workspace so the 88s clock starts after the previous fill. */
+const fillLocks = new Map<string, Promise<void>>();
+
+function enqueueFill<T>(workspaceId: string, run: () => Promise<T>): Promise<T> {
+  const prev = fillLocks.get(workspaceId) || Promise.resolve();
+  const job = prev.then(run, run);
+  fillLocks.set(workspaceId, job.then(() => undefined, () => undefined));
+  return job;
+}
+
+async function dispatchAndWait(workspaceId: string, message: any, timeoutMs: number) {
+  const pending = waitForBrowserTask(message.taskId, timeoutMs);
+  const session = dispatchBrowserTask(workspaceId, message);
+  if (!session) {
+    cancelBrowserTask(message.taskId);
+    return { status: 409, payload: { error: 'no_extension_connected' } };
+  }
+  try {
+    const result = await pending;
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        workspaceId,
+        sessionId: session.sessionId,
+        result,
+      },
+    };
+  } catch (err: any) {
+    const code = err && err.message === 'extension_timeout' ? 504 : 500;
+    return { status: code, payload: { error: (err && err.message) || 'browser_task_failed', taskId: message.taskId } };
+  }
+}
+
 function slimFields(fields: any) {
   if (!Array.isArray(fields)) return null;
   if (fields.length > 80) return null;
@@ -251,27 +285,10 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
     return { status: 400, payload: { error: 'unsupported task' } };
   }
 
-  const pending = waitForBrowserTask(message.taskId, timeoutMs);
-  const session = dispatchBrowserTask(workspaceId, message);
-  if (!session) {
-    cancelBrowserTask(message.taskId);
-    return { status: 409, payload: { error: 'no_extension_connected' } };
+  if (task === 'fill' || task === 'fill_form') {
+    return enqueueFill(workspaceId, () => dispatchAndWait(workspaceId, message, timeoutMs));
   }
-  try {
-    const result = await pending;
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        workspaceId,
-        sessionId: session.sessionId,
-        result,
-      },
-    };
-  } catch (err: any) {
-    const code = err && err.message === 'extension_timeout' ? 504 : 500;
-    return { status: code, payload: { error: (err && err.message) || 'browser_task_failed', taskId } };
-  }
+  return dispatchAndWait(workspaceId, message, timeoutMs);
 }
 
 router.post('/', authMiddleware, async (req: any, res: any) => {

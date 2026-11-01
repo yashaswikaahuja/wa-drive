@@ -36,12 +36,32 @@
   }
 
   function visible(el: any) {
-    if (!el || typeof el.getBoundingClientRect !== 'function') return true;
-    var box = el.getBoundingClientRect();
-    return box.width >= 2 && box.height >= 2;
+    if (!el) return false;
+    if (typeof el.getBoundingClientRect === 'function') {
+      var box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) return false;
+    }
+    try {
+      var view = (el.ownerDocument && el.ownerDocument.defaultView) || (typeof window !== 'undefined' ? window : null);
+      if (view && view.getComputedStyle) {
+        var cs = view.getComputedStyle(el);
+        if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return false;
+      }
+    } catch (e) { /* keep */ }
+    if (el.closest) {
+      if (el.closest('[hidden], [aria-hidden="true"]')) return false;
+      var pane = el.closest('.tab-pane, [role="tabpanel"]');
+      if (pane && pane !== el) {
+        var paneCls = String(pane.className || '');
+        var inactive = /\btab-pane\b/.test(paneCls) && !/\bactive\b/.test(paneCls) && !/\bshow\b/.test(paneCls);
+        var ariaHidden = pane.getAttribute && pane.getAttribute('aria-hidden') === 'true';
+        if (inactive || ariaHidden) return false;
+      }
+    }
+    return true;
   }
 
-  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable';
+  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable, .ui-droppable, .droppable, [ondrop]';
   var CLASS_WORD = /\b(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)\b/i;
   var CLASS_ONLY = /^(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)$/i;
   var AVAIL_WORD = /\b(AVAILABLE|GNWL|RAC|REGRET|CURR)\b/i;
@@ -102,6 +122,16 @@
     return /\bui-draggable\b/.test(String(el.className || ''));
   }
 
+  function isDroppable(el: any) {
+    if (!el || !el.tagName || inChrome(el)) return false;
+    if (isDraggable(el)) return false;
+    var ondrop = el.getAttribute && el.getAttribute('ondrop') != null;
+    var cls = String(el.className || '');
+    if (!ondrop && !/\bui-droppable\b|\bdroppable\b/.test(cls)) return false;
+    if (el.querySelector && el.querySelector('.ui-droppable, .droppable, [ondrop]')) return false;
+    return true;
+  }
+
   function isLinkCell(el: any) {
     return String(el.tagName || '').toLowerCase() === 'td' && /(?:^|\s)link(?:\s|$)/.test(String(el.className || ''));
   }
@@ -148,6 +178,12 @@
       if (el.id) return String(el.id);
       return 'drag';
     }
+    if (isDroppable(el)) {
+      var dropText = textOf(el);
+      if (dropText) return dropText.slice(0, 80);
+      if (el.id) return String(el.id);
+      return 'drop';
+    }
     var label = textOf(el);
     if (isClassCell(el)) return label.slice(0, 80);
     return label;
@@ -164,7 +200,8 @@
       var choice = !button && !klass && isChoice(el);
       var hover = !button && !klass && !choice && isHoverable(el);
       var drag = !button && !klass && !choice && !hover && isDraggable(el);
-      if (!button && !klass && !choice && !hover && !drag) continue;
+      var drop = !button && !klass && !choice && !hover && !drag && isDroppable(el);
+      if (!button && !klass && !choice && !hover && !drag && !drop) continue;
       if (!visible(el)) continue;
       var label = labelOf(el);
       if (!label || (button && label.length > 80)) continue;
@@ -178,6 +215,14 @@
     if (el.id && /^[A-Za-z][\w:-]*$/.test(el.id)) {
       var byId = '#' + el.id;
       if (doc.querySelectorAll && doc.querySelectorAll(byId).length === 1) return byId;
+      var parent = el.parentElement;
+      while (parent && parent !== (doc.documentElement || null)) {
+        if (parent.id && /^[A-Za-z][\w:-]*$/.test(parent.id)) {
+          var scoped = '#' + parent.id + ' #' + el.id;
+          if (doc.querySelectorAll && doc.querySelectorAll(scoped).length === 1) return scoped;
+        }
+        parent = parent.parentElement;
+      }
     }
     var cls = String(el.className || '').trim().split(/\s+/).filter(function (c: any) {
       return c && c.length < 40 && /^[A-Za-z][\w-]*$/.test(c);
@@ -198,7 +243,8 @@
       var asLink = tag === 'a';
       var asHover = !asLink && isHoverable(nodes[i]);
       var asDrag = !asLink && !asHover && isDraggable(nodes[i]);
-      var kind = asLink ? 'link' : asHover ? 'hover' : asDrag ? 'drag' : 'button';
+      var asDrop = !asLink && !asHover && !asDrag && isDroppable(nodes[i]);
+      var kind = asLink ? 'link' : asHover ? 'hover' : asDrag ? 'drag' : asDrop ? 'drop' : 'button';
       fields.push({
         selector: selectorFor(nodes[i], fields.length, doc),
         label: label,
