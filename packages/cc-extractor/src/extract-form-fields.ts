@@ -4,6 +4,7 @@ function extractFormFieldsWithFingerprint() {
   var _ssf = (globalThis as any).CcScanStandardFields || {};
   var _smw = (globalThis as any).CcScanMatWidgets     || {};
   var _sng = (globalThis as any).CcScanNgDropdowns    || {};
+  var _scw = (globalThis as any).CcScanCustomChoice   || {};
   var _sfv = (globalThis as any).CcSortFieldsVisual   || {};
   var _fp  = (globalThis as any).CcFingerprintForm    || {};
 
@@ -62,6 +63,12 @@ function extractFormFieldsWithFingerprint() {
     var ng = _sng.scan(doc, formFields, helpers, 10000 + formFields.length);
     formFields = formFields.concat(ng.formFields);
     labelList  = labelList.concat(ng.labelList);
+  }
+
+  if (_scw.scan) {
+    var custom = _scw.scan(doc, formFields, helpers, 20000 + formFields.length);
+    formFields = formFields.concat(custom.formFields);
+    labelList  = labelList.concat(custom.labelList);
   }
 
   // Sort by visual position (_el refs still present here)

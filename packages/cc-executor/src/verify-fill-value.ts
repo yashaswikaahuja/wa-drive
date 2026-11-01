@@ -56,11 +56,16 @@
 
     // ── Checkbox ──────────────────────────────────────────────────────────────
     if (liveEl.type === 'checkbox') {
+      var expCb = String(expected || '').trim().toLowerCase();
+      var wantOff = /^(false|off|unchecked|no|0)$/.test(expCb);
+      var wantOn = /^(true|on|checked|yes|1)$/.test(expCb) || (!wantOff && !!expCb);
+      var isOn = !!liveEl.checked;
+      var okCb = wantOff ? !isOn : wantOn ? isOn : isOn;
       return {
-        ok: !!liveEl.checked,
-        actualValue: liveEl.checked ? 'true' : 'false',
+        ok: okCb,
+        actualValue: isOn ? (liveEl.value || 'on') : 'false',
         normExpected: String(expected || ''),
-        normActual: liveEl.checked ? 'true' : 'false',
+        normActual: isOn ? 'true' : 'false',
       };
     }
 
@@ -91,9 +96,11 @@
     if (tag === 'select') {
       var opt = liveEl.options[liveEl.selectedIndex];
       var actualVal = (opt ? (opt.text || opt.value) : '') || '';
+      var optVal = opt ? String(opt.value || '') : '';
       var normExpS = String(expected || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       var normActS = actualVal.toLowerCase().replace(/[^a-z0-9]/g, '');
-      var okS = normExpS.length > 0 && (normActS === normExpS || normActS.includes(normExpS) || normExpS.includes(normActS));
+      var normValS = optVal.toLowerCase().replace(/[^a-z0-9]/g, '');
+      var okS = normExpS.length > 0 && (normActS === normExpS || normValS === normExpS || normActS.includes(normExpS) || normExpS.includes(normActS) || normValS.includes(normExpS));
       return { ok: okS, actualValue: actualVal, normExpected: normExpS, normActual: normActS };
     }
 

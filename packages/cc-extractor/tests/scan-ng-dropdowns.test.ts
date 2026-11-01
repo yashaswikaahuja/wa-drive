@@ -126,5 +126,12 @@ console.log('\nng-select containers');
   assert('label added to labelList', labelList.includes('state'), true);
 }
 
+{
+  const el = makeEl({ _label: 'Single', className: 'css-b62m3t-container' });
+  const { formFields } = scan(makeDoc([], [el]), [], helpers, 10000);
+  assert('react-select css-container captured', formFields.length, 1);
+  assert('react-select type=ng-dropdown', formFields[0].type, 'ng-dropdown');
+}
+
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

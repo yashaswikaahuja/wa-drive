@@ -75,6 +75,10 @@ await assertOk('missing selector → ok:false', verifyFillValue('#missing', 'x',
 console.log('\nCheckbox:');
 await assertOk('checkbox checked → ok:true',
   verifyFillValue('#cb', 'yes', makeResolver({ '#cb': makeInput({ type: 'checkbox', checked: true }) }), SETTLE), true);
+await assertOk('checkbox true vs checked → ok:true',
+  verifyFillValue('#cb', 'true', makeResolver({ '#cb': makeInput({ type: 'checkbox', checked: true, value: 'on' }) }), SETTLE), true);
+await assertOk('checkbox on vs checked → ok:true',
+  verifyFillValue('#cb', 'on', makeResolver({ '#cb': makeInput({ type: 'checkbox', checked: true, value: 'on' }) }), SETTLE), true);
 await assertOk('checkbox unchecked → ok:false',
   verifyFillValue('#cb', 'yes', makeResolver({ '#cb': makeInput({ type: 'checkbox', checked: false }) }), SETTLE), false);
 
@@ -83,6 +87,11 @@ console.log('\nSelect:');
 const sel1 = makeSelect([{ text: 'Bihar', value: 'BR' }, { text: 'Jharkhand', value: 'JH' }], 1);
 await assertOk('select option text match → ok:true',
   verifyFillValue('#s', 'Jharkhand', makeResolver({ '#s': sel1 }), SETTLE), true);
+const selOpt2 = makeSelect([{ text: 'Please select', value: '' }, { text: 'Option 2', value: '2' }], 1);
+await assertOk('select Option 2 vs value 2 → ok:true',
+  verifyFillValue('#s', 'Option 2', makeResolver({ '#s': selOpt2 }), SETTLE), true);
+await assertOk('select planned value 2 vs option text → ok:true',
+  verifyFillValue('#s', '2', makeResolver({ '#s': selOpt2 }), SETTLE), true);
 await assertOk('select option text partial → ok:true',
   verifyFillValue('#s', 'jharkh', makeResolver({ '#s': sel1 }), SETTLE), true);
 await assertOk('select no match → ok:false',

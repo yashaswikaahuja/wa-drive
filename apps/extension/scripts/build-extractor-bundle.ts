@@ -14,6 +14,7 @@ await writeConcatBundle({
     'scan-standard-fields.ts',
     'scan-mat-widgets.ts',
     'scan-ng-dropdowns.ts',
+    'scan-custom-choice.ts',
     'sort-fields-visual.ts',
     'fingerprint-form.ts',
     'correction-observer.ts',

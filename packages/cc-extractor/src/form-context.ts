@@ -6,8 +6,8 @@
  *   isInSkipContext(el)           — true if el is inside nav/header/footer/banner
  *                                   (role=search allowed when journey-like — #311)
  *   isGoodLabel(s, ccDomUtils)    — true if label is non-empty, meaningful, min 2 chars
- *   hasFormContext(doc, ccDomUtils) — true if page has a <form> OR 2+ labeled inputs
- *                                   (includes journey search widgets — #311)
+ *   hasFormContext(doc, ccDomUtils) — true if page has a <form> OR 1+ labeled
+ *                                   fillable control (select, number, checkbox, radio, combobox)
  *
  * ccDomUtils is injected (not read from window) so the functions are testable in Node.
  *
@@ -100,9 +100,25 @@
       var cx = box.left + box.width / 2;
       var cy = box.top + box.height / 2;
       var inView = cx >= 0 && cy >= 0 && cx <= iw && cy <= ih;
-      if (inView && !hitsControl(el, hit(cx, cy))) return false;
+      var top = inView ? hit(cx, cy) : null;
+      if (inView && !hitsControl(el, top) && !isAdCover(top, el)) return false;
     }
     return true;
+  }
+
+  function isAdCover(top: any, el: any) {
+    if (!top || top === el) return false;
+    var node = top;
+    var hops = 0;
+    while (node && hops < 6) {
+      var tag = String(node.tagName || '').toLowerCase();
+      if (tag === 'iframe' || tag === 'ins') return true;
+      var blob = ((node.id || '') + ' ' + (typeof node.className === 'string' ? node.className : '')).toLowerCase();
+      if (/adplus|adsbygoogle|google_ads|google_vignette|ad-overlay|ad_overlay/.test(blob)) return true;
+      node = node.parentElement;
+      hops += 1;
+    }
+    return false;
   }
 
   function isInSkipContext(el: any) {
@@ -135,8 +151,8 @@
 
   /**
    * Returns true if the page has a real form worth scanning.
-   * Requires either a <form> element OR at least 2 labeled visible inputs
-   * (including type=search / combobox journey widgets — #311).
+   * Requires either a <form> element OR at least one labeled visible control
+   * (text, select, number, checkbox, radio, combobox — #349).
    *
    * @param {Document} doc
    * @param {object} [ccDomUtils]
@@ -145,10 +161,10 @@
   function hasFormContext(doc: any, ccDomUtils: any) {
     const forms = doc.querySelectorAll('form');
     if (forms.length > 0) return true;
-    // No <form> tag — check for 2+ labeled inputs (some govt sites don't use <form>)
+    // No <form> tag — one labeled control is enough (DemoQA / The Internet, #349)
     // Include type=search for OTA journey strips (#311).
     const inputs = doc.querySelectorAll(
-      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input:not([type]),textarea,[role="combobox"]'
+      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input[type="number"],input:not([type]),textarea,select,input[type="checkbox"],input[type="radio"],[role="combobox"],[role="checkbox"],[role="radio"]'
     );
     let labeled = 0;
     inputs.forEach(function (el: any) {
@@ -156,9 +172,9 @@
       const lbl = ccDomUtils && typeof ccDomUtils.getLabel === 'function'
         ? ccDomUtils.getLabel(el)
         : (el.getAttribute && el.getAttribute('aria-label')) || el.placeholder || '';
-      if (lbl || isJourneyLike(el, lbl)) labeled++;
+      if (lbl || isJourneyLike(el, lbl) || (el.tagName && String(el.tagName).toLowerCase() === 'select') || el.type === 'number') labeled++;
     });
-    return labeled >= 2;
+    return labeled >= 1;
   }
 
   root.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike, isVisuallyPresent };

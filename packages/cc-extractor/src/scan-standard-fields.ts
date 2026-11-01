@@ -2,7 +2,8 @@
  * scan-standard-fields — Standard input/select/radio/checkbox scanner
  *
  * Loops all input/textarea/select elements in the document. Skips
- * hidden/submit/search/password/captcha inputs and elements in skip contexts.
+ * hidden/submit/password/captcha inputs and elements in skip contexts.
+ * A visible page search box is kept, including one in the header.
  *
  * Handles:
  *   - Radio buttons: grouped by name, label from legend/fieldset/container
@@ -34,6 +35,35 @@
 
   function isJourneyMeta(meta: any, label: any) {
     return JOURNEY_RE.test(String(meta || '') + ' ' + String(label || ''));
+  }
+
+  /**
+   * A box the operator uses to search the page. Header chrome stays out,
+   * but this box is the control read_form has to show.
+   * Name and id are enough: YouTube's box is type=text name=search_query
+   * inside the masthead, so a header skip or a "search" word skip hides it.
+   */
+  function isPageSearch(el: any) {
+    if (!el) return false;
+    var t = String(el.type || '').toLowerCase();
+    if (t === 'hidden' || t === 'submit' || t === 'button' || t === 'password' ||
+        t === 'image' || t === 'reset' || t === 'checkbox' || t === 'radio' || t === 'file') return false;
+    var meta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (typeof el.className === 'string' ? el.className : '')).toLowerCase();
+    if (SKIP_META_HARD_RE.test(meta)) return false;
+    if (t === 'search') return true;
+    if (/(^|[^a-z])(search_query|search|query)([^a-z]|$)/.test(meta) && !/(^|[^a-z])filter([^a-z]|$)/.test(meta)) return true;
+    var hint = String(el.placeholder || (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title'))) || '').toLowerCase();
+    return /^\s*search\b/.test(hint);
+  }
+
+  function uniqueSearchSelector(el: any, doc: any) {
+    if (!doc || typeof doc.querySelectorAll !== 'function') return null;
+    var sel = 'input[type="search"]';
+    try {
+      var hits = doc.querySelectorAll(sel);
+      if (hits && hits.length === 1 && hits[0] === el) return sel;
+    } catch (e) {}
+    return null;
   }
 
   // Same list as CcResolveCcSelector. form-field-N is an index into this
@@ -121,8 +151,19 @@
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
     function blocked(el: any) {
-      if (isInSkipContext(el)) return true;
-      if (typeof helpers.isVisuallyPresent === 'function' && !helpers.isVisuallyPresent(el)) return true;
+      if (isInSkipContext(el) && !isPageSearch(el)) return true;
+      if (typeof helpers.isVisuallyPresent === 'function' && !helpers.isVisuallyPresent(el)) {
+        var kind = String(el.type || '').toLowerCase();
+        if (kind === 'checkbox' || kind === 'radio') {
+          var lab = null;
+          if (el.id && el.ownerDocument && el.ownerDocument.querySelector) {
+            lab = el.ownerDocument.querySelector('label[for="' + el.id + '"]');
+          }
+          if (!lab && el.closest) lab = el.closest('label');
+          if (lab && helpers.isVisuallyPresent(lab)) return false;
+        }
+        return true;
+      }
       return false;
     }
 
@@ -136,19 +177,14 @@
 
     inputs.forEach(function (el: any) {
       var t = el.type;
-      // Allow type=search when journey-like (redBus/Cleartrip From/To) — #311
       if (t === 'hidden' || t === 'submit' || t === 'button' ||
           t === 'password' || t === 'image' || t === 'reset') return;
-      if (t === 'search') {
-        var earlyLbl = getLabel(el) || el.placeholder || '';
-        var earlyMeta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
-        if (!isJourneyMeta(earlyMeta, earlyLbl)) return;
-      }
       if (blocked(el)) return;
 
       var meta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
+      var pageSearch = isPageSearch(el);
       if (SKIP_META_HARD_RE.test(meta)) return;
-      if (SKIP_META_SOFT_RE.test(meta) && !isJourneyMeta(meta, getLabel(el) || el.placeholder || '')) return;
+      if (SKIP_META_SOFT_RE.test(meta) && !pageSearch && !isJourneyMeta(meta, getLabel(el) || el.placeholder || '')) return;
 
       // ── Radio ──
       if (t === 'radio' && el.name) {
@@ -196,7 +232,12 @@
       } else if (!label && typeof window !== 'undefined' && window.ccDomUtils && window.ccDomUtils.humanizeAttr) {
         label = window.ccDomUtils.humanizeAttr(el.name || el.id || '') || '';
       }
-      var selector = makeSelector(el, doc) || 'form-field-' + idx;
+      var selector = makeSelector(el, doc);
+      // type=search is outside FORM_FIELD_QUERY on purpose, so a kept counter
+      // must not become form-field-N. That index would point at a different input.
+      if (!selector && pageSearch) selector = uniqueSearchSelector(el, doc);
+      if (!selector && pageSearch) return;
+      if (!selector) selector = 'form-field-' + idx;
 
       // ── Select ──
       if (el.tagName === 'SELECT') {
@@ -211,8 +252,8 @@
         return;
       }
 
-      // ── Text / email / tel / number / date / file ──
-      var type = el.type || 'text';
+      // ── Text / email / tel / number / date / file / search ──
+      var type = pageSearch ? 'search' : (el.type || 'text');
       if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
       formFields.push({ selector: selector, id: el.id, name: el.name, value: el.value,
         placeholder: el.placeholder || '', label: label, type: type, index: idx,

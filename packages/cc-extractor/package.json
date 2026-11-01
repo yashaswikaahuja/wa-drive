@@ -10,6 +10,7 @@
     "./scan-standard-fields": "./src/scan-standard-fields.ts",
     "./scan-mat-widgets": "./src/scan-mat-widgets.ts",
     "./scan-ng-dropdowns": "./src/scan-ng-dropdowns.ts",
+    "./scan-custom-choice": "./src/scan-custom-choice.ts",
     "./sort-fields-visual": "./src/sort-fields-visual.ts",
     "./fingerprint-form": "./src/fingerprint-form.ts",
     "./correction-observer": "./src/correction-observer.ts",

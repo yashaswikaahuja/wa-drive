@@ -66,9 +66,24 @@
       var cx = box.left + box.width / 2;
       var cy = box.top + box.height / 2;
       var inView = cx >= 0 && cy >= 0 && cx <= iw && cy <= ih;
-      if (inView && !hitsControl(el, hit(cx, cy))) return false;
+      var top = inView ? hit(cx, cy) : null;
+      if (inView && !hitsControl(el, top) && !isAdCover(top, el)) return false;
     }
     return true;
+  }
+  function isAdCover(top, el) {
+    if (!top || top === el) return false;
+    var node = top;
+    var hops = 0;
+    while (node && hops < 6) {
+      var tag = String(node.tagName || "").toLowerCase();
+      if (tag === "iframe" || tag === "ins") return true;
+      var blob = ((node.id || "") + " " + (typeof node.className === "string" ? node.className : "")).toLowerCase();
+      if (/adplus|adsbygoogle|google_ads|google_vignette|ad-overlay|ad_overlay/.test(blob)) return true;
+      node = node.parentElement;
+      hops += 1;
+    }
+    return false;
   }
   function isInSkipContext(el) {
     if (!el || !el.closest) return false;
@@ -90,15 +105,15 @@
     const forms = doc.querySelectorAll("form");
     if (forms.length > 0) return true;
     const inputs = doc.querySelectorAll(
-      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input:not([type]),textarea,[role="combobox"]'
+      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input[type="number"],input:not([type]),textarea,select,input[type="checkbox"],input[type="radio"],[role="combobox"],[role="checkbox"],[role="radio"]'
     );
     let labeled = 0;
     inputs.forEach(function(el) {
       if (isInSkipContext(el)) return;
       const lbl = ccDomUtils && typeof ccDomUtils.getLabel === "function" ? ccDomUtils.getLabel(el) : el.getAttribute && el.getAttribute("aria-label") || el.placeholder || "";
-      if (lbl || isJourneyLike(el, lbl)) labeled++;
+      if (lbl || isJourneyLike(el, lbl) || el.tagName && String(el.tagName).toLowerCase() === "select" || el.type === "number") labeled++;
     });
-    return labeled >= 2;
+    return labeled >= 1;
   }
   root2.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike, isVisuallyPresent };
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -116,6 +131,27 @@ if (typeof module !== "undefined" && module.exports) {
   var AGREEMENT_RE = /\b(i\s+)?(agree|accept|confirm|declare|certify|consent|terms|self.declaration)\b/i;
   function isJourneyMeta(meta, label) {
     return JOURNEY_RE.test(String(meta || "") + " " + String(label || ""));
+  }
+  function isPageSearch(el) {
+    if (!el) return false;
+    var t = String(el.type || "").toLowerCase();
+    if (t === "hidden" || t === "submit" || t === "button" || t === "password" || t === "image" || t === "reset" || t === "checkbox" || t === "radio" || t === "file") return false;
+    var meta = ((el.id || "") + " " + (el.name || "") + " " + (typeof el.className === "string" ? el.className : "")).toLowerCase();
+    if (SKIP_META_HARD_RE.test(meta)) return false;
+    if (t === "search") return true;
+    if (/(^|[^a-z])(search_query|search|query)([^a-z]|$)/.test(meta) && !/(^|[^a-z])filter([^a-z]|$)/.test(meta)) return true;
+    var hint = String(el.placeholder || el.getAttribute && (el.getAttribute("aria-label") || el.getAttribute("title")) || "").toLowerCase();
+    return /^\s*search\b/.test(hint);
+  }
+  function uniqueSearchSelector(el, doc) {
+    if (!doc || typeof doc.querySelectorAll !== "function") return null;
+    var sel = 'input[type="search"]';
+    try {
+      var hits = doc.querySelectorAll(sel);
+      if (hits && hits.length === 1 && hits[0] === el) return sel;
+    } catch (e) {
+    }
+    return null;
   }
   var FORM_FIELD_QUERY = [
     'input[type="text"]',
@@ -186,8 +222,19 @@ if (typeof module !== "undefined" && module.exports) {
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
     function blocked(el) {
-      if (isInSkipContext(el)) return true;
-      if (typeof helpers.isVisuallyPresent === "function" && !helpers.isVisuallyPresent(el)) return true;
+      if (isInSkipContext(el) && !isPageSearch(el)) return true;
+      if (typeof helpers.isVisuallyPresent === "function" && !helpers.isVisuallyPresent(el)) {
+        var kind = String(el.type || "").toLowerCase();
+        if (kind === "checkbox" || kind === "radio") {
+          var lab = null;
+          if (el.id && el.ownerDocument && el.ownerDocument.querySelector) {
+            lab = el.ownerDocument.querySelector('label[for="' + el.id + '"]');
+          }
+          if (!lab && el.closest) lab = el.closest("label");
+          if (lab && helpers.isVisuallyPresent(lab)) return false;
+        }
+        return true;
+      }
       return false;
     }
     var formFields = [];
@@ -199,15 +246,11 @@ if (typeof module !== "undefined" && module.exports) {
     inputs.forEach(function(el) {
       var t = el.type;
       if (t === "hidden" || t === "submit" || t === "button" || t === "password" || t === "image" || t === "reset") return;
-      if (t === "search") {
-        var earlyLbl = getLabel(el) || el.placeholder || "";
-        var earlyMeta = ((el.id || "") + " " + (el.name || "") + " " + (el.className || "")).toLowerCase();
-        if (!isJourneyMeta(earlyMeta, earlyLbl)) return;
-      }
       if (blocked(el)) return;
       var meta = ((el.id || "") + " " + (el.name || "") + " " + (el.className || "")).toLowerCase();
+      var pageSearch = isPageSearch(el);
       if (SKIP_META_HARD_RE.test(meta)) return;
-      if (SKIP_META_SOFT_RE.test(meta) && !isJourneyMeta(meta, getLabel(el) || el.placeholder || "")) return;
+      if (SKIP_META_SOFT_RE.test(meta) && !pageSearch && !isJourneyMeta(meta, getLabel(el) || el.placeholder || "")) return;
       if (t === "radio" && el.name) {
         if (!radioGroups[el.name]) {
           radioGroups[el.name] = {
@@ -262,7 +305,10 @@ if (typeof module !== "undefined" && module.exports) {
       } else if (!label && typeof window !== "undefined" && window.ccDomUtils && window.ccDomUtils.humanizeAttr) {
         label = window.ccDomUtils.humanizeAttr(el.name || el.id || "") || "";
       }
-      var selector = makeSelector(el, doc) || "form-field-" + idx;
+      var selector = makeSelector(el, doc);
+      if (!selector && pageSearch) selector = uniqueSearchSelector(el, doc);
+      if (!selector && pageSearch) return;
+      if (!selector) selector = "form-field-" + idx;
       if (el.tagName === "SELECT") {
         var options = Array.from(el.querySelectorAll("option")).map(function(o) {
           return o.textContent.trim();
@@ -285,7 +331,7 @@ if (typeof module !== "undefined" && module.exports) {
         idx++;
         return;
       }
-      var type = el.type || "text";
+      var type = pageSearch ? "search" : el.type || "text";
       if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15));
       formFields.push({
         selector,
@@ -480,7 +526,7 @@ if (typeof module !== "undefined") module.exports = root.CcScanMatWidgets;
 (function(root2) {
   "use strict";
   var NG_TRIGGER_SEL = ".value-area, .select-type, .ng-value-container, .ng-select-container";
-  var NG_CONTAINER_SEL = 'ng-select, ng-dropdown, .ng-select, .ng-dropdown, [class*="custom-dropdown"], [class*="select-control"]';
+  var NG_CONTAINER_SEL = 'ng-select, ng-dropdown, .ng-select, .ng-dropdown, [class*="custom-dropdown"], [class*="select-control"], [class*="-container"][class*="css-"]';
   function isAlreadyCaptured(el, existingFields) {
     return existingFields.some(function(f) {
       try {
@@ -590,6 +636,112 @@ if (typeof module !== "undefined") module.exports = root.CcScanMatWidgets;
   root2.CcScanNgDropdowns = { scan };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined") module.exports = root.CcScanNgDropdowns;
+
+/* ==== scan-custom-choice.ts ==== */
+(function(root) {
+  "use strict";
+  var QUERY = [
+    '[role="checkbox"]',
+    '[role="radio"]',
+    ".rct-checkbox",
+    ".rct-title",
+    "label.custom-control-label",
+    "label.form-check-label"
+  ].join(",");
+  function already(el, existing) {
+    if (!el || !existing) return false;
+    for (var i = 0; i < existing.length; i++) {
+      var f = existing[i];
+      if (f && f._el === el) return true;
+      try {
+        if (f && f.selector && el.matches && el.matches(f.selector)) return true;
+      } catch (e) {
+      }
+    }
+    return false;
+  }
+  function selectorFor(el, idx, doc) {
+    if (el.id && /^[A-Za-z][\w:-]*$/.test(el.id)) {
+      var byId = "#" + el.id;
+      if (doc.querySelectorAll && doc.querySelectorAll(byId).length === 1) return byId;
+    }
+    var htmlFor = el.getAttribute && el.getAttribute("for");
+    if (htmlFor) return 'label[for="' + htmlFor + '"]';
+    var cls = String(el.className || "").trim().split(/\s+/).filter(function(c) {
+      return c && /^[A-Za-z][\w-]*$/.test(c);
+    });
+    if (cls.length && el.tagName) {
+      var sel = String(el.tagName).toLowerCase() + "." + cls[0];
+      if (doc.querySelectorAll && doc.querySelectorAll(sel).length === 1) return sel;
+    }
+    return "cc-choice-" + idx;
+  }
+  function kindOf(el) {
+    var role = el.getAttribute && el.getAttribute("role");
+    if (role === "radio") return "radio";
+    if (role === "checkbox") return "checkbox";
+    var cls = String(el.className || "");
+    if (/custom-control-label/.test(cls)) {
+      var box = el.parentElement && el.parentElement.querySelector && el.parentElement.querySelector("input");
+      var t = box && String(box.type || "").toLowerCase();
+      if (t === "radio") return "radio";
+      return "checkbox";
+    }
+    if (/rct-checkbox|rct-title/.test(cls) || el.getAttribute && el.getAttribute("for")) return "checkbox";
+    return "checkbox";
+  }
+  function scan(doc, existingFields, helpers, startIdx) {
+    var isInSkipContext = helpers.isInSkipContext;
+    var getLabel = helpers.getLabel;
+    var idx = typeof startIdx === "number" ? startIdx : 2e4;
+    var formFields = [];
+    var labelList = [];
+    var seen = {};
+    if (!doc || typeof doc.querySelectorAll !== "function") return { formFields, labelList };
+    var nodes = doc.querySelectorAll(QUERY);
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (isInSkipContext && isInSkipContext(el)) continue;
+      if (typeof helpers.isVisuallyPresent === "function" && !helpers.isVisuallyPresent(el)) continue;
+      var host = el;
+      if (el.classList && el.classList.contains("rct-checkbox") && el.closest) {
+        host = el.closest("label") || el;
+      }
+      if (el.classList && el.classList.contains("rct-title") && el.closest) {
+        host = el.closest("label") || el;
+      }
+      if (already(host, existingFields) || already(host, formFields)) continue;
+      var label = "";
+      if (host.classList && host.classList.contains("rct-title")) label = String(host.textContent || "").replace(/\s+/g, " ").trim();
+      else if (el.classList && el.classList.contains("rct-title")) label = String(el.textContent || "").replace(/\s+/g, " ").trim();
+      else label = getLabel && getLabel(host) || host.getAttribute && host.getAttribute("aria-label") || String(host.textContent || "").replace(/\s+/g, " ").trim();
+      label = String(label || "").replace(/\s+/g, " ").trim().slice(0, 80);
+      if (!label || label.length < 2) continue;
+      var key = label.toLowerCase();
+      if (seen[key]) continue;
+      seen[key] = true;
+      var type = kindOf(host);
+      var selector = selectorFor(host, idx, doc);
+      if (label) labelList.push(key.replace(/[^a-z0-9]/g, "").slice(0, 15));
+      formFields.push({
+        selector,
+        id: host.id || "",
+        name: host.getAttribute && host.getAttribute("for") || "",
+        value: "",
+        placeholder: "",
+        label,
+        type,
+        index: idx,
+        options: null,
+        _el: host
+      });
+      idx += 1;
+    }
+    return { formFields, labelList };
+  }
+  root.CcScanCustomChoice = { scan };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = (typeof globalThis !== "undefined" ? globalThis : this).CcScanCustomChoice;
 
 /* ==== sort-fields-visual.ts ==== */
 (function(root2) {
@@ -816,6 +968,7 @@ function extractFormFieldsWithFingerprint() {
   var _ssf = globalThis.CcScanStandardFields || {};
   var _smw = globalThis.CcScanMatWidgets || {};
   var _sng = globalThis.CcScanNgDropdowns || {};
+  var _scw = globalThis.CcScanCustomChoice || {};
   var _sfv = globalThis.CcSortFieldsVisual || {};
   var _fp = globalThis.CcFingerprintForm || {};
   var ccDomUtils = window.ccDomUtils || {};
@@ -862,6 +1015,11 @@ function extractFormFieldsWithFingerprint() {
     var ng = _sng.scan(doc, formFields, helpers, 1e4 + formFields.length);
     formFields = formFields.concat(ng.formFields);
     labelList = labelList.concat(ng.labelList);
+  }
+  if (_scw.scan) {
+    var custom = _scw.scan(doc, formFields, helpers, 2e4 + formFields.length);
+    formFields = formFields.concat(custom.formFields);
+    labelList = labelList.concat(custom.labelList);
   }
   if (_sfv.sort) _sfv.sort(formFields);
   var snapshotId = "snap." + Date.now().toString(36);

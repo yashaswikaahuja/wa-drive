@@ -12,13 +12,15 @@ Scans all `input`, `textarea`, and `select` elements in the document. Skips non-
 Returns all standard form fields found, plus a flat `labelList` array for fingerprinting.
 
 ## Skipped inputs
-- Types: `hidden`, `submit`, `button`, `search`, `password`, `image`, `reset`
-- Elements in skip contexts (nav/header/footer)
-- Inputs with `id/name/class` matching: `search`, `query`, `filter`, `captcha`, `otp`, `token`, `csrf`, `recaptcha`
+- Types: `hidden`, `submit`, `button`, `password`, `image`, `reset`
+- Elements in skip contexts (nav/header/footer), except a visible page search box
+- Inputs with `id/name/class` matching: `filter`, `captcha`, `otp`, `token`, `csrf`, `recaptcha`
+- `search` and `query` in the id, name, or class mark a page search box. That box is kept, including when it sits in the header. Its selector is its id or name, or `input[type="search"]` when that matches only one element. It is not given a `form-field-N` index.
 
 ## Field types emitted
 | Type | Condition |
 |------|-----------|
+| `search` | `input[type=search]`, or a text box whose name, id, or placeholder is the page search |
 | `text/email/tel/number/date/file` | Standard input types |
 | `dropdown` | `<select>` element |
 | `radio-group` | Radio buttons grouped by `name` |

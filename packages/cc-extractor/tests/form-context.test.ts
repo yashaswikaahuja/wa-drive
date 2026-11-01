@@ -92,6 +92,12 @@ assert('zero-size control is noise', isVisuallyPresent(painted({
 }
 {
   const el = painted();
+  view._top = { tagName: 'INS', id: 'google_vignette', className: 'adsbygoogle', parentElement: null };
+  assert('ad overlay does not drop painted control', isVisuallyPresent(el, view), true);
+  view._top = el;
+}
+{
+  const el = painted();
   const hiddenView = Object.assign({}, view, {
     getComputedStyle: () => ({ display: 'none', visibility: 'visible', opacity: '1' }),
   });
@@ -159,8 +165,9 @@ const navInput = {
 };
 
 assert('2 labeled inputs = has context',    hasFormContext(makeDocNoForm([labeledInput, labeledInput])), true);
-assert('1 labeled input = no context',      hasFormContext(makeDocNoForm([labeledInput, unlabeledInput])), false);
+assert('1 labeled input = has context',     hasFormContext(makeDocNoForm([labeledInput])), true);
 assert('0 labeled inputs = no context',     hasFormContext(makeDocNoForm([])), false);
+assert('a lone select is context',          hasFormContext(makeDocNoForm([{ closest() { return null; }, tagName: 'SELECT', placeholder: '' }])), true);
 assert('nav inputs are skipped',            hasFormContext(makeDocNoForm([navInput, navInput])), false);
 
 // With ccDomUtils that provides getLabel

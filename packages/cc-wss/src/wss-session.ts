@@ -114,68 +114,38 @@
 
   async function fillFormPage(incoming) {
     if (typeof fillFormFieldsSequential !== 'function') return { ok: false, error: 'executor_not_loaded' };
-    var mapping = {};
-    var fbs = {};
+    var loop = (typeof globalThis !== 'undefined') ? (globalThis as any).CcAgUiLoop : null;
+    if (!loop || typeof loop.run !== 'function') return { ok: false, error: 'ag_ui_loop_missing' };
     var list = Array.isArray(incoming) ? incoming : [];
     var skip = /captcha|otp|password|cvv|card number|\bpin\b/i;
+    var fields = [];
     for (var i = 0; i < list.length; i++) {
       var f = list[i];
-      if (!f || !f.selector || f.value == null || String(f.value) === '') continue;
+      if (!f || !f.selector) continue;
       var label = f.visualLabel || f.label || '';
       if (skip.test(label) || skip.test(f.selector)) continue;
-      if (/^(button|submit)$/i.test(f.type || '')) continue;
-      if (/^(reset|image|file)$/i.test(f.type || '')) continue;
-      mapping[f.selector] = { value: String(f.value), type: f.type || 'text', label: label, visualLabel: label };
-      fbs[f.selector] = { label: label, visualLabel: label, source: 'operator' };
+      fields.push(f);
     }
-    await fillFormFieldsSequential(mapping, fbs, {}, list);
-    var clickRecords = [];
-    var clickApi = (typeof globalThis !== 'undefined') ? (globalThis as any).CcClickControl : null;
-    if (clickApi && typeof clickApi.press === 'function') {
-      for (var c = 0; c < list.length; c++) {
-        var buttonField = list[c];
-        if (!buttonField || !/^(button|submit)$/i.test(buttonField.type || '')) continue;
-        var buttonLabel = buttonField.visualLabel || buttonField.label || '';
-        if (skip.test(buttonLabel)) continue;
-        var beforeMark = location.href + '|' + document.title + '|' + ((document.body && document.body.innerText) ? document.body.innerText.length : 0);
-        var pressed = clickApi.press(buttonField, document);
-        await new Promise(function (r) { setTimeout(r, 700); });
-        var afterMark = location.href + '|' + document.title + '|' + ((document.body && document.body.innerText) ? document.body.innerText.length : 0);
-        var changed = beforeMark !== afterMark;
-        clickRecords.push({
-          selector: (pressed && pressed.selector) || buttonField.selector || '',
-          label: buttonLabel,
-          result: pressed && pressed.pressed && changed ? 'clicked' : 'no_effect',
-          failReason: pressed && pressed.pressed ? (changed ? '' : 'no_effect') : ((pressed && pressed.reason) || 'not_found'),
-          plannedValue: buttonLabel,
-          actualValue: (pressed && pressed.clicked) || '',
-        });
-      }
-    }
-    var records = [];
-    try {
-      var raw = document.body && document.body.getAttribute('data-cc-records');
-      if (raw) records = JSON.parse(raw);
-    } catch (e) { /* records stay empty */ }
-    if (!records.length && Array.isArray((window as any).__ccFillRecords)) records = (window as any).__ccFillRecords;
-    records = records.concat(clickRecords);
+    var out = await loop.run(fields, document);
+    var records = (out && out.records) || [];
     function count(name) {
       return records.filter(function (r) { return r && r.result === name; }).length;
     }
     return {
-      ok: true,
+      ok: !(out && out.stopped),
       url: location.href,
-      filled: count('filled'),
-      skipped: count('skipped') + count('waiting_human'),
-      failed: count('failed') + count('error'),
+      stopped: !!(out && out.stopped),
+      filled: count('filled') + count('chosen'),
+      skipped: count('skipped'),
+      failed: count('failed') + count('not_landed') + count('no_option') + count('no_effect'),
       records: records.map(function (r) {
         return {
           selector: r.selector || '',
           label: r.label || '',
           result: r.result || '',
           failReason: r.failReason || '',
-          plannedValue: r.plannedValue != null ? r.plannedValue : r.value,
-          actualValue: r.actualValue != null ? r.actualValue : (r.actual != null ? r.actual : ''),
+          plannedValue: r.plannedValue != null ? r.plannedValue : '',
+          actualValue: r.actualValue != null ? r.actualValue : '',
         };
       }),
     };
@@ -230,18 +200,22 @@
       }
     }
     if (!entry) return { ok: false, error: 'not_found', url: location.href };
-    var beforeMark = location.href + '|' + document.title + '|' + ((document.body && document.body.innerText) ? document.body.innerText.length : 0);
+    var beforeUrl = location.href;
+    var beforeTitle = document.title;
     var pressed = api.press(entry, document);
     await new Promise(function (r) { setTimeout(r, 900); });
-    var afterMark = location.href + '|' + document.title + '|' + ((document.body && document.body.innerText) ? document.body.innerText.length : 0);
-    var changed = beforeMark !== afterMark;
+    var changed = location.href !== beforeUrl || document.title !== beforeTitle;
+    // A SPA click is real even when the address and title stay. no_effect was a
+    // false miss on DemoQA Submit / Click Me and The Internet Start (#349).
+    var didPress = !!(pressed && pressed.pressed);
     return {
-      ok: !!(pressed && pressed.pressed && changed),
+      ok: didPress,
       url: location.href,
       clicked: (pressed && pressed.clicked) || '',
       selector: (pressed && pressed.selector) || entry.selector || '',
       label: entry.visualLabel || entry.label || '',
-      reason: pressed && pressed.pressed ? (changed ? '' : 'no_effect') : ((pressed && pressed.reason) || 'not_found'),
+      reason: didPress ? '' : ((pressed && pressed.reason) || 'not_found'),
+      moved: changed,
     };
   }
 
