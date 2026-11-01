@@ -205,12 +205,46 @@
     });
   }
 
+  function isFrameGone(err) {
+    return /Frame with ID .* was removed|frame was removed|The tab was closed|No tab with id|moved to a different document|click_script_timeout/i.test(String((err && err.message) || err || ''));
+  }
+
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error(label || 'script_timeout')); }, ms);
+      }),
+    ]);
+  }
+
+  async function tabIfNavigated(tab, beforeUrl) {
+    for (var i = 0; i < 6; i++) {
+      await waitMs(i === 0 ? 250 : 200);
+      var after = tab;
+      try { after = await chrome.tabs.get(tab.id); } catch (e) { return null; }
+      if (after && after.status === 'loading') continue;
+      if (pageUrl(after && after.url || '') && pageUrl(after.url) !== pageUrl(beforeUrl)) {
+        return {
+          ok: true,
+          tabId: tab.id,
+          url: pageUrl(after.url),
+          title: after.title || '',
+          moved: true,
+          reason: '',
+        };
+      }
+    }
+    return null;
+  }
+
   async function runPageTask(taskId, tabId, func, args) {
     var tab = await pickTaskTab(tabId);
     if (!tab || !tab.id) {
       replyBrowserTask(taskId, { ok: false, error: 'no_tab' });
       return;
     }
+    var beforeUrl = tab.url || '';
     try {
       await injectKernel(tab.id, true);
       var results = await chrome.scripting.executeScript({
@@ -221,7 +255,94 @@
       var page = func === readFormPage ? mergeReadFrames(results) : pickBestFrameResult(results);
       replyBrowserTask(taskId, Object.assign({ ok: false, tabId: tab.id, url: tab.url || null }, page || { error: 'no_result' }));
     } catch (e) {
+      var nav = await tabIfNavigated(tab, beforeUrl);
+      if (nav) {
+        replyBrowserTask(taskId, nav);
+        return;
+      }
       replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: (e && e.message) || 'page_task_failed' });
+    }
+  }
+
+  async function runClickTask(taskId, tabId, spec) {
+    var tab = await pickWebTab(tabId);
+    if (!tab || !tab.id) {
+      replyBrowserTask(taskId, { ok: false, error: 'no_tab' });
+      return;
+    }
+    if (String(tab.url || '').indexOf('http') !== 0) {
+      replyBrowserTask(taskId, { ok: false, error: 'open_a_form_page', tabId: tab.id });
+      return;
+    }
+    var beforeUrl = tab.url || '';
+    var want = (spec && spec.text) || '';
+    try {
+      try { await chrome.tabs.update(tab.id, { active: true }); } catch (e0) { /* stay */ }
+      await injectKernel(tab.id, false);
+      var results = null;
+      try {
+        results = await withTimeout(chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: clickFromJson,
+          args: [spec || {}],
+        }), 3500, 'click_script_timeout');
+      } catch (e1) {
+        var nav = await tabIfNavigated(tab, beforeUrl);
+        if (nav) {
+          replyBrowserTask(taskId, Object.assign(nav, { clicked: want, label: want }));
+          return;
+        }
+        if (!isFrameGone(e1)) {
+          replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: (e1 && e1.message) || 'page_task_failed' });
+          return;
+        }
+      }
+      var page = results && results[0] && results[0].result;
+      var after = tab;
+      try { after = await chrome.tabs.get(tab.id); } catch (e2) { /* keep */ }
+      var afterUrl = (after && after.url) || (page && page.url) || beforeUrl;
+      var moved = pageUrl(afterUrl) !== pageUrl(beforeUrl);
+      if (!moved && page && page.link) {
+        var late = await tabIfNavigated(tab, beforeUrl);
+        if (late) {
+          replyBrowserTask(taskId, {
+            ok: true,
+            tabId: tab.id,
+            url: late.url,
+            title: late.title,
+            clicked: (page && page.clicked) || want,
+            hovered: (page && page.hovered) || null,
+            selector: (page && page.selector) || '',
+            label: (page && page.label) || want,
+            reason: '',
+            moved: true,
+          });
+          return;
+        }
+        try { after = await chrome.tabs.get(tab.id); } catch (e4) { /* keep */ }
+        afterUrl = (after && after.url) || afterUrl;
+        moved = pageUrl(afterUrl) !== pageUrl(beforeUrl);
+      }
+      var ok = !!(page && page.ok) || moved;
+      replyBrowserTask(taskId, {
+        ok: ok,
+        tabId: tab.id,
+        url: pageUrl(afterUrl),
+        title: (after && after.title) || (page && page.title) || '',
+        clicked: (page && page.clicked) || want,
+        hovered: (page && page.hovered) || null,
+        selector: (page && page.selector) || '',
+        label: (page && page.label) || want,
+        reason: ok ? '' : ((page && page.reason) || (page && page.error) || 'not_found'),
+        moved: moved || !!(page && page.moved),
+      });
+    } catch (e3) {
+      var nav2 = await tabIfNavigated(tab, beforeUrl);
+      if (nav2) {
+        replyBrowserTask(taskId, Object.assign(nav2, { clicked: want, label: want }));
+        return;
+      }
+      replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: (e3 && e3.message) || 'page_task_failed' });
     }
   }
 
@@ -303,7 +424,19 @@
     var beforeUrl = location.href;
     var beforeTitle = document.title;
     var pressed = api.press(entry, document);
-    await new Promise(function (r) { setTimeout(r, 900); });
+    var navigates = entry && entry.type === 'link';
+    var hovered = !!(pressed && pressed.hovered);
+    await new Promise(function (r) {
+      var done = false;
+      function finish() {
+        if (done) return;
+        done = true;
+        try { window.removeEventListener('pagehide', finish); } catch (e0) { /* stay */ }
+        r();
+      }
+      try { window.addEventListener('pagehide', finish); } catch (e1) { /* stay */ }
+      setTimeout(finish, navigates ? 50 : hovered ? 200 : 900);
+    });
     var changed = location.href !== beforeUrl || document.title !== beforeTitle;
     // A SPA click is real even when the address and title stay. no_effect was a
     // false miss on DemoQA Submit / Click Me and The Internet Start (#349).
@@ -312,10 +445,12 @@
       ok: didPress,
       url: location.href,
       clicked: (pressed && pressed.clicked) || '',
+      hovered: hovered ? ((pressed && pressed.clicked) || '') : null,
       selector: (pressed && pressed.selector) || entry.selector || '',
       label: entry.visualLabel || entry.label || '',
       reason: didPress ? '' : ((pressed && pressed.reason) || 'not_found'),
       moved: changed,
+      link: navigates,
     };
   }
 
@@ -814,6 +949,7 @@
     if (!tab || !tab.id) return { ok: false, error: 'no_tab' };
     if (String(tab.url || '').indexOf('http') !== 0) return { ok: false, error: 'open_a_form_page', tabId: tab.id };
     if (typeof fn !== 'function') return { ok: false, error: 'pointer_not_loaded' };
+    var beforeUrl = tab.url || '';
     try { await chrome.tabs.update(tab.id, { active: true }); } catch (e) { /* stay */ }
     if (spec && spec.selector) {
       try {
@@ -842,7 +978,9 @@
       try { after = await chrome.tabs.get(tab.id); } catch (e3) { /* keep */ }
       return Object.assign({ tabId: tab.id }, page || { ok: false, error: 'no_result' }, { url: pageUrl(after && after.url || (page && page.url) || '') });
     } catch (e4) {
-      return { ok: false, error: 'page_not_readable', tabId: tab.id };
+      var nav = await tabIfNavigated(tab, beforeUrl);
+      if (nav) return Object.assign({ clicked: spec && spec.selector || '' }, nav);
+      return { ok: false, error: isFrameGone(e4) ? (e4 && e4.message) : 'page_not_readable', tabId: tab.id };
     }
   }
 
@@ -893,7 +1031,7 @@
       return;
     }
     if (msg.task === 'click') {
-      runPageTask(msg.taskId, msg.tabId, clickFromJson, [{ text: msg.text || '', control: msg.control || null }]);
+      runClickTask(msg.taskId, msg.tabId, { text: msg.text || '', control: msg.control || null });
       return;
     }
     if (msg.task === 'read_form') {

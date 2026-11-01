@@ -512,14 +512,21 @@ function pointerClickAt(spec) {
   }
   function makeEvent(name, point2, button2, buttons2, detail) {
     var view = doc.defaultView || g.window || g;
+    var scrollX = view && view.scrollX || 0;
+    var scrollY = view && view.scrollY || 0;
     var init = {
       bubbles: true,
       cancelable: true,
       view,
       clientX: point2.x,
       clientY: point2.y,
+      pageX: point2.x + scrollX,
+      pageY: point2.y + scrollY,
+      screenX: point2.x,
+      screenY: point2.y,
       button: button2,
       buttons: buttons2,
+      which: button2 === 0 ? 1 : button2 === 2 ? 3 : 2,
       detail
     };
     try {
@@ -535,6 +542,56 @@ function pointerClickAt(spec) {
     for (var i = 0; i < names2.length; i++) {
       var ev = makeEvent(names2[i], point2, button2, buttons2, detail);
       if (el && typeof el.dispatchEvent === "function") el.dispatchEvent(ev);
+    }
+  }
+  function forceHover(el) {
+    var rootDoc = el && el.ownerDocument || doc;
+    try {
+      var marked = rootDoc.documentElement;
+      if (marked && marked.getAttribute && marked.getAttribute("data-cc-hover-css") !== "1") {
+        if (marked.setAttribute) marked.setAttribute("data-cc-hover-css", "1");
+        var sheets = rootDoc.styleSheets || [];
+        for (var s = 0; s < sheets.length; s++) {
+          var rules = null;
+          try {
+            rules = sheets[s].cssRules;
+          } catch (e0) {
+            continue;
+          }
+          if (!rules || !sheets[s].insertRule) continue;
+          var add = [];
+          for (var r = 0; r < rules.length; r++) {
+            var rule = rules[r];
+            if (!rule || !rule.selectorText || String(rule.selectorText).indexOf(":hover") === -1) continue;
+            add.push(String(rule.selectorText).replace(/:hover/g, ".cc-force-hover") + "{" + (rule.style && rule.style.cssText || "") + "}");
+          }
+          for (var a = 0; a < add.length; a++) {
+            try {
+              sheets[s].insertRule(add[a], sheets[s].cssRules.length);
+            } catch (e1) {
+            }
+          }
+        }
+      }
+    } catch (e2) {
+    }
+    try {
+      var prev = rootDoc.querySelectorAll && rootDoc.querySelectorAll(".cc-force-hover");
+      if (prev) {
+        for (var c = 0; c < prev.length; c++) {
+          if (prev[c] && prev[c].classList) prev[c].classList.remove("cc-force-hover");
+        }
+      }
+    } catch (e3) {
+    }
+    var node = el;
+    while (node && node.classList) {
+      try {
+        node.classList.add("cc-force-hover");
+      } catch (e4) {
+        break;
+      }
+      node = node.parentElement || node.parentNode;
     }
   }
   var selector = spec && spec.selector ? String(spec.selector) : "";
@@ -567,6 +624,7 @@ function pointerClickAt(spec) {
   var action = spec && spec.action === "hover" ? "hover" : spec && spec.action === "drag" ? "drag" : "click";
   if (action === "hover") {
     fire(target, point, 0, 0, ["pointerover", "pointerenter", "mouseover", "mouseenter", "pointermove", "mousemove"], 0);
+    forceHover(target);
     return {
       ok: true,
       action: "hover",
@@ -862,12 +920,41 @@ function keyboardPress(spec) {
       else if (typeof el2.dispatchEvent === "function") el2.dispatchEvent({ type: name, key: def2.key, bubbles: true, cancelable: true });
     }
     send("keydown");
-    if (def2.key === "Backspace" && isEditable(el2) && !mods2.ctrl && !mods2.alt && !mods2.meta) deleteOne(el2, false);
+    if (nudgeRange(el2, def2)) {
+    } else if (def2.key === "Backspace" && isEditable(el2) && !mods2.ctrl && !mods2.alt && !mods2.meta) deleteOne(el2, false);
     else if (def2.key === "Delete" && isEditable(el2) && !mods2.ctrl && !mods2.alt && !mods2.meta) deleteOne(el2, true);
     else if (def2.key === "Tab") moveTab(el2, !!mods2.shift);
     else if (def2.key.length === 1 && !mods2.ctrl && !mods2.alt && !mods2.meta && isEditable(el2) && !blockedText(el2)) insertText(el2, def2.key);
     send("keypress");
     send("keyup");
+  }
+  function nudgeRange(el2, def2) {
+    if (!el2 || tagOf(el2) !== "input") return false;
+    if (String(el2.type || "").toLowerCase() !== "range") return false;
+    var min = Number(el2.min);
+    var max = Number(el2.max);
+    var step = Number(el2.step);
+    if (!isFinite(min)) min = 0;
+    if (!isFinite(max)) max = 100;
+    if (!isFinite(step) || step <= 0) step = 1;
+    var cur = Number(el2.value);
+    if (!isFinite(cur)) cur = min;
+    var next = cur;
+    if (def2.key === "ArrowRight" || def2.key === "ArrowUp") next = cur + step;
+    else if (def2.key === "ArrowLeft" || def2.key === "ArrowDown") next = cur - step;
+    else if (def2.key === "Home") next = min;
+    else if (def2.key === "End") next = max;
+    else return false;
+    if (next > max) next = max;
+    if (next < min) next = min;
+    el2.value = String(next);
+    emitInput(el2, null, "insertReplacementText");
+    var view = doc.defaultView || g.window || g;
+    try {
+      if (view && typeof view.Event === "function") el2.dispatchEvent(new view.Event("change", { bubbles: true }));
+    } catch (e) {
+    }
+    return true;
   }
   var selector = spec && spec.selector ? String(spec.selector) : "";
   var mods = {
@@ -1351,12 +1438,49 @@ scrollRoot.CcScrollPage = { scrollPage };
       files: kernelScripts()
     });
   }
+  function isFrameGone(err) {
+    return /Frame with ID .* was removed|frame was removed|The tab was closed|No tab with id|moved to a different document|click_script_timeout/i.test(String(err && err.message || err || ""));
+  }
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise(function(_, reject) {
+        setTimeout(function() {
+          reject(new Error(label || "script_timeout"));
+        }, ms);
+      })
+    ]);
+  }
+  async function tabIfNavigated(tab, beforeUrl) {
+    for (var i = 0; i < 6; i++) {
+      await waitMs(i === 0 ? 250 : 200);
+      var after = tab;
+      try {
+        after = await chrome.tabs.get(tab.id);
+      } catch (e) {
+        return null;
+      }
+      if (after && after.status === "loading") continue;
+      if (pageUrl(after && after.url || "") && pageUrl(after.url) !== pageUrl(beforeUrl)) {
+        return {
+          ok: true,
+          tabId: tab.id,
+          url: pageUrl(after.url),
+          title: after.title || "",
+          moved: true,
+          reason: ""
+        };
+      }
+    }
+    return null;
+  }
   async function runPageTask(taskId, tabId, func, args) {
     var tab = await pickTaskTab(tabId);
     if (!tab || !tab.id) {
       replyBrowserTask(taskId, { ok: false, error: "no_tab" });
       return;
     }
+    var beforeUrl = tab.url || "";
     try {
       await injectKernel(tab.id, true);
       var results = await chrome.scripting.executeScript({
@@ -1367,7 +1491,102 @@ scrollRoot.CcScrollPage = { scrollPage };
       var page = func === readFormPage ? mergeReadFrames(results) : pickBestFrameResult(results);
       replyBrowserTask(taskId, Object.assign({ ok: false, tabId: tab.id, url: tab.url || null }, page || { error: "no_result" }));
     } catch (e) {
+      var nav = await tabIfNavigated(tab, beforeUrl);
+      if (nav) {
+        replyBrowserTask(taskId, nav);
+        return;
+      }
       replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: e && e.message || "page_task_failed" });
+    }
+  }
+  async function runClickTask(taskId, tabId, spec) {
+    var tab = await pickWebTab(tabId);
+    if (!tab || !tab.id) {
+      replyBrowserTask(taskId, { ok: false, error: "no_tab" });
+      return;
+    }
+    if (String(tab.url || "").indexOf("http") !== 0) {
+      replyBrowserTask(taskId, { ok: false, error: "open_a_form_page", tabId: tab.id });
+      return;
+    }
+    var beforeUrl = tab.url || "";
+    var want = spec && spec.text || "";
+    try {
+      try {
+        await chrome.tabs.update(tab.id, { active: true });
+      } catch (e0) {
+      }
+      await injectKernel(tab.id, false);
+      var results = null;
+      try {
+        results = await withTimeout(chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: clickFromJson,
+          args: [spec || {}]
+        }), 3500, "click_script_timeout");
+      } catch (e1) {
+        var nav = await tabIfNavigated(tab, beforeUrl);
+        if (nav) {
+          replyBrowserTask(taskId, Object.assign(nav, { clicked: want, label: want }));
+          return;
+        }
+        if (!isFrameGone(e1)) {
+          replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: e1 && e1.message || "page_task_failed" });
+          return;
+        }
+      }
+      var page = results && results[0] && results[0].result;
+      var after = tab;
+      try {
+        after = await chrome.tabs.get(tab.id);
+      } catch (e2) {
+      }
+      var afterUrl = after && after.url || page && page.url || beforeUrl;
+      var moved = pageUrl(afterUrl) !== pageUrl(beforeUrl);
+      if (!moved && page && page.link) {
+        var late = await tabIfNavigated(tab, beforeUrl);
+        if (late) {
+          replyBrowserTask(taskId, {
+            ok: true,
+            tabId: tab.id,
+            url: late.url,
+            title: late.title,
+            clicked: page && page.clicked || want,
+            hovered: page && page.hovered || null,
+            selector: page && page.selector || "",
+            label: page && page.label || want,
+            reason: "",
+            moved: true
+          });
+          return;
+        }
+        try {
+          after = await chrome.tabs.get(tab.id);
+        } catch (e4) {
+        }
+        afterUrl = after && after.url || afterUrl;
+        moved = pageUrl(afterUrl) !== pageUrl(beforeUrl);
+      }
+      var ok = !!(page && page.ok) || moved;
+      replyBrowserTask(taskId, {
+        ok,
+        tabId: tab.id,
+        url: pageUrl(afterUrl),
+        title: after && after.title || page && page.title || "",
+        clicked: page && page.clicked || want,
+        hovered: page && page.hovered || null,
+        selector: page && page.selector || "",
+        label: page && page.label || want,
+        reason: ok ? "" : page && page.reason || page && page.error || "not_found",
+        moved: moved || !!(page && page.moved)
+      });
+    } catch (e3) {
+      var nav2 = await tabIfNavigated(tab, beforeUrl);
+      if (nav2) {
+        replyBrowserTask(taskId, Object.assign(nav2, { clicked: want, label: want }));
+        return;
+      }
+      replyBrowserTask(taskId, { ok: false, tabId: tab.id, error: e3 && e3.message || "page_task_failed" });
     }
   }
   async function runFillFormTask(taskId, tabId, fields) {
@@ -1450,8 +1669,24 @@ scrollRoot.CcScrollPage = { scrollPage };
     var beforeUrl = location.href;
     var beforeTitle = document.title;
     var pressed = api.press(entry, document);
+    var navigates = entry && entry.type === "link";
+    var hovered = !!(pressed && pressed.hovered);
     await new Promise(function(r) {
-      setTimeout(r, 900);
+      var done = false;
+      function finish() {
+        if (done) return;
+        done = true;
+        try {
+          window.removeEventListener("pagehide", finish);
+        } catch (e0) {
+        }
+        r();
+      }
+      try {
+        window.addEventListener("pagehide", finish);
+      } catch (e1) {
+      }
+      setTimeout(finish, navigates ? 50 : hovered ? 200 : 900);
     });
     var changed = location.href !== beforeUrl || document.title !== beforeTitle;
     var didPress = !!(pressed && pressed.pressed);
@@ -1459,10 +1694,12 @@ scrollRoot.CcScrollPage = { scrollPage };
       ok: didPress,
       url: location.href,
       clicked: pressed && pressed.clicked || "",
+      hovered: hovered ? pressed && pressed.clicked || "" : null,
       selector: pressed && pressed.selector || entry.selector || "",
       label: entry.visualLabel || entry.label || "",
       reason: didPress ? "" : pressed && pressed.reason || "not_found",
-      moved: changed
+      moved: changed,
+      link: navigates
     };
   }
   function loadFillOrchestrator() {
@@ -1990,6 +2227,7 @@ scrollRoot.CcScrollPage = { scrollPage };
     if (!tab || !tab.id) return { ok: false, error: "no_tab" };
     if (String(tab.url || "").indexOf("http") !== 0) return { ok: false, error: "open_a_form_page", tabId: tab.id };
     if (typeof fn !== "function") return { ok: false, error: "pointer_not_loaded" };
+    var beforeUrl = tab.url || "";
     try {
       await chrome.tabs.update(tab.id, { active: true });
     } catch (e) {
@@ -2025,7 +2263,9 @@ scrollRoot.CcScrollPage = { scrollPage };
       }
       return Object.assign({ tabId: tab.id }, page || { ok: false, error: "no_result" }, { url: pageUrl(after && after.url || page && page.url || "") });
     } catch (e4) {
-      return { ok: false, error: "page_not_readable", tabId: tab.id };
+      var nav = await tabIfNavigated(tab, beforeUrl);
+      if (nav) return Object.assign({ clicked: spec && spec.selector || "" }, nav);
+      return { ok: false, error: isFrameGone(e4) ? e4 && e4.message : "page_not_readable", tabId: tab.id };
     }
   }
   function runMouseClick(spec) {
@@ -2071,7 +2311,7 @@ scrollRoot.CcScrollPage = { scrollPage };
       return;
     }
     if (msg.task === "click") {
-      runPageTask(msg.taskId, msg.tabId, clickFromJson, [{ text: msg.text || "", control: msg.control || null }]);
+      runClickTask(msg.taskId, msg.tabId, { text: msg.text || "", control: msg.control || null });
       return;
     }
     if (msg.task === "read_form") {

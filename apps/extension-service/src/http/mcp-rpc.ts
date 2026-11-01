@@ -58,7 +58,7 @@ const tools = [
   },
   {
     name: 'click',
-    description: 'Press a button or a visible link in the signed-in Chrome by visible text or by a control from read_form. Links from read_form have type "link".',
+    description: 'Press a button, visible link, hover figure, or drag handle in the signed-in Chrome by visible text or by a control from read_form. Links have type "link". A link that navigates still returns ok with moved true even if the old page unloads. Hover figures have type "hover" and open captions without a click.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -183,7 +183,7 @@ const tools = [
   },
   {
     name: 'mouse_click',
-    description: 'Click the GUI with the mouse. Pass x and y in visible-screen pixels (the same space as a snapshot rect), or a selector from read_form to click the center of that control. button is left, right, or middle. count 2 is a double-click. action hover or drag uses the hover and drag tools. After a snapshot, click the thing you see. Then read_form or snapshot again.',
+    description: 'Click, hover, or drag the GUI. Pass x and y in visible-screen CSS pixels (the same space as a snapshot rect), or a selector from read_form. action hover moves the mouse without clicking so hover menus and captions can open. action drag also needs x2,y2 or toSelector. button is left, right, or middle. count 2 is a double-click. If hover or drag is not in your tool list, use this tool with action hover or drag. After a snapshot, click the thing you see. Then read_form or snapshot again.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -237,7 +237,7 @@ const tools = [
   },
   {
     name: 'keyboard',
-    description: 'Type on the keyboard in the focused control, or press a key. Pass text to type, key for one named key (Enter, Tab, Escape, Backspace, Delete, Space, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown), or keys for a short sequence. selector focuses that control first. ctrl, alt, shift, meta are modifiers. Does not type into password, CAPTCHA, or OTP boxes.',
+    description: 'Type on the keyboard in the focused control, or press a key. Pass text to type, key for one named key (Enter, Tab, Escape, Backspace, Delete, Space, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown), or keys for a short sequence. selector focuses that control first. Arrow keys on a slider (input type range) move its value. ctrl, alt, shift, meta are modifiers. Does not type into password, CAPTCHA, or OTP boxes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -325,7 +325,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
           'Dropdowns: if read_form includes options, fill_form with that type and value equal to one option. If options is null, click the dropdown, read_form, then click the choice. Read again before a dependent dropdown such as District after State.',
           'list_profiles and read_profile show the customers in this workspace. fill runs the extension Fill button for one profileId on the open page. It uses saved mappings and that profile. Call it once, then read_form to see what landed.',
           'snapshot photographs the GUI when read_form is not enough. Call it with no arguments for the visible screen, scope page for the whole page, or a selector or rect for one area. It does not type or click. The JPEG can be smaller than the screen: mouse_click x,y are CSS pixels, cssX = imageX * scaleX from the snapshot result.',
-          'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. hover moves the mouse over a point or selector. drag moves from x,y to x2,y2 or from selector to toSelector. click also finds visible links by text. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first. read_form includes iframe fields with frameId; copy frameId on fill_form, click, keyboard, mouse_click, hover, and drag. After any of those, read_form or snapshot before the next click or fill.',
+          'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. action hover or drag on mouse_click works even when hover and drag are missing from the tool list. hover moves the mouse over a point or selector. drag moves from x,y to x2,y2 or from selector to toSelector. click also finds visible links by text; a link that navigates is success (moved true) even if the old frame is gone. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first; arrows move a range slider. read_form includes iframe fields with frameId, hover figures (type hover), and drag handles (type drag); copy frameId on fill_form, click, keyboard, mouse_click, hover, and drag. After any of those, read_form or snapshot before the next click or fill.',
         ].join(' '),
       }),
     };

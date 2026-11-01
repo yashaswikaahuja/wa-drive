@@ -104,7 +104,7 @@ Clicks the GUI with the mouse. `x` and `y` are visible-screen CSS pixels. A snap
 { "selector": "button.ytSearchboxComponentSearchButton" }
 ```
 
-`button` is `left`, `right`, or `middle`. `count` 2 is a double-click. `action` can be `click`, `hover`, or `drag`. For `drag`, also pass `x2` and `y2`, or `toSelector`. After it returns, `read_form` or `snapshot` again.
+`button` is `left`, `right`, or `middle`. `count` 2 is a double-click. `action` can be `click`, `hover`, or `drag`. For `drag`, also pass `x2` and `y2`, or `toSelector`. If `hover` or `drag` is missing from the connected tool list, call `mouse_click` with `action` `hover` or `drag`. After it returns, `read_form` or `snapshot` again.
 
 ### `hover`
 
@@ -146,7 +146,7 @@ Types on the keyboard in the focused control, or presses a named key. Pass `sele
 { "key": "Escape" }
 ```
 
-`key` is one of `Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`, `PageUp`, `PageDown`, or a single character. `keys` is a short sequence of those. `ctrl`, `alt`, `shift`, and `meta` are modifiers. It does not type into a password, CAPTCHA, or OTP box. Copy `frameId` from `read_form` when the control is inside an iframe.
+`key` is one of `Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`, `PageUp`, `PageDown`, or a single character. `keys` is a short sequence of those. Arrow keys on a slider (`input type=range`) move its value. `ctrl`, `alt`, `shift`, and `meta` are modifiers. It does not type into a password, CAPTCHA, or OTP box. Copy `frameId` from `read_form` when the control is inside an iframe.
 
 ### `open_url`
 
@@ -206,9 +206,9 @@ Each item has:
 
 - `selector` — the handle for a later `fill_form` or `click`
 - `label` and `visualLabel` — the text the operator sees
-- `type` — `text`, `checkbox-group`, `button`, `contenteditable`, and similar
+- `type` — `text`, `checkbox-group`, `button`, `link`, `hover`, `drag`, `slider`, `contenteditable`, and similar
 - `frameId` — Chrome frame id when the isolated world ran in that frame. Same-origin editors such as TinyMCE `about:blank` are read through the parent `contentDocument`; copy `frameId` when it is present, and `fill_form` / `keyboard` still find `#tinymce` from the parent tab.
-- `role` — `button` on controls that are clicked, absent on typed fields
+- `role` — `button` on controls that are clicked, `link` / `hover` / `drag` on those targets, absent on typed fields
 
 Selectors such as `form-field-1` and `cc-button-6` are positions in that read. They change when the page changes. After navigation, a new dialog, or a click that rebuilds the card, call `read_form` again and use the new selectors.
 
@@ -236,7 +236,7 @@ For a station box, a short value such as `SURAT` is what you type. The page may 
 
 ### `click`
 
-Presses one control from the latest read. Visible links are type `link` and can be pressed by the same text, including the home “Dropdown” link on The Internet.
+Presses one control from the latest read. Visible links are type `link` and can be pressed by the same text, including the home “Dropdown” link on The Internet. A link that unloads the page still returns `ok: true` with `moved: true` and the new URL; `Frame with ID 0 was removed` was a false miss. Hover figures are type `hover` (captions on The Internet `/hovers`). Drag handles are type `drag` (`#column-a` on `/drag_and_drop`).
 
 By visible text:
 

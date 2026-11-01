@@ -219,5 +219,23 @@ const extraLink = api.findByText(longLabel, longDoc);
 assert('findByText extra anchor', extraLink.field && extraLink.field.type, 'link');
 assert('findByText extra label', extraLink.field && extraLink.field.visualLabel, longLabel);
 
+console.log('\nHover figures and drag handles are listed');
+const figure = choice('DIV', 'name: user1', { className: 'figure', id: 'hotspot' });
+figure.innerText = '';
+figure.classList = { add() {}, remove() {} };
+const columnA = choice('DIV', 'A', { className: 'ui-draggable', id: 'column-a' });
+const hoverDoc = docWith([figure, columnA]);
+const hoverFields = api.list(hoverDoc);
+assert('hover and drag listed', hoverFields.length, 2);
+assert('figure type hover', hoverFields[0].type, 'hover');
+assert('figure label from textContent', hoverFields[0].visualLabel, 'name: user1');
+assert('column type drag', hoverFields[1].type, 'drag');
+assert('column selector', hoverFields[1].selector, '#column-a');
+const hovered = api.press(hoverFields[0], hoverDoc);
+assert('hover pressed', hovered.pressed, true);
+assert('hover flagged', hovered.hovered, true);
+assert('hover mouseenter', figure.events.indexOf('mouseenter') !== -1, true);
+assert('hover did not click', figure.events.indexOf('native-click') === -1, true);
+
 if (failed) { console.error('\n' + failed + ' failed'); process.exit(1); }
 console.log('\n' + passed + ' passed');

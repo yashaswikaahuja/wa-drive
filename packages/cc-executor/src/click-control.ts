@@ -41,7 +41,7 @@
     return box.width >= 2 && box.height >= 2;
   }
 
-  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"]';
+  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable';
   var CLASS_WORD = /\b(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)\b/i;
   var CLASS_ONLY = /^(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)$/i;
   var AVAIL_WORD = /\b(AVAILABLE|GNWL|RAC|REGRET|CURR)\b/i;
@@ -83,6 +83,25 @@
     return false;
   }
 
+  function isHoverable(el: any) {
+    if (!el || !el.tagName || inChrome(el)) return false;
+    var tag = String(el.tagName).toLowerCase();
+    if (tag === 'figure') return true;
+    var cls = String(el.className || '');
+    if (/\bfigure\b/.test(cls)) return true;
+    var popup = el.getAttribute && el.getAttribute('aria-haspopup');
+    if (popup && popup !== 'false' && !isButton(el)) return true;
+    return false;
+  }
+
+  function isDraggable(el: any) {
+    if (!el || !el.tagName || inChrome(el)) return false;
+    if (el.draggable === true) return true;
+    var attr = el.getAttribute && el.getAttribute('draggable');
+    if (attr === 'true') return true;
+    return /\bui-draggable\b/.test(String(el.className || ''));
+  }
+
   function isLinkCell(el: any) {
     return String(el.tagName || '').toLowerCase() === 'td' && /(?:^|\s)link(?:\s|$)/.test(String(el.className || ''));
   }
@@ -115,6 +134,20 @@
   }
 
   function labelOf(el: any) {
+    if (isHoverable(el)) {
+      var blob = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (blob) return blob.slice(0, 80);
+      var img = el.querySelector && el.querySelector('img');
+      var alt = img && img.getAttribute && img.getAttribute('alt');
+      if (alt) return String(alt).slice(0, 80);
+      return 'hover';
+    }
+    if (isDraggable(el)) {
+      var dragText = textOf(el);
+      if (dragText) return dragText.slice(0, 80);
+      if (el.id) return String(el.id);
+      return 'drag';
+    }
     var label = textOf(el);
     if (isClassCell(el)) return label.slice(0, 80);
     return label;
@@ -129,7 +162,9 @@
       var button = isButton(el);
       var klass = !button && isClassCell(el);
       var choice = !button && !klass && isChoice(el);
-      if (!button && !klass && !choice) continue;
+      var hover = !button && !klass && !choice && isHoverable(el);
+      var drag = !button && !klass && !choice && !hover && isDraggable(el);
+      if (!button && !klass && !choice && !hover && !drag) continue;
       if (!visible(el)) continue;
       var label = labelOf(el);
       if (!label || (button && label.length > 80)) continue;
@@ -161,12 +196,15 @@
       var label = labelOf(nodes[i]);
       var tag = String(nodes[i].tagName || '').toLowerCase();
       var asLink = tag === 'a';
+      var asHover = !asLink && isHoverable(nodes[i]);
+      var asDrag = !asLink && !asHover && isDraggable(nodes[i]);
+      var kind = asLink ? 'link' : asHover ? 'hover' : asDrag ? 'drag' : 'button';
       fields.push({
         selector: selectorFor(nodes[i], fields.length, doc),
         label: label,
         visualLabel: label,
-        type: asLink ? 'link' : 'button',
-        role: asLink ? 'link' : 'button',
+        type: kind,
+        role: kind,
       });
     }
     return fields;
@@ -271,6 +309,76 @@
     }
   }
 
+  function forceHoverCss(el: any) {
+    var rootDoc = (el && el.ownerDocument) || (typeof document !== 'undefined' ? document : null);
+    if (!rootDoc) return;
+    try {
+      var marked = rootDoc.documentElement;
+      if (marked && marked.getAttribute && marked.getAttribute('data-cc-hover-css') !== '1') {
+        if (marked.setAttribute) marked.setAttribute('data-cc-hover-css', '1');
+        var sheets = rootDoc.styleSheets || [];
+        for (var s = 0; s < sheets.length; s++) {
+          var rules: any = null;
+          try { rules = sheets[s].cssRules; } catch (e0) { continue; }
+          if (!rules || !sheets[s].insertRule) continue;
+          var add = [];
+          for (var r = 0; r < rules.length; r++) {
+            var rule = rules[r];
+            if (!rule || !rule.selectorText || String(rule.selectorText).indexOf(':hover') === -1) continue;
+            add.push(String(rule.selectorText).replace(/:hover/g, '.cc-force-hover') + '{' + ((rule.style && rule.style.cssText) || '') + '}');
+          }
+          for (var a = 0; a < add.length; a++) {
+            try { sheets[s].insertRule(add[a], sheets[s].cssRules.length); } catch (e1) { /* skip bad rule */ }
+          }
+        }
+      }
+    } catch (e2) { /* mouse events still fire */ }
+    try {
+      var prev = rootDoc.querySelectorAll && rootDoc.querySelectorAll('.cc-force-hover');
+      if (prev) {
+        for (var c = 0; c < prev.length; c++) {
+          if (prev[c] && prev[c].classList) prev[c].classList.remove('cc-force-hover');
+        }
+      }
+    } catch (e3) { /* stay */ }
+    var node = el;
+    while (node && node.classList) {
+      try { node.classList.add('cc-force-hover'); } catch (e4) { break; }
+      node = node.parentElement || node.parentNode;
+    }
+  }
+
+  function fireHover(el: any) {
+    if (typeof el.scrollIntoView === 'function') {
+      try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) { /* stay */ }
+    }
+    var point = centerOf(el);
+    var view = (el.ownerDocument && el.ownerDocument.defaultView) || (typeof window !== 'undefined' ? window : null);
+    var names = ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'pointermove', 'mousemove'];
+    for (var i = 0; i < names.length; i++) {
+      var ev = null;
+      var init = {
+        bubbles: true,
+        cancelable: true,
+        view: view,
+        clientX: point ? point.x : 0,
+        clientY: point ? point.y : 0,
+        button: 0,
+        buttons: 0,
+      };
+      try {
+        if (names[i].indexOf('pointer') === 0 && view && typeof view.PointerEvent === 'function') {
+          ev = new view.PointerEvent(names[i], Object.assign({ pointerId: 1, pointerType: 'mouse', isPrimary: true }, init));
+        } else if (view && typeof view.MouseEvent === 'function') {
+          ev = new view.MouseEvent(names[i], init);
+        }
+      } catch (e2) { /* test doubles dispatch a plain object */ }
+      if (ev && typeof el.dispatchEvent === 'function') el.dispatchEvent(ev);
+      else if (typeof el.dispatchEvent === 'function') el.dispatchEvent({ type: names[i], bubbles: true, cancelable: true });
+    }
+    forceHoverCss(el);
+  }
+
   function chooseOption(doc: any, text: any) {
     var want = norm(text);
     if (!want || !doc || typeof doc.querySelectorAll !== 'function') {
@@ -294,6 +402,10 @@
     }
     if (isDisabled(found.node)) {
       return { pressed: false, reason: 'disabled', clicked: textOf(found.node), selector: found.field.selector };
+    }
+    if (found.field && found.field.type === 'hover') {
+      fireHover(found.node);
+      return { pressed: true, reason: '', clicked: labelOf(found.node), selector: found.field.selector, hovered: true };
     }
     fire(found.node);
     return { pressed: true, reason: '', clicked: textOf(found.node), selector: found.field.selector };

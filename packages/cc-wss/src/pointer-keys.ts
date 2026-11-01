@@ -48,14 +48,21 @@ function pointerClickAt(spec: any) {
   }
   function makeEvent(name: any, point: any, button: any, buttons: any, detail: any) {
     var view = doc.defaultView || g.window || g;
+    var scrollX = (view && view.scrollX) || 0;
+    var scrollY = (view && view.scrollY) || 0;
     var init = {
       bubbles: true,
       cancelable: true,
       view: view,
       clientX: point.x,
       clientY: point.y,
+      pageX: point.x + scrollX,
+      pageY: point.y + scrollY,
+      screenX: point.x,
+      screenY: point.y,
       button: button,
       buttons: buttons,
+      which: button === 0 ? 1 : button === 2 ? 3 : 2,
       detail: detail,
     };
     try {
@@ -70,6 +77,43 @@ function pointerClickAt(spec: any) {
     for (var i = 0; i < names.length; i++) {
       var ev = makeEvent(names[i], point, button, buttons, detail);
       if (el && typeof el.dispatchEvent === 'function') el.dispatchEvent(ev);
+    }
+  }
+  function forceHover(el: any) {
+    var rootDoc = (el && el.ownerDocument) || doc;
+    try {
+      var marked = rootDoc.documentElement;
+      if (marked && marked.getAttribute && marked.getAttribute('data-cc-hover-css') !== '1') {
+        if (marked.setAttribute) marked.setAttribute('data-cc-hover-css', '1');
+        var sheets = rootDoc.styleSheets || [];
+        for (var s = 0; s < sheets.length; s++) {
+          var rules: any = null;
+          try { rules = sheets[s].cssRules; } catch (e0) { continue; }
+          if (!rules || !sheets[s].insertRule) continue;
+          var add = [];
+          for (var r = 0; r < rules.length; r++) {
+            var rule = rules[r];
+            if (!rule || !rule.selectorText || String(rule.selectorText).indexOf(':hover') === -1) continue;
+            add.push(String(rule.selectorText).replace(/:hover/g, '.cc-force-hover') + '{' + ((rule.style && rule.style.cssText) || '') + '}');
+          }
+          for (var a = 0; a < add.length; a++) {
+            try { sheets[s].insertRule(add[a], sheets[s].cssRules.length); } catch (e1) { /* skip */ }
+          }
+        }
+      }
+    } catch (e2) { /* mouse events still fire */ }
+    try {
+      var prev = rootDoc.querySelectorAll && rootDoc.querySelectorAll('.cc-force-hover');
+      if (prev) {
+        for (var c = 0; c < prev.length; c++) {
+          if (prev[c] && prev[c].classList) prev[c].classList.remove('cc-force-hover');
+        }
+      }
+    } catch (e3) { /* stay */ }
+    var node = el;
+    while (node && node.classList) {
+      try { node.classList.add('cc-force-hover'); } catch (e4) { break; }
+      node = node.parentElement || node.parentNode;
     }
   }
 
@@ -100,6 +144,7 @@ function pointerClickAt(spec: any) {
   var action = spec && spec.action === 'hover' ? 'hover' : spec && spec.action === 'drag' ? 'drag' : 'click';
   if (action === 'hover') {
     fire(target, point, 0, 0, ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'pointermove', 'mousemove'], 0);
+    forceHover(target);
     return {
       ok: true,
       action: 'hover',
@@ -356,12 +401,40 @@ function keyboardPress(spec: any) {
       else if (typeof el.dispatchEvent === 'function') el.dispatchEvent({ type: name, key: def.key, bubbles: true, cancelable: true });
     }
     send('keydown');
-    if (def.key === 'Backspace' && isEditable(el) && !mods.ctrl && !mods.alt && !mods.meta) deleteOne(el, false);
+    if (nudgeRange(el, def)) { /* native range ignores untrusted arrows */ }
+    else if (def.key === 'Backspace' && isEditable(el) && !mods.ctrl && !mods.alt && !mods.meta) deleteOne(el, false);
     else if (def.key === 'Delete' && isEditable(el) && !mods.ctrl && !mods.alt && !mods.meta) deleteOne(el, true);
     else if (def.key === 'Tab') moveTab(el, !!mods.shift);
     else if (def.key.length === 1 && !mods.ctrl && !mods.alt && !mods.meta && isEditable(el) && !blockedText(el)) insertText(el, def.key);
     send('keypress');
     send('keyup');
+  }
+  function nudgeRange(el: any, def: any) {
+    if (!el || tagOf(el) !== 'input') return false;
+    if (String(el.type || '').toLowerCase() !== 'range') return false;
+    var min = Number(el.min);
+    var max = Number(el.max);
+    var step = Number(el.step);
+    if (!isFinite(min)) min = 0;
+    if (!isFinite(max)) max = 100;
+    if (!isFinite(step) || step <= 0) step = 1;
+    var cur = Number(el.value);
+    if (!isFinite(cur)) cur = min;
+    var next = cur;
+    if (def.key === 'ArrowRight' || def.key === 'ArrowUp') next = cur + step;
+    else if (def.key === 'ArrowLeft' || def.key === 'ArrowDown') next = cur - step;
+    else if (def.key === 'Home') next = min;
+    else if (def.key === 'End') next = max;
+    else return false;
+    if (next > max) next = max;
+    if (next < min) next = min;
+    el.value = String(next);
+    emitInput(el, null, 'insertReplacementText');
+    var view = doc.defaultView || g.window || g;
+    try {
+      if (view && typeof view.Event === 'function') el.dispatchEvent(new view.Event('change', { bubbles: true }));
+    } catch (e) { /* stay */ }
+    return true;
   }
 
   var selector = spec && spec.selector ? String(spec.selector) : '';

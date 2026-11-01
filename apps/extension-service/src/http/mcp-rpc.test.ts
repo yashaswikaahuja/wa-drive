@@ -327,6 +327,35 @@ const keyed = pressKeys({ selector: '[name="search_query"]', text: 'govind', key
 assert.equal(keyed.ok, true);
 assert.equal(inputEl.value, 'govind');
 assert.equal(keyed.typed, 'govind');
+const rangeEl = {
+  tagName: 'INPUT',
+  type: 'range',
+  min: '0',
+  max: '5',
+  step: '0.5',
+  value: '0',
+  id: 'range',
+  name: 'range',
+  disabled: false,
+  readOnly: false,
+  dispatchEvent: () => true,
+  focus: () => {},
+  click: () => {},
+  getAttribute: () => '',
+  scrollIntoView: () => {},
+};
+(globalThis as any).document.querySelector = (sel) => {
+  if (String(sel).includes('search_query')) return inputEl;
+  if (String(sel).includes('range')) return rangeEl;
+  return hit;
+};
+const slid = pressKeys({ selector: '#range', key: 'ArrowRight' });
+assert.equal(slid.ok, true);
+assert.equal(rangeEl.value, '0.5');
+pressKeys({ selector: '#range', key: 'ArrowRight' });
+assert.equal(rangeEl.value, '1');
+pressKeys({ selector: '#range', key: 'End' });
+assert.equal(rangeEl.value, '5');
 assert.equal(keyed.key, 'Enter');
 
 const scrollPage = (globalThis as any).CcScrollPage.scrollPage;
