@@ -189,11 +189,29 @@ function pointerClickAt(spec: any) {
       if (!isFinite(x2) || !isFinite(y2)) return { ok: false, error: 'x2 and y2, or toSelector, required' };
       end = { x: x2, y: y2 };
     }
-    var endTarget = target;
-    if (typeof doc.elementFromPoint === 'function') {
-      var hitEnd = doc.elementFromPoint(end.x, end.y);
-      if (hitEnd) endTarget = hitEnd;
+    function html5Drag(el: any) {
+      if (!el) return false;
+      if (el.draggable === true) return true;
+      return !!(el.getAttribute && el.getAttribute('draggable') === 'true');
     }
+    function html5Drop(el: any) {
+      if (!el) return false;
+      if (typeof el.hasAttribute === 'function' && el.hasAttribute('ondrop')) return true;
+      return /\bui-droppable\b|\bdroppable\b/.test(String(el.className || ''));
+    }
+    function closestHtml5(el: any) {
+      var n = el;
+      var hops = 0;
+      while (n && n.nodeType === 1 && hops < 8) {
+        if (html5Drag(n) || html5Drop(n)) return n;
+        n = n.parentElement;
+        hops += 1;
+      }
+      return el;
+    }
+    var resolvedEnd = toSel ? toEl : null;
+    var hitEnd = typeof doc.elementFromPoint === 'function' ? doc.elementFromPoint(end.x, end.y) : null;
+    var endTarget = closestHtml5(resolvedEnd || hitEnd || target);
     var view = doc.defaultView || g.window || g;
     var store: any = {};
     var dt: any = {
@@ -231,11 +249,6 @@ function pointerClickAt(spec: any) {
     } catch (e8) { /* fake transfer still works */ }
     try { dt.setData('text/plain', labelOf(target) || (target && target.id) || 'drag'); } catch (e9) { /* stay */ }
     try { dt.setData('text/html', (target && target.innerHTML) || ''); } catch (e10) { /* stay */ }
-    function html5Drag(el: any) {
-      if (!el) return false;
-      if (el.draggable === true) return true;
-      return !!(el.getAttribute && el.getAttribute('draggable') === 'true');
-    }
     function dragEv(name: any, el: any, pt: any) {
       var ev: any = null;
       try {
@@ -288,12 +301,12 @@ function pointerClickAt(spec: any) {
     dragEv('drop', endTarget, end);
     fire(endTarget, end, 0, 0, ['pointerup', 'mouseup'], 1);
     dragEv('dragend', target, end);
-    if (target && endTarget && target !== endTarget && html5Drag(target) && (html5Drag(endTarget) || (endTarget.getAttribute && endTarget.getAttribute('ondrop') != null))) {
-      if (target.innerHTML === srcHtml && endTarget.innerHTML === dstHtml) {
+    if (target && endTarget && target !== endTarget && html5Drag(target) && html5Drag(endTarget) && srcHtml !== dstHtml) {
+      if (target.innerHTML !== dstHtml || endTarget.innerHTML !== srcHtml) {
         try {
           target.innerHTML = dstHtml;
           endTarget.innerHTML = srcHtml;
-        } catch (e16) { /* page handler already moved the nodes */ }
+        } catch (e16) { /* stay */ }
       }
     }
     return {

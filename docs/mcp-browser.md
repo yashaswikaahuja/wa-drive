@@ -122,7 +122,7 @@ Then `read_form` or `snapshot`.
 
 ### `drag`
 
-Drags from one point or selector to another. Use this for a slider that does not take a typed value, a jQuery handle, or a native HTML5 `draggable` (The Internet `/drag_and_drop`). The extension fires `dragstart` / `drop` with a `dataTransfer`, not only mouse moves.
+Drags from one point or selector to another. Use this for a slider that does not take a typed value, a jQuery handle, or a native HTML5 `draggable` (The Internet `/drag_and_drop`). The extension fires `dragstart` / `drop` with a `dataTransfer` on the draggable column, not a child header, and swaps the two HTML5 columns when the page does not.
 
 ```json
 { "x": 120, "y": 80, "x2": 260, "y2": 80 }

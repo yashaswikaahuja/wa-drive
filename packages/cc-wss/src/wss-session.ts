@@ -891,6 +891,7 @@
     }
     try { await chrome.tabs.update(tab.id, { active: true }); } catch (e0) { /* stay */ }
     try {
+      var scrollMs = spec && spec.to === 'bottom' ? 20000 : 8000;
       var results = await withTimeout(chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: fn,
@@ -901,7 +902,7 @@
           selector: spec && spec.selector || '',
         }],
         injectImmediately: true,
-      }), 8000, 'scroll_script_timeout');
+      }), scrollMs, 'scroll_script_timeout');
       var page = results && results[0] && results[0].result;
       return Object.assign({ tabId: tab.id }, page || { ok: false, error: 'no_result' });
     } catch (e2) {
@@ -966,6 +967,7 @@
         func: fn,
         args: [spec || {}],
         injectImmediately: true,
+        world: spec && spec.action === 'drag' ? 'MAIN' : 'ISOLATED',
       }), 8000, 'pointer_script_timeout');
       var page = results && results[0] && results[0].result;
       if ((!page || page.error === 'not_found') && spec && spec.selector && !target.frameIds) {
