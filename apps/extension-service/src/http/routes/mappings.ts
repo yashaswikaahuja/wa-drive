@@ -269,7 +269,7 @@ router.post('/:formKey', async ( req: any, res: any) => {
       };
       for (const [semanticKey, info] of Object.entries(updates) as any) {
         const { profileKey, delta = {}, label, type, order, options,
-                fillMode, rules, constantValue, fallback, relation } = info;
+                fillMode, rules, constantValue, fallback, relation, selector, source } = info;
         const existing = mappings[formKey][semanticKey];
         if (existing) {
           existing.fills = (existing.fills || 0) + (delta.fills || 0);
@@ -294,6 +294,8 @@ router.post('/:formKey', async ( req: any, res: any) => {
           if (type) existing.type = type;
           if (order !== undefined) existing.order = order;
           if (options) existing.options = options;
+          if (selector && !locked) existing.selector = String(selector).slice(0, 300);
+          if (source === 'manual' || source === 'confirmed') existing.source = source;
           existing.lastSeen = today;
         } else {
           mappings[formKey][semanticKey] = {
@@ -307,10 +309,11 @@ router.post('/:formKey', async ( req: any, res: any) => {
             rules: rules || null,
             constantValue: constantValue !== undefined ? constantValue : null,
             fallback: fallback !== undefined ? fallback : null,
+            selector: selector ? String(selector).slice(0, 300) : null,
             fills: delta.fills || 0,
             corrections: delta.corrections || 0,
             lastSeen: today,
-            source: profileKey ? 'agent' : 'seed',
+            source: source === 'manual' || source === 'confirmed' ? source : (profileKey ? 'agent' : 'seed'),
           };
         }
       }

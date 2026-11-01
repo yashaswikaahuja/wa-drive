@@ -36,4 +36,9 @@ if (!g.__CC_SW_SCRIPTS_LOADED) {
   } catch (e) {
     console.warn('[CC] bg-bundle load failed:', (e as Error).message);
   }
+  try {
+    importScripts('application/orchestrator-bundle.js', 'application/fill-orchestrator.js');
+  } catch (e) {
+    console.warn('[CC] fill orchestrator load failed:', (e as Error).message);
+  }
 }

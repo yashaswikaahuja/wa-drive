@@ -5,17 +5,68 @@ import { deriveProfile } from '@cybercontrol/svc-fill-planner';
 
 const router = Router();
 
+export async function listWorkspaceProfiles(workspaceId: string) {
+  const { rows } = await pool.query(`
+    SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
+           relationship, updated_at AS "updatedAt"
+    FROM profiles
+    WHERE workspace_id = $1 AND deleted_at IS NULL
+    ORDER BY updated_at DESC
+  `, [workspaceId]);
+  return rows;
+}
+
+function fieldValue(value: any) {
+  if (value == null || value === '') return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value).slice(0, 300);
+  if (typeof value === 'object' && value && value.value != null && value.value !== '') return String(value.value).slice(0, 300);
+  return '';
+}
+
+async function loadFullProfile(workspaceId: string, profileId: string) {
+  const { rows } = await pool.query(`
+    SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
+           relationship, data, created_at AS "createdAt", updated_at AS "updatedAt"
+    FROM profiles
+    WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+  `, [profileId, workspaceId]);
+  if (!rows.length) return null;
+  const profile = rows[0];
+  try {
+    const personKey = (profile.displayLabel || profile.name || '')
+      .toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+    const derived = await deriveProfile(workspaceId, profile.phone, personKey, profile.data || {});
+    if (Object.keys(derived).length > 0) profile.data = derived;
+  } catch (e: any) {
+    console.warn('[ext/profiles] deriveProfile failed:', e.message);
+  }
+  return profile;
+}
+
+export async function readWorkspaceProfile(workspaceId: string, profileId: string) {
+  const profile = await loadFullProfile(workspaceId, profileId);
+  if (!profile) return null;
+  const fields: any = {};
+  const data = profile.data || {};
+  for (const key of Object.keys(data)) {
+    const shown = fieldValue(data[key]);
+    if (shown) fields[key] = shown;
+  }
+  return {
+    id: profile.id,
+    name: profile.name,
+    phone: profile.phone,
+    displayLabel: profile.displayLabel,
+    relationship: profile.relationship,
+    updatedAt: profile.updatedAt,
+    fields,
+  };
+}
+
 // GET /api/profiles — list profiles for the authenticated workspace
 router.get('/', authMiddleware, async ( req: any, res: any) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
-             relationship, updated_at AS "updatedAt"
-      FROM profiles
-      WHERE workspace_id = $1 AND deleted_at IS NULL
-      ORDER BY updated_at DESC
-    `, [req.user.workspaceId]);
-    res.json(rows);
+    res.json(await listWorkspaceProfiles(req.user.workspaceId));
   } catch (e) {
     console.error('[ext/profiles] list error:', e.message);
     res.status(500).json({ error: e.message });
@@ -25,25 +76,8 @@ router.get('/', authMiddleware, async ( req: any, res: any) => {
 // GET /api/profiles/:id — full profile (with data jsonb) for autofill
 router.get('/:id', authMiddleware, async ( req: any, res: any) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
-             relationship, data, created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM profiles
-      WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-    `, [req.params.id, req.user.workspaceId]);
-    if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    const profile = rows[0];
-    // Document-centric model: profiles.data is stored empty; the real fields are derived on demand
-    // from per-document extractions (extraction_cache). Operator-confirmed fields in `data` win.
-    // (Mirrors backend /api/customers/persons/:id — without this the extension sees an empty profile.)
-    try {
-      const personKey = (profile.displayLabel || profile.name || '')
-        .toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
-      const derived = await deriveProfile(req.user.workspaceId, profile.phone, personKey, profile.data || {});
-      if (Object.keys(derived).length > 0) profile.data = derived;
-    } catch (e) {
-      console.warn('[ext/profiles] deriveProfile failed:', e.message);
-    }
+    const profile = await loadFullProfile(req.user.workspaceId, req.params.id);
+    if (!profile) return res.status(404).json({ error: 'Not found' });
     res.json(profile);
   } catch (e) {
     console.error('[ext/profiles] get error:', e.message);

@@ -219,6 +219,549 @@
     };
   }
 
+  function loadFillOrchestrator() {
+    if (root.CcFillOrchestrator && typeof root.CcFillOrchestrator.runProductFill === 'function') return;
+    importScripts('application/orchestrator-bundle.js', 'application/fill-orchestrator.js');
+  }
+
+  async function runExtensionFill(profileId, tabId) {
+    try { loadFillOrchestrator(); } catch (e) {
+      return { ok: false, error: 'fill_orchestrator_missing' };
+    }
+    var api = root.CcFillOrchestrator;
+    if (!api || typeof api.runProductFill !== 'function') return { ok: false, error: 'fill_orchestrator_missing' };
+    var stored = await chrome.storage.local.get(['accessToken', 'backendUrl']);
+    var id = profileId ? String(profileId) : '';
+    if (!id) return { ok: false, error: 'profile_required' };
+    if (!stored.accessToken || !stored.backendUrl) return { ok: false, error: 'extension_not_signed_in' };
+    var tab = await pickTaskTab(tabId);
+    if (!tab || !tab.id) return { ok: false, error: 'no_tab' };
+    if (!tab.url || String(tab.url).indexOf('chrome') === 0 || String(tab.url).indexOf('edge') === 0) {
+      return { ok: false, error: 'open_a_form_page' };
+    }
+    var base = String(stored.backendUrl).replace(/\/$/, '');
+    var res = await fetch(base + '/profiles/' + encodeURIComponent(id), {
+      headers: { Authorization: 'Bearer ' + stored.accessToken },
+    });
+    if (!res.ok) return { ok: false, error: 'profile_fetch_' + res.status };
+    var profile = await res.json();
+    var out = await api.runProductFill({
+      tabId: tab.id,
+      profile: profile,
+      backendUrl: stored.backendUrl,
+      accessToken: stored.accessToken,
+      runtimeVersion: 'mcp',
+      executionPreference: 'AUTO',
+    });
+    var records = (out && out.records) || [];
+    return {
+      ok: !!(out && out.ok),
+      tabId: tab.id,
+      url: tab.url || '',
+      profileId: id,
+      filled: (out && out.filled) || 0,
+      failed: (out && out.failed) || 0,
+      skipped: (out && out.skipped) || 0,
+      error: (out && out.error) || '',
+      operatorMessage: (out && out.operatorMessage) || '',
+      records: records.slice(0, 40).map(function (r) {
+        return {
+          selector: (r && r.selector) || '',
+          label: (r && r.label) || '',
+          result: (r && r.result) || '',
+          plannedValue: r && r.plannedValue != null ? String(r.plannedValue).slice(0, 120) : '',
+          actualValue: r && r.actualValue != null ? String(r.actualValue).slice(0, 120) : '',
+        };
+      }),
+    };
+  }
+
+  function waitMs(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  function bytesToBase64(bytes) {
+    var parts = [];
+    var size = 0x8000;
+    for (var i = 0; i < bytes.length; i += size) {
+      parts.push(String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + size))));
+    }
+    return btoa(parts.join(''));
+  }
+
+  async function bitmapFromDataUrl(dataUrl) {
+    var response = await fetch(dataUrl);
+    return createImageBitmap(await response.blob());
+  }
+
+  async function jpegBytes(canvas, quality) {
+    var blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: quality });
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  async function encodeBitmap(bmp, sx, sy, sw, sh, maxWidth, quality) {
+    var scale = Math.min(1, maxWidth / Math.max(1, sw));
+    var dw = Math.max(1, Math.round(sw * scale));
+    var dh = Math.max(1, Math.round(sh * scale));
+    var canvas = new OffscreenCanvas(dw, dh);
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, dw, dh);
+    ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, dw, dh);
+    var bytes = await jpegBytes(canvas, quality);
+    return { base64: bytesToBase64(bytes), width: dw, height: dh };
+  }
+
+  async function shrinkShot(make) {
+    var first = await make(1280, 0.72);
+    if (first.base64.length <= 1200000) return first;
+    var second = await make(720, 0.52);
+    if (second.base64.length <= 1200000) return second;
+    return null;
+  }
+
+  function measureForSnapshot(spec) {
+    var beforeX = window.scrollX || 0;
+    var beforeY = window.scrollY || 0;
+    var box = null;
+    var selector = spec && spec.selector ? String(spec.selector) : '';
+    if (selector) {
+      var el = null;
+      try {
+        var resolver = (typeof globalThis !== 'undefined') ? globalThis.CcResolveCcSelector : null;
+        if (resolver && typeof resolver.resolveCcSelector === 'function') el = resolver.resolveCcSelector(selector, document);
+      } catch (e) { el = null; }
+      if (!el) {
+        try {
+          var clickApi = (typeof globalThis !== 'undefined') ? globalThis.CcClickControl : null;
+          if (clickApi && typeof clickApi.elementFor === 'function') el = clickApi.elementFor(selector, document);
+        } catch (e2) { el = null; }
+      }
+      if (!el) {
+        try { el = document.querySelector(selector); } catch (e3) { el = null; }
+      }
+      if (!el) return { ok: false, error: 'not_found' };
+      try { el.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e4) { /* stay */ }
+      var rect = el.getBoundingClientRect();
+      if (!rect || rect.width < 2 || rect.height < 2) return { ok: false, error: 'empty_area' };
+      box = { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+    } else if (spec && spec.rect) {
+      box = {
+        x: Number(spec.rect.x) || 0,
+        y: Number(spec.rect.y) || 0,
+        width: Number(spec.rect.width) || 0,
+        height: Number(spec.rect.height) || 0,
+      };
+      if (box.width < 2 || box.height < 2) return { ok: false, error: 'empty_area' };
+    }
+    var rootEl = document.documentElement;
+    var body = document.body;
+    return {
+      ok: true,
+      url: location.href,
+      title: document.title,
+      clientWidth: window.innerWidth || 1,
+      clientHeight: window.innerHeight || 1,
+      scrollHeight: Math.max(rootEl ? rootEl.scrollHeight : 0, body ? body.scrollHeight : 0, window.innerHeight || 0),
+      scrollX: beforeX,
+      scrollY: beforeY,
+      scrolled: (window.scrollX || 0) !== beforeX || (window.scrollY || 0) !== beforeY,
+      box: box,
+    };
+  }
+
+  async function cropVisible(dataUrl, box, clientWidth) {
+    var bmp = await bitmapFromDataUrl(dataUrl);
+    try {
+      var sx = 0;
+      var sy = 0;
+      var sw = bmp.width;
+      var sh = bmp.height;
+      var clipped = false;
+      if (box) {
+        var px = bmp.width / Math.max(1, clientWidth || bmp.width);
+        sx = Math.max(0, Math.floor(box.x * px));
+        sy = Math.max(0, Math.floor(box.y * px));
+        sw = Math.max(1, Math.floor(box.width * px));
+        sh = Math.max(1, Math.floor(box.height * px));
+        if (box.x < 0 || box.y < 0 || box.x + box.width > (clientWidth || bmp.width)) clipped = true;
+        if (sx + sw > bmp.width) { sw = bmp.width - sx; clipped = true; }
+        if (sy + sh > bmp.height) { sh = bmp.height - sy; clipped = true; }
+        if (sw < 2 || sh < 2) throw new Error('empty_area');
+      }
+      var encoded = await shrinkShot(function (maxWidth, quality) {
+        return encodeBitmap(bmp, sx, sy, sw, sh, maxWidth, quality);
+      });
+      if (!encoded) throw new Error('snapshot_too_large');
+      encoded.clipped = clipped;
+      return encoded;
+    } finally {
+      if (bmp.close) bmp.close();
+    }
+  }
+
+  async function captureWholePage(tabId, windowId, metrics) {
+    var plan = root.CcPageShot.pageShotOffsets(metrics.scrollHeight, metrics.clientHeight, 6);
+    var shots = [];
+    for (var i = 0; i < plan.offsets.length; i++) {
+      var top = plan.offsets[i];
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: function (y) { window.scrollTo(0, y); },
+        args: [top],
+      });
+      await waitMs(180);
+      shots.push({
+        y: top,
+        dataUrl: await chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 60 }),
+      });
+    }
+    var bitmaps = [];
+    try {
+      for (var s = 0; s < shots.length; s++) {
+        bitmaps.push({ y: shots[s].y, bmp: await bitmapFromDataUrl(shots[s].dataUrl) });
+      }
+      var srcW = bitmaps[0].bmp.width;
+      var pxPerCss = srcW / Math.max(1, metrics.clientWidth);
+      var covered = Math.min(metrics.scrollHeight, bitmaps[bitmaps.length - 1].y + metrics.clientHeight);
+      var fitScale = Math.min(1, 1000 / srcW);
+      var naturalH = Math.round(covered * pxPerCss * fitScale);
+      var outW = Math.max(1, Math.round(srcW * fitScale));
+      var outH = naturalH;
+      var drawScale = fitScale;
+      if (outH > 4200) {
+        var fit = 4200 / outH;
+        outW = Math.max(1, Math.round(outW * fit));
+        outH = 4200;
+        drawScale = outW / srcW;
+      }
+      var canvas = new OffscreenCanvas(outW, outH);
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, outW, outH);
+      for (var d = 0; d < bitmaps.length; d++) {
+        ctx.drawImage(bitmaps[d].bmp, 0, Math.round(bitmaps[d].y * pxPerCss * drawScale));
+      }
+      var bytes = await jpegBytes(canvas, naturalH > 4200 ? 0.45 : 0.62);
+      if (bytes.length > 1400000) throw new Error('snapshot_too_large');
+      return {
+        base64: bytesToBase64(bytes),
+        width: outW,
+        height: outH,
+        clipped: plan.clipped || naturalH > 4200,
+      };
+    } finally {
+      for (var c = 0; c < bitmaps.length; c++) {
+        if (bitmaps[c].bmp && bitmaps[c].bmp.close) bitmaps[c].bmp.close();
+      }
+    }
+  }
+
+  async function pickWebTab(tabId) {
+    if (tabId) {
+      try {
+        var exact = await chrome.tabs.get(Number(tabId));
+        if (exact && exact.id && String(exact.url || '').indexOf('http') === 0) return exact;
+      } catch (e) { /* tab closed */ }
+    }
+    var all = await chrome.tabs.query({});
+    var pages = [];
+    for (var i = 0; i < all.length; i++) {
+      if (String(all[i].url || '').indexOf('http') === 0) pages.push(all[i]);
+    }
+    if (!pages.length) return pickTaskTab(tabId);
+    pages.sort(function (a, b) { return (b.lastAccessed || 0) - (a.lastAccessed || 0); });
+    return pages[0];
+  }
+
+  async function runSnapshot(spec) {
+    var tab = await pickWebTab(spec && spec.tabId);
+    if (!tab || !tab.id) return { ok: false, error: 'no_tab' };
+    var url = String(tab.url || '');
+    if (url.indexOf('http') !== 0) return { ok: false, error: 'open_a_form_page', tabId: tab.id, url: url };
+    var scope = spec && spec.scope === 'page' ? 'page' : 'viewport';
+    if ((spec && spec.selector) || (spec && spec.rect)) scope = 'area';
+    var metrics = null;
+    try {
+      if (spec && spec.selector) {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: kernelScripts() });
+      }
+      var measured = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: measureForSnapshot,
+        args: [{ selector: (spec && spec.selector) || '', rect: (spec && spec.rect) || null }],
+      });
+      metrics = measured && measured[0] && measured[0].result;
+    } catch (e) {
+      return { ok: false, error: 'page_not_readable', tabId: tab.id };
+    }
+    if (!metrics || metrics.ok === false) {
+      return { ok: false, error: (metrics && metrics.error) || 'page_not_readable', tabId: tab.id, url: url };
+    }
+    try {
+      await chrome.tabs.update(tab.id, { active: true });
+      if (tab.windowId) {
+        try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (eFocus) { /* window stays behind */ }
+      }
+    } catch (e2) {
+      return { ok: false, error: 'tab_not_active', tabId: tab.id };
+    }
+    var shown = false;
+    for (var attempt = 0; attempt < 8; attempt++) {
+      await waitMs(120);
+      try {
+        var now = await chrome.tabs.get(tab.id);
+        if (now && now.active) { shown = true; break; }
+      } catch (eWait) { /* tab closed while switching */ }
+    }
+    if (!shown) return { ok: false, error: 'tab_not_active', tabId: tab.id, url: url };
+    if (metrics.scrolled) await waitMs(200);
+    var shot = null;
+    try {
+      async function captureShown() {
+        return chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: scope === 'page' ? 60 : 72 });
+      }
+      if (scope === 'page') {
+        shot = await captureWholePage(tab.id, tab.windowId, metrics);
+      } else {
+        var dataUrl = null;
+        try {
+          dataUrl = await captureShown();
+        } catch (eCap) {
+          await waitMs(300);
+          dataUrl = await captureShown();
+        }
+        shot = await cropVisible(dataUrl, scope === 'area' ? metrics.box : null, metrics.clientWidth);
+      }
+    } catch (e3) {
+      var message = (e3 && e3.message) || 'capture_failed';
+      return { ok: false, error: String(message).slice(0, 180), tabId: tab.id, url: metrics.url || url };
+    } finally {
+      if (scope === 'page' || metrics.scrolled) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: function (x, y) { window.scrollTo(x, y); },
+            args: [metrics.scrollX || 0, metrics.scrollY || 0],
+          });
+        } catch (e4) { /* leave the page where it is */ }
+      }
+    }
+    return {
+      ok: true,
+      tabId: tab.id,
+      url: metrics.url || url,
+      title: metrics.title || '',
+      scope: scope,
+      width: shot.width,
+      height: shot.height,
+      mimeType: 'image/jpeg',
+      clipped: !!shot.clipped,
+      image: shot.base64,
+    };
+  }
+
+  function pageUrl(raw) {
+    var value = String(raw || '');
+    if (!value) return '';
+    try {
+      var parsed = new URL(value);
+      return (parsed.origin + parsed.pathname).slice(0, 300);
+    } catch (e) {
+      return value.split('?')[0].slice(0, 300);
+    }
+  }
+
+  function slimTab(tab) {
+    return {
+      tabId: tab.id,
+      windowId: tab.windowId,
+      title: String(tab.title || '').slice(0, 120),
+      url: pageUrl(tab.url || tab.pendingUrl || ''),
+      active: !!tab.active,
+    };
+  }
+
+  async function runListTabs() {
+    var all = await chrome.tabs.query({});
+    var tabs = [];
+    for (var i = 0; i < all.length && tabs.length < 40; i++) tabs.push(slimTab(all[i]));
+    tabs.sort(function (a, b) { return (b.active ? 1 : 0) - (a.active ? 1 : 0); });
+    return { ok: true, tabs: tabs };
+  }
+
+  async function runFocusTab(tabId) {
+    if (!tabId) return { ok: false, error: 'tabId required' };
+    var tab = null;
+    try { tab = await chrome.tabs.get(Number(tabId)); } catch (e) { return { ok: false, error: 'no_tab' }; }
+    if (!tab || !tab.id) return { ok: false, error: 'no_tab' };
+    await chrome.tabs.update(tab.id, { active: true });
+    if (tab.windowId) {
+      try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (e2) { /* stay behind */ }
+    }
+    var shown = slimTab(tab);
+    shown.active = true;
+    return { ok: true, tabId: tab.id, title: shown.title, url: shown.url, active: true };
+  }
+
+  function scrollPage(spec) {
+    var beforeX = window.scrollX || 0;
+    var beforeY = window.scrollY || 0;
+    var rootEl = document.scrollingElement || document.documentElement;
+    if (spec && spec.selector) {
+      var target = null;
+      try {
+        var resolver = (typeof globalThis !== 'undefined') ? globalThis.CcResolveCcSelector : null;
+        if (resolver && typeof resolver.resolveCcSelector === 'function') target = resolver.resolveCcSelector(spec.selector, document);
+      } catch (e) { target = null; }
+      if (!target) {
+        try {
+          var clickApi = (typeof globalThis !== 'undefined') ? globalThis.CcClickControl : null;
+          if (clickApi && typeof clickApi.elementFor === 'function') target = clickApi.elementFor(spec.selector, document);
+        } catch (e2) { target = null; }
+      }
+      if (!target) {
+        try { target = document.querySelector(spec.selector); } catch (e3) { target = null; }
+      }
+      if (!target) return { ok: false, error: 'not_found' };
+      try { target.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e4) { /* stay */ }
+    } else if (spec && spec.to === 'top') {
+      window.scrollTo(0, 0);
+    } else if (spec && spec.to === 'bottom') {
+      window.scrollTo(0, (rootEl && rootEl.scrollHeight) || 0);
+    } else {
+      window.scrollBy(Number(spec && spec.dx) || 0, Number(spec && spec.dy) || 0);
+    }
+    return {
+      ok: true,
+      url: String(location.href || '').split('?')[0].slice(0, 300),
+      title: document.title,
+      scrollX: window.scrollX || 0,
+      scrollY: window.scrollY || 0,
+      scrollHeight: (rootEl && rootEl.scrollHeight) || 0,
+      clientHeight: window.innerHeight || 0,
+      moved: (window.scrollX || 0) !== beforeX || (window.scrollY || 0) !== beforeY,
+    };
+  }
+
+  async function runScroll(spec) {
+    var tab = await pickWebTab(spec && spec.tabId);
+    if (!tab || !tab.id) return { ok: false, error: 'no_tab' };
+    if (String(tab.url || '').indexOf('http') !== 0) return { ok: false, error: 'open_a_form_page', tabId: tab.id };
+    if (spec && spec.selector) {
+      try {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: kernelScripts() });
+      } catch (e) { /* selector falls back to querySelector */ }
+    }
+    try {
+      var results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: scrollPage,
+        args: [{
+          dy: spec && spec.dy || 0,
+          dx: spec && spec.dx || 0,
+          to: spec && spec.to || '',
+          selector: spec && spec.selector || '',
+        }],
+      });
+      var page = results && results[0] && results[0].result;
+      return Object.assign({ tabId: tab.id }, page || { ok: false, error: 'no_result' });
+    } catch (e2) {
+      return { ok: false, error: 'page_not_readable', tabId: tab.id };
+    }
+  }
+
+  function historyStep(action) {
+    if (action === 'back') history.back();
+    else if (action === 'forward') history.forward();
+    else location.reload();
+    return location.href;
+  }
+
+  async function runHistory(spec) {
+    var action = spec && spec.action;
+    if (action !== 'back' && action !== 'forward' && action !== 'reload') return { ok: false, error: 'action required' };
+    var tab = await pickWebTab(spec && spec.tabId);
+    if (!tab || !tab.id) return { ok: false, error: 'no_tab' };
+    if (String(tab.url || '').indexOf('http') !== 0) return { ok: false, error: 'open_a_form_page', tabId: tab.id };
+    var before = pageUrl(tab.url);
+    try {
+      await chrome.tabs.update(tab.id, { active: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: historyStep,
+        args: [action],
+      });
+    } catch (e) {
+      return { ok: false, error: 'page_not_readable', tabId: tab.id, action: action };
+    }
+    await waitMs(700);
+    var after = tab;
+    try { after = await chrome.tabs.get(tab.id); } catch (e2) { /* keep the old tab */ }
+    return {
+      ok: true,
+      tabId: tab.id,
+      action: action,
+      url: pageUrl(after && after.url || ''),
+      title: (after && after.title) || '',
+      moved: pageUrl(after && after.url || '') !== before,
+    };
+  }
+
+  async function runPointerTask(spec, fn) {
+    var tab = await pickWebTab(spec && spec.tabId);
+    if (!tab || !tab.id) return { ok: false, error: 'no_tab' };
+    if (String(tab.url || '').indexOf('http') !== 0) return { ok: false, error: 'open_a_form_page', tabId: tab.id };
+    if (typeof fn !== 'function') return { ok: false, error: 'pointer_not_loaded' };
+    try { await chrome.tabs.update(tab.id, { active: true }); } catch (e) { /* stay */ }
+    if (spec && spec.selector) {
+      try {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: kernelScripts() });
+      } catch (e2) { /* selector falls back to querySelector */ }
+    }
+    try {
+      var results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: fn,
+        args: [spec || {}],
+      });
+      var page = results && results[0] && results[0].result;
+      await waitMs(400);
+      var after = tab;
+      try { after = await chrome.tabs.get(tab.id); } catch (e3) { /* keep */ }
+      return Object.assign({ tabId: tab.id }, page || { ok: false, error: 'no_result' }, { url: pageUrl(after && after.url || (page && page.url) || '') });
+    } catch (e4) {
+      return { ok: false, error: 'page_not_readable', tabId: tab.id };
+    }
+  }
+
+  function runMouseClick(spec) {
+    var api = root.CcPagePointer;
+    return runPointerTask({
+      tabId: spec && spec.tabId || null,
+      x: spec && spec.x,
+      y: spec && spec.y,
+      selector: spec && spec.selector || '',
+      button: spec && spec.button || 'left',
+      count: spec && spec.count || 1,
+    }, api && api.clickAt);
+  }
+
+  function runKeyboard(spec) {
+    var api = root.CcPagePointer;
+    return runPointerTask({
+      tabId: spec && spec.tabId || null,
+      selector: spec && spec.selector || '',
+      text: spec && spec.text || '',
+      key: spec && spec.key || '',
+      keys: Array.isArray(spec && spec.keys) ? spec.keys : [],
+      ctrl: !!(spec && spec.ctrl),
+      alt: !!(spec && spec.alt),
+      shift: !!(spec && spec.shift),
+      meta: !!(spec && spec.meta),
+    }, api && api.pressKeys);
+  }
+
   function runBrowserTask(msg) {
     if (!msg || !msg.task) {
       replyBrowserTask(msg && msg.taskId, { ok: false, error: 'unknown task' });
@@ -234,6 +777,70 @@
     }
     if (msg.task === 'fill_form') {
       runPageTask(msg.taskId, msg.tabId, fillFormPage, [Array.isArray(msg.fields) ? msg.fields : []]);
+      return;
+    }
+    if (msg.task === 'fill') {
+      runExtensionFill(msg.profileId, msg.tabId).then(function (result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function (err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: (err && err.message) || 'fill_failed' });
+      });
+      return;
+    }
+    if (msg.task === 'snapshot') {
+      runSnapshot(msg).then(function (result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function (err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: (err && err.message) || 'snapshot_failed' });
+      });
+      return;
+    }
+    if (msg.task === 'list_tabs') {
+      runListTabs().then(function (result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function (err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: (err && err.message) || 'list_tabs_failed' });
+      });
+      return;
+    }
+    if (msg.task === 'focus_tab') {
+      runFocusTab(msg.tabId).then(function (result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function (err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: (err && err.message) || 'focus_failed' });
+      });
+      return;
+    }
+    if (msg.task === 'scroll') {
+      runScroll(msg).then(function (result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function (err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: (err && err.message) || 'scroll_failed' });
+      });
+      return;
+    }
+    if (msg.task === 'history') {
+      runHistory(msg).then(function (result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function (err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: (err && err.message) || 'history_failed' });
+      });
+      return;
+    }
+    if (msg.task === 'mouse_click') {
+      runMouseClick(msg).then(function (result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function (err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: (err && err.message) || 'mouse_click_failed' });
+      });
+      return;
+    }
+    if (msg.task === 'keyboard') {
+      runKeyboard(msg).then(function (result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function (err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: (err && err.message) || 'keyboard_failed' });
+      });
       return;
     }
     if (msg.task !== 'open_url') {
