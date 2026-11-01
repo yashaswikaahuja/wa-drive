@@ -2,7 +2,7 @@
  * mapper-capabilities.test.ts — TypeScript ESM sources via Node strip-types.
  */
 import { getFieldAliases, FIELD_ALIASES } from '../src/field-aliases.ts';
-import { normalizeIdent, labelPrimaryIdent, normChoice } from '../src/field-ident.ts';
+import { normalizeIdent, labelPrimaryIdent, normChoice, aliasHitsIdent } from '../src/field-ident.ts';
 import { resolveChoiceToOption } from '../src/resolve-choice.ts';
 import { decideConditionalChoice } from '../src/decide-conditional.ts';
 
@@ -51,6 +51,10 @@ assert('weak label → matchBy=dom-fallback', r2.matchBy, 'dom-fallback');
 const f3 = { label: 'पिता का नाम', id: '', name: '', placeholder: '' };
 const r3 = labelPrimaryIdent(f3);
 assert('Hindi-only label labelStrong=true (≥4 chars)', r3.labelStrong, true);
+assert('po does not hit police_station', aliasHitsIdent('police_station', 'po'), false);
+assert('police_station hits police_station', aliasHitsIdent('police_station', 'police_station'), true);
+assert('post hits post_office', aliasHitsIdent('post_office', 'post'), true);
+assert('thana hits thana_police_station', aliasHitsIdent('thana_police_station', 'thana'), true);
 
 console.log('\nCcResolveChoice (TS)');
 const radioField = {

@@ -177,6 +177,7 @@
 
   function lookupSavedEntry(savedMap: any, field: any) {
     if (!savedMap || !field) return null;
+    if (field.canonicalKey && savedMap[field.canonicalKey]) return savedMap[field.canonicalKey];
     var keys = labelKeys(field.label).concat(labelKeys(field.name));
     var i;
     for (i = 0; i < keys.length; i++) {
@@ -212,6 +213,7 @@
     for (var i = 0; i < (fields || []).length; i++) {
       var f = fields[i];
       if (!f || !f.selector || map[f.selector]) continue;
+      if (f.fillMode === 'auto' || f.humanGate === 'captcha' || f.humanGate === 'otp' || f.humanGate === 'submit') continue;
       if (/radio|checkbox/i.test(String(f.type || ''))) continue;
       var entry = lookupSavedEntry(savedMap, f);
       if (!entry || !entry.profileKey) continue;

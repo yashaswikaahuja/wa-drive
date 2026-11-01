@@ -65,6 +65,24 @@ if (typeof module !== "undefined" && typeof globalThis !== "undefined") {
       flat[k] = v && typeof v === "object" && "value" in v ? v.value : v;
     }
     if (profile && profile.name) flat.name = flat.name || profile.name;
+    function copyIfEmpty(fromKey, toKey) {
+      if (flat[fromKey] != null && String(flat[fromKey]).trim() !== "" && (flat[toKey] == null || String(flat[toKey]).trim() === "")) {
+        flat[toKey] = flat[fromKey];
+      }
+    }
+    var keys = Object.keys(flat);
+    for (var i = 0; i < keys.length; i++) {
+      var src = keys[i];
+      copyIfEmpty(src, src.replace(/-/g, "_"));
+      copyIfEmpty(src, src.replace(/_/g, "-"));
+    }
+    copyIfEmpty("email-id", "email");
+    copyIfEmpty("email_id", "email");
+    copyIfEmpty("email", "email_id");
+    copyIfEmpty("phone", "mobile");
+    copyIfEmpty("mobile", "phone");
+    copyIfEmpty("sub-division", "sub_division");
+    copyIfEmpty("sub_division", "sub-division");
     return flat;
   }
   root2.CcFlattenProfile = { flattenProfile };
@@ -232,6 +250,7 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
   }
   function lookupSavedEntry(savedMap, field) {
     if (!savedMap || !field) return null;
+    if (field.canonicalKey && savedMap[field.canonicalKey]) return savedMap[field.canonicalKey];
     var keys = labelKeys(field.label).concat(labelKeys(field.name));
     var i;
     for (i = 0; i < keys.length; i++) {
@@ -281,6 +300,7 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
     for (var i = 0; i < (fields || []).length; i++) {
       var f = fields[i];
       if (!f || !f.selector || map[f.selector]) continue;
+      if (f.fillMode === "auto" || f.humanGate === "captcha" || f.humanGate === "otp" || f.humanGate === "submit") continue;
       if (/radio|checkbox/i.test(String(f.type || ""))) continue;
       var entry = lookupSavedEntry(savedMap, f);
       if (!entry || !entry.profileKey) continue;
@@ -365,10 +385,21 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
             type: f2.type || "text",
             options: f2.options || null,
             optionSelectors: f2.optionSelectors || null,
-            placeholder: f2.placeholder || ""
+            placeholder: f2.placeholder || "",
+            locators: f2.locators || null,
+            lastLocator: f2.lastLocator || null,
+            canonicalKey: f2.canonicalKey || null,
+            dependsOn: f2.dependsOn || null,
+            fillMode: f2.fillMode || null,
+            humanGate: f2.humanGate || null,
+            rules: f2.rules || null,
+            needsReview: !!f2.needsReview,
+            optionsDynamic: !!f2.optionsDynamic,
+            optionDetails: f2.optionDetails || null,
+            constantValue: f2.constantValue || null
           };
         });
-        return { ok: true, fields, profile: prof, formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href, snapshotId };
+        return { ok: true, fields, profile: prof, formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href, snapshotId, meta: extracted2.meta || null };
       }
     });
     var extracted = extractResults && extractResults[0] && extractResults[0].result;
@@ -468,6 +499,7 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
         if (spaced && spaced !== gsk) out.push(spaced);
         return out;
       }, hasTaughtMapping = function(f2) {
+        if (f2 && f2.canonicalKey && savedMaps[f2.canonicalKey] && savedMaps[f2.canonicalKey].profileKey) return true;
         var keys = labelKeys(f2 && f2.label).concat(labelKeys(f2 && f2.name));
         for (var i2 = 0; i2 < keys.length; i2++) {
           var entry = savedMaps[keys[i2]];
@@ -806,6 +838,21 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
       }
     }
     try {
+      let mappingProfileKey = function(field) {
+        var info2 = syncFbs[field.selector];
+        var mapEntry2 = syncMapping[field.selector];
+        if (info2 && info2.profileKey) return info2.profileKey;
+        if (mapEntry2 && mapEntry2.profileKey) return mapEntry2.profileKey;
+        var sels = field.optionSelectors || [];
+        for (var si2 = 0; si2 < sels.length; si2++) {
+          var optInfo = syncFbs[sels[si2]];
+          var optMap = syncMapping[sels[si2]];
+          if (optInfo && optInfo.profileKey) return optInfo.profileKey;
+          if (optMap && optMap.profileKey) return optMap.profileKey;
+        }
+        if (field.canonicalKey) return field.canonicalKey;
+        return null;
+      };
       var pk = extracted.semanticFormKey || extracted.formKey;
       var syncMapping = r._mapping || {};
       var syncFbs = r._fbs || {};
@@ -818,13 +865,13 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
       };
       for (var i = 0; i < syncFields.length; i++) {
         var f = syncFields[i];
-        var sk = gsk2(f.label);
+        var sk = f.canonicalKey || gsk2(f.label);
         if (!sk || sk.length < 2) sk = gsk2(f.name);
         if (!sk || sk.length < 2) sk = gsk2(f.id);
         if (!sk || sk.length < 2) continue;
         var info = syncFbs[f.selector];
         var mapEntry = syncMapping[f.selector];
-        var profileKey = info && info.profileKey || mapEntry && mapEntry.profileKey || null;
+        var profileKey = mappingProfileKey(f);
         var filledRec = syncRecords.find(function(rec) {
           return rec.selector === f.selector && rec.result === "filled";
         });
@@ -850,7 +897,16 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
           label: f.label || f.name || f.id || sk,
           type: f.type,
           order: i,
-          options: f.options || null,
+          options: f.optionsDynamic ? "dynamic" : f.optionDetails || f.options || null,
+          locators: f.locators || null,
+          lastLocator: f.lastLocator || null,
+          canonicalKey: f.canonicalKey || null,
+          dependsOn: f.dependsOn || null,
+          fillMode: f.fillMode || null,
+          humanGate: f.humanGate || null,
+          rules: f.rules || null,
+          needsReview: !profileKey || !!f.needsReview,
+          constantValue: f.constantValue || null,
           delta: { fills: wasFilled ? 1 : 0, corrections: 0 }
         };
       }
@@ -858,7 +914,7 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
         await fetch(backendUrl + "/mappings/" + encodeURIComponent(pk), {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": "Bearer " + accessToken },
-          body: JSON.stringify({ updates, meta: { hostname: r.hostname || extracted.hostname, title: "", lastSeen: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), syncVersion: 3 } })
+          body: JSON.stringify({ updates, meta: { hostname: r.hostname || extracted.hostname, title: extracted.meta && extracted.meta.title || "", serviceId: extracted.meta && extracted.meta.serviceId || "", structuralFingerprint: extracted.meta && extracted.meta.structuralFingerprint || "", lastSeen: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), syncVersion: 3 } })
         });
       }
     } catch (e) {

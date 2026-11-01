@@ -27,12 +27,14 @@ const helpers = {
 };
 
 function makeInput(props) {
-  return Object.assign({
+  const el = Object.assign({
     type: 'text', id: '', name: '', value: '', className: '',
     placeholder: '', tagName: 'INPUT', _label: '', _skip: false,
     closest: () => null,
     querySelectorAll: () => [],
+    getAttribute(k) { return this[k] != null && this[k] !== '' ? String(this[k]) : null; },
   }, props);
+  return el;
 }
 
 function makeDoc(elements) {
@@ -41,9 +43,14 @@ function makeDoc(elements) {
 
 // ── Skip types ────────────────────────────────────────────────────────────────
 console.log('\nSkip types');
-for (const t of ['hidden','submit','button','password','image','reset']) {
+for (const t of ['hidden','button','password','image','reset']) {
   const { formFields } = scan(makeDoc([makeInput({ type: t })]), helpers);
   assert(`type="${t}" skipped`, formFields.length, 0);
+}
+{
+  const { formFields } = scan(makeDoc([makeInput({ type: 'submit', id: 'go', value: 'Submit', _label: 'Submit' })]), helpers);
+  assert('submit captured', formFields.length, 1);
+  assert('submit humanGate', formFields[0].humanGate, 'submit');
 }
 
 // ── Skip context ──────────────────────────────────────────────────────────────
@@ -51,11 +58,16 @@ console.log('\nSkip context');
 { const { formFields } = scan(makeDoc([makeInput({ _skip: true, _label: 'Name' })]), helpers);
   assert('element in skip context not captured', formFields.length, 0); }
 
-// ── Skip meta (search/captcha/otp) ────────────────────────────────────────────
+// ── Skip meta (csrf/recaptcha still skipped; captcha/otp are human gates) ──
 console.log('\nSkip meta');
-for (const kw of ['captcha', 'otp', 'csrf', 'recaptcha']) {
+for (const kw of ['csrf', 'recaptcha']) {
   const { formFields } = scan(makeDoc([makeInput({ id: kw, _label: 'Field' })]), helpers);
   assert(`id="${kw}" skipped`, formFields.length, 0);
+}
+for (const kw of ['captcha', 'otp']) {
+  const { formFields } = scan(makeDoc([makeInput({ id: kw, _label: 'Field' })]), helpers);
+  assert(`id="${kw}" captured as humanGate`, formFields.length, 1);
+  assert(`id="${kw}" humanGate type`, formFields[0].humanGate, kw);
 }
 {
   const { formFields } = scan(makeDoc([makeInput({ id: 'filter', name: 'filter', _label: 'Filter' })]), helpers);
@@ -71,6 +83,17 @@ console.log('\nNot on screen');
   });
   const { formFields } = scan(makeDoc([hidden]), helpersHidden);
   assert('hidden aadhaar input is not captured', formFields.length, 0);
+}
+{
+  const panchayat = Object.assign(makeInput({ tagName: 'SELECT', id: '56886', type: '', _label: 'Panchayat' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const helpersHiddenSel = Object.assign({}, helpers, { isVisuallyPresent: () => false });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [panchayat] : []; } };
+  const { formFields } = scan(doc, helpersHiddenSel);
+  assert('hidden panchayat select is captured', formFields.length, 1);
+  assert('panchayat canonicalKey', formFields[0].canonicalKey, 'panchayat');
+  assert('panchayat optionsDynamic', formFields[0].optionsDynamic, true);
 }
 {
   const label = { id: 'yes-label' };
@@ -138,7 +161,8 @@ console.log('\nPage search');
 {
   const poisoned = makeInput({ type: 'search', id: 'captcha', _label: 'Search' });
   const { formFields } = scan(makeDoc([poisoned]), helpers);
-  assert('search box named captcha stays out', formFields.length, 0);
+  assert('search box named captcha is a captcha gate', formFields.length, 1);
+  assert('search captcha humanGate', formFields[0].humanGate, 'captcha');
 }
 {
   const box = makeInput({ type: 'search', _label: 'Search' });
@@ -165,6 +189,9 @@ console.log('\nSelect');
   assert('select captured', formFields.length, 1);
   assert('type=dropdown', formFields[0].type, 'dropdown');
   assert('placeholder option filtered', JSON.stringify(formFields[0].options), JSON.stringify(['Delhi','Mumbai']));
+  assert('select has locators', Array.isArray(formFields[0].locators) && formFields[0].locators.length > 0, true);
+  assert('select canonicalKey=state', formFields[0].canonicalKey, 'state');
+  assert('optionDetails has value+labels', formFields[0].optionDetails[0].labelEn, 'Delhi');
 }
 
 console.log('\nNumber input');
@@ -245,6 +272,52 @@ console.log('\nContenteditable');
   assert('contenteditable captured', formFields.length, 1);
   assert('type=contenteditable', formFields[0].type, 'contenteditable');
   assert('selector=#tinymce', formFields[0].selector, '#tinymce');
+}
+
+console.log('\nLocators, cascade, Hindi auto, rules');
+{
+  const name = makeInput({ id: '78250', _label: 'Name of Applicant', required: true, maxLength: 60 });
+  const hindi = makeInput({ id: '17287', _label: 'आवेदक / आवेदिका का नाम' });
+  const pin = makeInput({ id: 'pin', _label: 'PIN Code', maxLength: 6 });
+  const { formFields } = scan(makeDoc([name, hindi, pin]), helpers);
+  const byId = {};
+  formFields.forEach((f) => { byId[f.id] = f; });
+  assert('name locators include id', byId['78250'].locators.some((l) => l.type === 'id'), true);
+  assert('name canonicalKey', byId['78250'].canonicalKey, 'name');
+  assert('hindi fillMode auto', byId['17287'].fillMode, 'auto');
+  assert('hindi canonicalKey', byId['17287'].canonicalKey, 'name_hindi');
+  assert('pin digits rule', byId.pin.rules && byId.pin.rules.digits, 6);
+}
+{
+  const genderA = Object.assign(makeInput({ type: 'radio', name: '17290', value: 'M', _label: 'पुरुष / Male' }), { closest: () => null });
+  const genderB = Object.assign(makeInput({ type: 'radio', name: '17290', value: 'F', _label: 'स्त्री / Female' }), { closest: () => null });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [genderA, genderB] : []; } };
+  const { formFields } = scan(doc, helpers);
+  assert('gender canonicalKey', formFields[0].canonicalKey, 'gender');
+  assert('gender optionDetails value', formFields[0].optionDetails[0].value, 'M');
+}
+{
+  const block = Object.assign(makeInput({ tagName: 'SELECT', id: 'block', type: '', _label: 'Block' }), {
+    querySelectorAll: () => [{ textContent: 'Mohra', value: '1' }],
+  });
+  const thana = Object.assign(makeInput({ tagName: 'SELECT', id: '65015', type: '', _label: 'थाना / Police Station' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const panchayat = Object.assign(makeInput({ tagName: 'SELECT', id: '56886', type: '', _label: 'Panchayat' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const office = Object.assign(makeInput({ tagName: 'SELECT', id: 'applLoc', type: '', _label: 'Apply to the Office' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [block, thana, panchayat, office] : []; } };
+  const { formFields } = scan(doc, helpers);
+  const byKey = {};
+  formFields.forEach((f) => { byKey[f.canonicalKey] = f; });
+  assert('thana is police_station not post_office', byKey.police_station && byKey.police_station.id, '65015');
+  assert('thana optionsDynamic', byKey.police_station.optionsDynamic, true);
+  assert('panchayat present', !!byKey.panchayat, true);
+  assert('panchayat dependsOn', byKey.panchayat.dependsOn, 'block');
+  assert('office is dropdown', byKey.apply_to_office.type, 'dropdown');
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────

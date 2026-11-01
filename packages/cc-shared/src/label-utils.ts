@@ -22,6 +22,15 @@ const SEMANTIC_ALIASES = {
   'permanent address': 'address', 'residential address': 'address', 'correspondence address': 'address',
   'pin code': 'pincode', 'postal code': 'pincode', 'pincode': 'pincode',
   'state name': 'state', 'district name': 'district',
+  'police station': 'police_station', 'thana': 'police_station',
+  'post office': 'post_office',
+  'sub division': 'sub_division', 'subdivision': 'sub_division',
+  'local body': 'local_body_type', 'local body type': 'local_body_type',
+  'residence type': 'residence_type', 'type of residence': 'residence_type',
+  'supporting document': 'supporting_document_type', 'document type': 'supporting_document_type',
+  'male female third gender': 'gender', 'male female': 'gender',
+  'name of applicant': 'name', 'name of father': 'father_name', 'name of mother': 'mother_name',
+  'name of husband': 'husband_name',
 };
 
 function normalizeLabel(label: any) {

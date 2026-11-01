@@ -102,7 +102,24 @@ const BG_SEMANTIC_ALIASES = {
   "postal code": "pincode",
   "pincode": "pincode",
   "state name": "state",
-  "district name": "district"
+  "district name": "district",
+  "police station": "police_station",
+  "thana": "police_station",
+  "post office": "post_office",
+  "sub division": "sub_division",
+  "subdivision": "sub_division",
+  "local body": "local_body_type",
+  "local body type": "local_body_type",
+  "residence type": "residence_type",
+  "type of residence": "residence_type",
+  "supporting document": "supporting_document_type",
+  "document type": "supporting_document_type",
+  "male female third gender": "gender",
+  "male female": "gender",
+  "name of applicant": "name",
+  "name of father": "father_name",
+  "name of mother": "mother_name",
+  "name of husband": "husband_name"
 };
 function normalizeLabel(label) {
   return (label || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
@@ -483,7 +500,8 @@ async function runJobDispatch(envelope, tabId) {
       func: async (prof, bUrl, aToken) => {
         var _a2, _b, _c;
         const headers = { "Content-Type": "application/json", "Authorization": "Bearer " + aToken };
-        const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
+        const extracted = extractFormFieldsWithFingerprint();
+        const { formFields, formKey, semanticFormKey } = extracted;
         if (!formFields.length) return { ok: false, error: "no fields detected" };
         const pk = semanticFormKey || formKey;
         let saved = null;
@@ -495,6 +513,17 @@ async function runJobDispatch(envelope, tabId) {
         }
         let mapping = {}, fbs = {};
         const gsk = (l) => (l || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+        const catalogKey = (f) => f.canonicalKey || gsk(f.label) || gsk(f.name) || gsk(f.id);
+        const mappingProfileKey = (f, mapping2, fbs2) => {
+          if (fbs2[f.selector] && fbs2[f.selector].profileKey) return fbs2[f.selector].profileKey;
+          if (mapping2[f.selector] && mapping2[f.selector].profileKey) return mapping2[f.selector].profileKey;
+          const sels = f.optionSelectors || [];
+          for (let si = 0; si < sels.length; si++) {
+            if (fbs2[sels[si]] && fbs2[sels[si]].profileKey) return fbs2[sels[si]].profileKey;
+            if (mapping2[sels[si]] && mapping2[sels[si]].profileKey) return mapping2[sels[si]].profileKey;
+          }
+          return f.canonicalKey || null;
+        };
         const partish = (f) => {
           const lbl = String(f.label || "").trim();
           const blob = `${f.label || ""} ${f.name || ""} ${f.id || ""}`.toLowerCase();
@@ -512,8 +541,9 @@ async function runJobDispatch(envelope, tabId) {
         };
         if (saved) {
           for (const f of formFields) {
-            const sk = gsk(f.label);
-            const s = saved[sk];
+            if (f.fillMode === "auto" || f.humanGate === "captcha" || f.humanGate === "otp" || f.humanGate === "submit") continue;
+            const sk = catalogKey(f);
+            const s = saved[sk] || saved[gsk(f.label)];
             if (!s || !s.profileKey) continue;
             const atom = atomOf(s.profileKey);
             if (!atom) continue;
@@ -559,19 +589,36 @@ async function runJobDispatch(envelope, tabId) {
           const updates = {};
           for (let i = 0; i < formFields.length; i++) {
             const f = formFields[i];
-            const sk = gsk(f.label);
+            const sk = catalogKey(f);
             if (!sk || sk.length < 2) continue;
             const info = fbs[f.selector];
-            const profileKey = (info == null ? void 0 : info.profileKey) || ((_a2 = mapping[f.selector]) == null ? void 0 : _a2.profileKey) || (mapping[f.selector] ? (_b = Object.entries(prof).find(([, v]) => v === mapping[f.selector].value)) == null ? void 0 : _b[0] : null) || null;
+            const profileKey = mappingProfileKey(f, mapping, fbs) || (info == null ? void 0 : info.profileKey) || ((_a2 = mapping[f.selector]) == null ? void 0 : _a2.profileKey) || (mapping[f.selector] ? (_b = Object.entries(prof).find(([, v]) => v === mapping[f.selector].value)) == null ? void 0 : _b[0] : null) || null;
             const wasFilled = records.some((r2) => r2.selector === f.selector && r2.result === "filled");
             const relation = (info == null ? void 0 : info.relation) || ((_c = mapping[f.selector]) == null ? void 0 : _c.relation) || (profileKey ? { kind: partish(f) && compound(profileKey) ? "unknown" : "identity" } : { kind: "unknown" });
-            updates[sk] = { profileKey, relation, label: f.label, type: f.type, order: i, options: f.options || null, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+            updates[sk] = {
+              profileKey,
+              relation,
+              label: f.label,
+              type: f.type,
+              order: i,
+              options: f.optionsDynamic ? "dynamic" : f.optionDetails || f.options || null,
+              locators: f.locators || null,
+              lastLocator: f.lastLocator || null,
+              canonicalKey: f.canonicalKey || null,
+              dependsOn: f.dependsOn || null,
+              fillMode: f.fillMode || null,
+              humanGate: f.humanGate || null,
+              rules: f.rules || null,
+              needsReview: !profileKey || !!f.needsReview,
+              constantValue: f.constantValue || null,
+              delta: { fills: wasFilled ? 1 : 0, corrections: 0 }
+            };
           }
           if (Object.keys(updates).length > 0) {
             await fetch(bUrl + "/mappings/" + pk, {
               method: "POST",
               headers,
-              body: JSON.stringify({ updates, meta: { hostname: location.hostname, title: document.title.slice(0, 80), lastSeen: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), syncVersion: 2 } })
+              body: JSON.stringify({ updates, meta: { hostname: location.hostname, title: extracted.meta && extracted.meta.title || document.title.slice(0, 80), serviceId: extracted.meta && extracted.meta.serviceId || "", structuralFingerprint: extracted.meta && extracted.meta.structuralFingerprint || "", lastSeen: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), syncVersion: 2 } })
             });
           }
         } catch (e) {

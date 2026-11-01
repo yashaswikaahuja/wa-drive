@@ -98,9 +98,16 @@
           label: f.label || '',
           visualLabel: f.visualLabel || f.label || '',
           type: f.type || 'text',
-          options: f.options || null,
+          options: f.optionsDynamic ? 'dynamic' : (f.options || null),
           placeholder: f.placeholder || '',
           fieldId: f.fieldId || '',
+          locators: f.locators || null,
+          canonicalKey: f.canonicalKey || null,
+          dependsOn: f.dependsOn || null,
+          humanGate: f.humanGate || null,
+          fillMode: f.fillMode || null,
+          rules: f.rules || null,
+          needsReview: !!f.needsReview,
         };
       }),
     };

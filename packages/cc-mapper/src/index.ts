@@ -1,6 +1,6 @@
 export type * from './types.ts';
 export { FIELD_ALIASES, getFieldAliases, CcFieldAliases } from './field-aliases.ts';
-export { normalizeIdent, labelPrimaryIdent, normChoice, CcFieldIdent } from './field-ident.ts';
+export { normalizeIdent, labelPrimaryIdent, normChoice, aliasHitsIdent, optionText, optionTexts, CcFieldIdent } from './field-ident.ts';
 export { resolveChoiceToOption, CcResolveChoice } from './resolve-choice.ts';
 export { decideConditionalChoice, CcDecideConditional } from './decide-conditional.ts';
 export { tryMatch as tryMatchSpecial, isTwinField, isEducationRow, CcMatchSpecialFields } from './match-special-fields.ts';
@@ -9,6 +9,7 @@ export { applyAll, applyConditionalPost, applyTwinMirror, CcFuzzyPostPasses } fr
 export { applySplitDob, parseDobParts } from './split-dob.ts';
 export {
   profileAtom,
+  profileKeyCandidates,
   isCompoundAtom,
   looksLikePartField,
   shapeCompatible,

@@ -55,17 +55,46 @@ const MONTH_NAMES = [
   'December',
 ];
 
+const PROFILE_KEY_SYNONYMS: Record<string, string[]> = {
+  email: ['email', 'email_id', 'email-id'],
+  email_id: ['email_id', 'email-id', 'email'],
+  mobile: ['mobile', 'phone', 'mobile_number'],
+  phone: ['phone', 'mobile', 'mobile_number'],
+  sub_division: ['sub_division', 'sub-division'],
+  pincode: ['pincode', 'pin_code', 'pin-code'],
+};
+
+/** Hub stores hyphen keys (`email-id`); mapper aliases use underscores. */
+export function profileKeyCandidates(key: string | null | undefined): string[] {
+  const k = String(key || '');
+  if (!k) return [];
+  const out: string[] = [];
+  const add = (x: string) => {
+    if (x && out.indexOf(x) < 0) out.push(x);
+  };
+  add(k);
+  add(k.replace(/-/g, '_'));
+  add(k.replace(/_/g, '-'));
+  const syn = PROFILE_KEY_SYNONYMS[k.replace(/-/g, '_')] || PROFILE_KEY_SYNONYMS[k];
+  if (syn) syn.forEach(add);
+  return out;
+}
+
 export function profileAtom(profile: RelationProfile | null | undefined, key: string | null | undefined): string | null {
   if (!profile || key == null) return null;
-  const entry = profile[key];
-  if (entry == null) return null;
-  const v =
-    typeof entry === 'object' && entry && 'value' in (entry as object)
-      ? (entry as { value: unknown }).value
-      : entry;
-  if (v == null) return null;
-  const s = String(v).trim();
-  return s === '' ? null : s;
+  const keys = profileKeyCandidates(key);
+  for (let i = 0; i < keys.length; i++) {
+    const entry = profile[keys[i]];
+    if (entry == null) continue;
+    const v =
+      typeof entry === 'object' && entry && 'value' in (entry as object)
+        ? (entry as { value: unknown }).value
+        : entry;
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (s !== '') return s;
+  }
+  return null;
 }
 
 function normLoose(s: unknown): string {

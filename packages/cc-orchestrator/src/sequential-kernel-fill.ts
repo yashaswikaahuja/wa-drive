@@ -71,9 +71,15 @@
             visualLabel: f.visualLabel || f.label || '', fieldId: f.fieldId || '',
             snapshotId: f.snapshotId || snapshotId, type: f.type || 'text',
             options: f.options || null, optionSelectors: f.optionSelectors || null, placeholder: f.placeholder || '',
+            locators: f.locators || null, lastLocator: f.lastLocator || null,
+            canonicalKey: f.canonicalKey || null, dependsOn: f.dependsOn || null,
+            fillMode: f.fillMode || null, humanGate: f.humanGate || null,
+            rules: f.rules || null, needsReview: !!f.needsReview,
+            optionsDynamic: !!f.optionsDynamic, optionDetails: f.optionDetails || null,
+            constantValue: f.constantValue || null,
           };
         });
-        return { ok: true, fields: fields, profile: prof, formKey: formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href, snapshotId: snapshotId };
+        return { ok: true, fields: fields, profile: prof, formKey: formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href, snapshotId: snapshotId, meta: extracted.meta || null };
       },
     });
 
@@ -188,6 +194,7 @@
         return out;
       }
       function hasTaughtMapping(f: any) {
+        if (f && f.canonicalKey && savedMaps[f.canonicalKey] && savedMaps[f.canonicalKey].profileKey) return true;
         var keys = labelKeys(f && f.label).concat(labelKeys(f && f.name));
         for (var i = 0; i < keys.length; i++) {
           var entry = savedMaps[keys[i]];
@@ -491,16 +498,31 @@
       var syncProfile = extracted.profile || {};
       var updates = {};
       var gsk2 = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
+      function mappingProfileKey(field: any) {
+        var info = syncFbs[field.selector];
+        var mapEntry = syncMapping[field.selector];
+        if (info && info.profileKey) return info.profileKey;
+        if (mapEntry && mapEntry.profileKey) return mapEntry.profileKey;
+        var sels = field.optionSelectors || [];
+        for (var si = 0; si < sels.length; si++) {
+          var optInfo = syncFbs[sels[si]];
+          var optMap = syncMapping[sels[si]];
+          if (optInfo && optInfo.profileKey) return optInfo.profileKey;
+          if (optMap && optMap.profileKey) return optMap.profileKey;
+        }
+        if (field.canonicalKey) return field.canonicalKey;
+        return null;
+      }
       for (var i = 0; i < syncFields.length; i++) {
         var f = syncFields[i];
-        // Catalog key: prefer label, fall back to name/id so fields still appear in Admin Mappings.
-        var sk = gsk2(f.label);
+        // Catalog key: short canonical key, then label, then name/id.
+        var sk = f.canonicalKey || gsk2(f.label);
         if (!sk || sk.length < 2) sk = gsk2(f.name);
         if (!sk || sk.length < 2) sk = gsk2(f.id);
         if (!sk || sk.length < 2) continue;
         var info = syncFbs[f.selector];
         var mapEntry = syncMapping[f.selector];
-        var profileKey = (info && info.profileKey) || (mapEntry && mapEntry.profileKey) || null;
+        var profileKey = mappingProfileKey(f);
         var filledRec = syncRecords.find(function (rec: any) { return rec.selector === f.selector && rec.result === 'filled'; });
         var wasFilled = !!filledRec;
         var evidence = null;
@@ -525,7 +547,16 @@
           label: f.label || f.name || f.id || sk,
           type: f.type,
           order: i,
-          options: f.options || null,
+          options: f.optionsDynamic ? 'dynamic' : (f.optionDetails || f.options || null),
+          locators: f.locators || null,
+          lastLocator: f.lastLocator || null,
+          canonicalKey: f.canonicalKey || null,
+          dependsOn: f.dependsOn || null,
+          fillMode: f.fillMode || null,
+          humanGate: f.humanGate || null,
+          rules: f.rules || null,
+          needsReview: !profileKey || !!f.needsReview,
+          constantValue: f.constantValue || null,
           delta: { fills: wasFilled ? 1 : 0, corrections: 0 },
         };
       }
@@ -533,7 +564,7 @@
         await fetch(backendUrl + '/mappings/' + encodeURIComponent(pk), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 3 } }),
+          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: (extracted.meta && extracted.meta.title) || '', serviceId: (extracted.meta && extracted.meta.serviceId) || '', structuralFingerprint: (extracted.meta && extracted.meta.structuralFingerprint) || '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 3 } }),
         });
       }
     } catch (e) { console.warn('[CC] mapping sync failed:', e.message); }

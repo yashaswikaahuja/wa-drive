@@ -16,13 +16,13 @@
     address: ["address", "adress", "permanent_address", "correspondence_address", "residential_address", "pata", "niwas", "full_address", "addr", "txt_adress", "txt_address"],
     mobile: ["mobile_no", "mobile_number", "phone_no", "contact_no", "mo_no", "sampark", "mobile", "phone", "mobile_no_", "sampark_no", "txt_mobile", "txtmobile", "txt_mobile_no", "mobile_no_mobile_sankhya", "registered_mobile"],
     phone: ["mobile_no", "mobile_number", "phone_no", "contact_no", "mo_no", "sampark", "mobile", "phone", "phone_number", "mobile_no_", "sampark_no", "txt_mobile", "txtmobile", "txt_mobile_no", "mobile_no_mobile_sankhya", "registered_mobile", "enter_your_mobile_number", "enter_mobile_number"],
-    email: ["email_address", "email_id", "emailid", "email_add", "email", "txt_email", "txtemail", "txt_email_id", "email_id_e_mail_a_i_di", "registered_email", "enter_your_email_id", "enter_email_id"],
-    email_id: ["email_address", "email_id", "emailid", "email_add", "email", "txt_email", "txtemail", "txt_email_id", "email_id_e_mail_a_i_di", "registered_email", "enter_your_email_id", "enter_email_id", "confirm_your_email_id"],
+    email: ["email_address", "email_id", "emailid", "email_add", "email", "email-id", "txt_email", "txtemail", "txt_email_id", "email_id_e_mail_a_i_di", "registered_email", "enter_your_email_id", "enter_email_id"],
+    email_id: ["email_address", "email_id", "emailid", "email_add", "email", "email-id", "txt_email", "txtemail", "txt_email_id", "email_id_e_mail_a_i_di", "registered_email", "enter_your_email_id", "enter_email_id", "confirm_your_email_id"],
     aadhaar_number: ["aadhaar", "aadhar", "uid", "aadhaar_no", "aadhar_no", "identity_card_no", "enter_identity", "aadhaar_number_", "aadhar_card", "txt_aadhaar", "txtaadhaar", "txt_aadhar", "aadhaar_card_no", "aadhar_number", "uid_no", "aadhar_sankhya", "aadhaar_sankhya"],
     pan_number: ["pan_no", "pan_number", "pancard", "pan_card"],
     epic_number: ["epic_no", "voter_id", "epic_number"],
     category: ["category", "caste_category", "varg", "txt_category", "ddl_category", "ddlcategory", "social_category", "reservation_category", "caste"],
-    gender: ["gender", "sex", "ling", "txt_gender", "ddl_gender", "rbl_gender"],
+    gender: ["gender", "sex", "ling", "txt_gender", "ddl_gender", "rbl_gender", "male_female_third_gender", "male_female", "\u092A\u0941\u0930\u0941\u0937", "\u0938\u094D\u0924\u094D\u0930\u0940", "\u0924\u0943\u0924\u0940\u092F"],
     pincode: ["pincode", "pin_code", "postal_code", "zip_code", "pin", "zip", "pincode_pin_code"],
     state: ["state_name", "state_of", "rajya", "state", "home_state", "permanent_state", "state_of_residence"],
     district: ["district_name", "jila", "district", "home_district", "permanent_district"],
@@ -47,10 +47,18 @@
     school_name: ["school_name", "school", "last_school_attended", "name_of_school", "institute_name", "last_institution"],
     registration_number: ["registration_number", "reg_number", "reg_no", "registration_no", "enrollment_number", "enrolment_number"],
     village: ["village", "village_name", "gram", "gaon", "txt_village", "ddl_village"],
-    post_office: ["post_office", "post", "po", "txt_post", "post_name"],
-    police_station: ["police_station", "thana", "ps", "txt_ps", "ddl_ps"],
+    post_office: ["post_office", "post", "txt_post", "post_name", "dakghar", "\u0921\u093E\u0915\u0918\u0930"],
+    police_station: ["police_station", "thana", "ps", "txt_ps", "ddl_ps", "\u0925\u093E\u0928\u093E"],
     sub_division: ["sub_division", "subdivision", "sub_div", "anumandal", "anchal", "circle", "txt_subdiv", "ddl_subdiv", "sub-division", "\u0905\u0928\u0941\u092E\u0902\u0921\u0932"],
     block: ["block", "block_name", "taluka", "tehsil", "prakhnd", "txt_block", "ddl_block", "\u092A\u094D\u0930\u0916\u0902\u0921"],
+    panchayat: ["panchayat", "gram_panchayat", "panchayat_name", "\u0917\u094D\u0930\u093E\u092E_\u092A\u0902\u091A\u093E\u092F\u0924", "\u092A\u0902\u091A\u093E\u092F\u0924"],
+    ward: ["ward", "ward_no", "ward_number", "ward_no", "\u0935\u093E\u0930\u094D\u0921"],
+    purpose: ["purpose", "purpose_of", "uddeshya", "\u0909\u0926\u094D\u0926\u0947\u0936\u094D\u092F"],
+    residence_type: ["residence_type", "type_of_residence", "sthayi", "permanent_residence", "\u0938\u094D\u0925\u093E\u092F\u0940", "\u0905\u0938\u094D\u0925\u093E\u092F\u0940"],
+    local_body_type: ["local_body_type", "local_body", "gram_panchayat_nagar", "municipal_body"],
+    supporting_document_type: ["supporting_document_type", "supporting_document", "document_type", "id_proof"],
+    husband_name: ["husband_name", "husband", "pati_ka_naam", "\u092A\u0924\u093F_\u0915\u093E_\u0928\u093E\u092E", "name_of_husband"],
+    photo: ["photo", "photograph", "passport_photo", "applicant_photo"],
     house_no: ["house_no", "house_number", "house", "flat_no", "door_no", "txt_house"],
     street: ["street", "street_name", "road", "lane", "txt_street"],
     // Travel / journey (#312) — do not confuse with police_station
@@ -159,10 +167,53 @@
   function normChoice(s) {
     return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   }
+  function aliasHitsIdent(ident, alias) {
+    const a = String(alias || "").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+    const id = String(ident || "").toLowerCase();
+    if (!a || !id) return false;
+    if (id === a) return true;
+    const tokens = id.split(/_+/).filter(Boolean);
+    const aliasTokens = a.split(/_+/).filter(Boolean);
+    if (!aliasTokens.length) return false;
+    if (a.length <= 2) return tokens.includes(a);
+    for (let i = 0; i <= tokens.length - aliasTokens.length; i++) {
+      let ok = true;
+      for (let j = 0; j < aliasTokens.length; j++) {
+        if (tokens[i + j] !== aliasTokens[j]) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return true;
+    }
+    if (aliasTokens.length === 1 && tokens.includes(a)) return true;
+    if (a.length >= 4) {
+      const padded = "_" + id + "_";
+      if (padded.includes("_" + a + "_")) return true;
+    }
+    return false;
+  }
+  function optionText(opt) {
+    if (opt == null) return "";
+    if (typeof opt === "string") return opt;
+    if (typeof opt === "object") {
+      const o = opt;
+      return String(o.text || o.labelEn || o.label || o.labelHi || o.value || "");
+    }
+    return String(opt);
+  }
+  function optionTexts(options) {
+    if (!options || options === "dynamic") return [];
+    if (!Array.isArray(options)) return [];
+    return options.map(optionText).filter(Boolean);
+  }
   var CcFieldIdent = {
     normalizeIdent,
     labelPrimaryIdent,
-    normChoice
+    normChoice,
+    aliasHitsIdent,
+    optionText,
+    optionTexts
   };
 
   // ../../packages/cc-mapper/src/resolve-choice.ts
@@ -177,7 +228,7 @@
     const planned = String(plannedValue).trim();
     const plannedNorm = normChoice(planned);
     const type = field.type || "";
-    const opts = field.options || [];
+    const opts = optionTexts(field.options);
     const isYesNo = looksLikeYesNo(opts);
     if (isYesNo && plannedNorm.length > 8 && !/^(yes|no|true|false|y|n)$/.test(plannedNorm)) return null;
     if (isYesNo && /^\d{8,}$/.test(plannedNorm)) return null;
@@ -434,7 +485,16 @@
     if (field.type === "radio" || field.type === "radio-group") {
       const condDecision = helpers.decideConditionalChoice(field, profile);
       if (condDecision) {
-        const resolvedCond = helpers.resolveChoiceToOption(field, condDecision, null);
+        const blob = `${field.label || ""} ${field.name || ""} ${field.id || ""} ${field.canonicalKey || ""}`.toLowerCase();
+        let condKey = field.canonicalKey || null;
+        if (!condKey) {
+          if (/gender|sex|ling|पुरुष|महिला|स्त्री|तृतीय/.test(blob)) condKey = "gender";
+          else if (/marital/.test(blob)) condKey = "marital_status";
+          else if (/disabilit|pwd|divyang/.test(blob)) condKey = "is_pwd";
+          else if (/ex.?serviceman/.test(blob)) condKey = "ex_serviceman";
+          else if (/changed|new_name|name_change/.test(blob)) condKey = "changed_name";
+        }
+        const resolvedCond = helpers.resolveChoiceToOption(field, condDecision, condKey);
         if (resolvedCond) {
           mapping[resolvedCond.selector] = resolvedCond.entry;
           return true;
@@ -513,6 +573,43 @@
     }
   }
 
+  // ../../packages/cc-mapper/src/mapping-relation.ts
+  var PROFILE_KEY_SYNONYMS = {
+    email: ["email", "email_id", "email-id"],
+    email_id: ["email_id", "email-id", "email"],
+    mobile: ["mobile", "phone", "mobile_number"],
+    phone: ["phone", "mobile", "mobile_number"],
+    sub_division: ["sub_division", "sub-division"],
+    pincode: ["pincode", "pin_code", "pin-code"]
+  };
+  function profileKeyCandidates(key) {
+    const k = String(key || "");
+    if (!k) return [];
+    const out = [];
+    const add = (x) => {
+      if (x && out.indexOf(x) < 0) out.push(x);
+    };
+    add(k);
+    add(k.replace(/-/g, "_"));
+    add(k.replace(/_/g, "-"));
+    const syn = PROFILE_KEY_SYNONYMS[k.replace(/-/g, "_")] || PROFILE_KEY_SYNONYMS[k];
+    if (syn) syn.forEach(add);
+    return out;
+  }
+  function profileAtom(profile, key) {
+    if (!profile || key == null) return null;
+    const keys = profileKeyCandidates(key);
+    for (let i = 0; i < keys.length; i++) {
+      const entry = profile[keys[i]];
+      if (entry == null) continue;
+      const v = typeof entry === "object" && entry && "value" in entry ? entry.value : entry;
+      if (v == null) continue;
+      const s = String(v).trim();
+      if (s !== "") return s;
+    }
+    return null;
+  }
+
   // ../../packages/cc-mapper/src/match-profile-fields.ts
   function tryMatchNameParts(field, ident, matchBy, nameParts, mapping) {
     const isFatherMother = ident.includes("father") || ident.includes("mother") || ident.includes("pita") || ident.includes("mata");
@@ -570,31 +667,38 @@
     }
     return false;
   }
+  function identLooksLikePoliceStation(ident) {
+    return ident.includes("police_station") || ident.includes("thana") || /(?:^|_)ps(?:_|$)/.test(ident);
+  }
   function tryMatchAlias(field, ident, matchBy, profile, helpers, mapping) {
     const fieldAliases = helpers.fieldAliases || {};
     const normalizeIdent3 = helpers.normalizeIdent || ((s) => String(s || "").toLowerCase().replace(/\W+/g, "_"));
     const resolveChoiceToOption2 = helpers.resolveChoiceToOption || (() => null);
     const isFatherMother = ident.includes("father") || ident.includes("mother") || ident.includes("pita") || ident.includes("mata");
     const isStateDistrict = ident.includes("state") || ident.includes("district") || ident.includes("rajya") || ident.includes("jila");
+    const canonical = String(field.canonicalKey || "");
     let bestKey = null;
     let bestAliasLen = -1;
     for (const profileKey in fieldAliases) {
-      if (!profile[profileKey]) continue;
+      const atom = profileAtom(profile, profileKey) || (field.constantValue && profileKey === canonical ? field.constantValue : null);
+      if (!atom) continue;
       if (profileKey === "name" && (isFatherMother || isStateDistrict)) continue;
       if (profileKey === "name" && (ident.includes("first_name") || ident.includes("firstname") || ident.includes("last_name") || ident.includes("lastname") || ident.includes("surname") || ident.includes("middle_name") || ident.includes("middlename"))) continue;
-      if (profileKey === "father_name" && !isFatherMother) continue;
-      if (profileKey === "mother_name" && !(ident.includes("mother") || ident.includes("mata"))) continue;
+      if (profileKey === "father_name" && !isFatherMother && canonical !== "father_name") continue;
+      if (profileKey === "mother_name" && !(ident.includes("mother") || ident.includes("mata")) && canonical !== "mother_name") continue;
       if (profileKey === "name" && (ident.includes("husband") || ident.includes("wife") || ident.includes("spouse") || ident.includes("guardian") || ident.includes("pati") || ident.includes("pita_pati"))) continue;
       if ((profileKey === "post_office" || profileKey === "village") && (ident.includes("purpose") || ident.includes("uddeshya") || ident.includes("apply") && ident.includes("office"))) continue;
+      if (profileKey === "post_office" && identLooksLikePoliceStation(ident)) continue;
       if (profileKey === "degree_name" && ident.includes("highest")) continue;
       if (field.type === "radio" || field.type === "radio-group") {
-        const groupIdent = normalizeIdent3([field.label, field.name, field.id].filter(Boolean).join(" "));
-        let groupMatches = fieldAliases[profileKey].some((a) => groupIdent.includes(a.replace(/[^a-z0-9]/g, "")));
+        const groupIdent = normalizeIdent3([field.label, field.name, field.id, field.canonicalKey].filter(Boolean).join(" "));
+        let groupMatches = canonical === profileKey || fieldAliases[profileKey].some((a) => aliasHitsIdent(groupIdent, a));
         if (!groupMatches && profileKey === "gender" && field.options) {
-          groupMatches = /gender|sex|ling|male|female|पुरुष|महिला|स्त्री|तृतीय/.test(groupIdent + " " + field.options.join(" ").toLowerCase());
+          const optBlob = optionTexts(field.options).join(" ").toLowerCase();
+          groupMatches = /gender|sex|ling|male|female|पुरुष|महिला|स्त्री|तृतीय/.test(groupIdent + " " + optBlob);
         }
         if (!groupMatches) continue;
-        const resolved = resolveChoiceToOption2(field, profile[profileKey] != null ? String(profile[profileKey]) : null, profileKey);
+        const resolved = resolveChoiceToOption2(field, atom, profileKey);
         if (resolved) {
           resolved.entry.matchBy = matchBy;
           mapping[resolved.selector] = resolved.entry;
@@ -602,30 +706,38 @@
         continue;
       }
       if (field.type === "checkbox-group") continue;
+      if (canonical === profileKey && canonical.length > bestAliasLen) {
+        bestAliasLen = canonical.length;
+        bestKey = profileKey;
+        continue;
+      }
       const aliases = fieldAliases[profileKey];
       for (let ai = 0; ai < aliases.length; ai++) {
         const alias = aliases[ai];
         if (!alias || alias.length < 2) continue;
-        if (ident.includes(alias) && alias.length > bestAliasLen) {
+        if (aliasHitsIdent(ident, alias) && alias.length > bestAliasLen) {
           bestAliasLen = alias.length;
           bestKey = profileKey;
         }
       }
     }
     if (bestKey) {
+      const bestAtom = profileAtom(profile, bestKey) || field.constantValue || "";
       if (field.type === "radio" || field.type === "radio-group" || field.type === "checkbox-group") {
-        const bestResolved = resolveChoiceToOption2(field, profile[bestKey] != null ? String(profile[bestKey]) : null, bestKey);
+        const bestResolved = resolveChoiceToOption2(field, bestAtom, bestKey);
         if (bestResolved) {
           bestResolved.entry.matchBy = matchBy;
           mapping[bestResolved.selector] = bestResolved.entry;
         }
       } else {
-        mapping[field.selector] = { value: profile[bestKey], type: field.type || "", matchBy, profileKey: bestKey, label: field.label || null };
+        mapping[field.selector] = { value: bestAtom, type: field.type || "", matchBy, profileKey: bestKey, label: field.label || null };
       }
     }
   }
   function tryMatch2(field, ident, matchBy, profile, nameParts, helpers, mapping) {
     if (isTravelJourneyField(field)) return true;
+    if (field.fillMode === "auto") return true;
+    if (field.humanGate === "captcha" || field.humanGate === "otp" || field.humanGate === "submit") return true;
     if (ident.includes("hindi") || ident.includes("_hindi") || (field.label || "").includes("\u0939\u093F\u0902\u0926\u0940") || (field.label || "").includes("(Hindi)")) return true;
     const isChangedName = ident.includes("new_name") || ident.includes("changed_name") || ident.includes("newname") || ident.includes("changedname") || (field.label || "").toLowerCase().includes("new name") || (field.label || "").toLowerCase().includes("changed name");
     if (isChangedName && !profile.changed_name) return true;

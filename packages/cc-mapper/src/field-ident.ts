@@ -79,8 +79,63 @@ export function normChoice(s: string): string {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+/**
+ * Whole-token alias match. Short aliases (po, ps) must be their own token so
+ * `po` cannot bind `police_station`.
+ */
+export function aliasHitsIdent(ident: string, alias: string): boolean {
+  const a = String(alias || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  const id = String(ident || '').toLowerCase();
+  if (!a || !id) return false;
+  if (id === a) return true;
+  const tokens = id.split(/_+/).filter(Boolean);
+  const aliasTokens = a.split(/_+/).filter(Boolean);
+  if (!aliasTokens.length) return false;
+  if (a.length <= 2) return tokens.includes(a);
+  for (let i = 0; i <= tokens.length - aliasTokens.length; i++) {
+    let ok = true;
+    for (let j = 0; j < aliasTokens.length; j++) {
+      if (tokens[i + j] !== aliasTokens[j]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return true;
+  }
+  if (aliasTokens.length === 1 && tokens.includes(a)) return true;
+  if (a.length >= 4) {
+    const padded = '_' + id + '_';
+    if (padded.includes('_' + a + '_')) return true;
+  }
+  return false;
+}
+
+/** Display text from a string option or {text,label,labelEn,value} record. */
+export function optionText(opt: unknown): string {
+  if (opt == null) return '';
+  if (typeof opt === 'string') return opt;
+  if (typeof opt === 'object') {
+    const o = opt as { text?: string; label?: string; labelEn?: string; labelHi?: string; value?: string };
+    return String(o.text || o.labelEn || o.label || o.labelHi || o.value || '');
+  }
+  return String(opt);
+}
+
+export function optionTexts(options: unknown): string[] {
+  if (!options || options === 'dynamic') return [];
+  if (!Array.isArray(options)) return [];
+  return options.map(optionText).filter(Boolean);
+}
+
 export const CcFieldIdent = {
   normalizeIdent,
   labelPrimaryIdent,
   normChoice,
+  aliasHitsIdent,
+  optionText,
+  optionTexts,
 };
