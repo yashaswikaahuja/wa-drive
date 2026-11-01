@@ -131,6 +131,33 @@ console.log('\nContenteditable:');
   globalLike.window.keystrokeFillSync = null;
 }
 
+// ── range slider ──────────────────────────────────────────────────────────────
+console.log('\nRange slider:');
+{
+  const events = [];
+  const el = {
+    tagName: 'INPUT',
+    type: 'range',
+    min: '0',
+    max: '100',
+    value: '25',
+    getAttribute: () => null,
+    focus: function () { this.focused = true; },
+    dispatchEvent: function (e) { events.push(e.type || e); },
+  };
+  globalLike.window.keystrokeFillSync = () => { throw new Error('should skip keystroke'); };
+  const r = fillText(el, '80');
+  ok('range returns 1', r === 1);
+  ok('range value clamped in range', el.value === '80');
+  ok('range input event', events.includes('input'));
+  ok('range change event', events.includes('change'));
+  const over = fillText(el, '140');
+  ok('range clamps to max', over === 1 && el.value === '100');
+  const under = fillText(el, '-4');
+  ok('range clamps to min', under === 1 && el.value === '0');
+  globalLike.window.keystrokeFillSync = null;
+}
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

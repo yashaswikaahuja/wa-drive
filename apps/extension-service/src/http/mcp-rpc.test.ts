@@ -17,7 +17,7 @@ assert.equal(init.body.result.serverInfo.name, 'cybercontrol-browser');
 
 const listed = await respondToMcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, 'ws', run);
 const names = listed.body.result.tools.map((tool) => tool.name);
-assert.deepEqual(names, ['open_url', 'read_form', 'fill_form', 'click', 'list_profiles', 'read_profile', 'fill', 'snapshot', 'list_tabs', 'close_tab', 'focus_tab', 'scroll', 'history', 'mouse_click', 'keyboard']);
+assert.deepEqual(names, ['open_url', 'read_form', 'fill_form', 'click', 'list_profiles', 'read_profile', 'fill', 'snapshot', 'list_tabs', 'close_tab', 'focus_tab', 'scroll', 'history', 'mouse_click', 'hover', 'drag', 'keyboard']);
 
 const note = await respondToMcp({ jsonrpc: '2.0', method: 'notifications/initialized' }, 'ws', run);
 assert.equal(note.kind, 'accept');
@@ -196,6 +196,37 @@ assert.equal(calls[calls.length - 1].body.button, 'left');
 assert.equal(calls[calls.length - 1].body.count, 1);
 assert.equal(JSON.parse(pointed.body.result.content[0].text).ok, true);
 
+const hovered = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '15h',
+  method: 'tools/call',
+  params: { name: 'hover', arguments: { selector: '#menu', tabId: 9 } },
+}, 'ws-9', run);
+assert.equal(calls[calls.length - 1].body.task, 'hover');
+assert.equal(calls[calls.length - 1].body.selector, '#menu');
+assert.equal(calls[calls.length - 1].body.action, 'hover');
+assert.equal(JSON.parse(hovered.body.result.content[0].text).ok, true);
+
+const dragged = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '15d',
+  method: 'tools/call',
+  params: { name: 'drag', arguments: { x: 40, y: 12, x2: 180, y2: 12, tabId: 9 } },
+}, 'ws-9', run);
+assert.equal(calls[calls.length - 1].body.task, 'drag');
+assert.equal(calls[calls.length - 1].body.x2, 180);
+assert.equal(calls[calls.length - 1].body.y2, 12);
+assert.equal(calls[calls.length - 1].body.action, 'drag');
+assert.equal(JSON.parse(dragged.body.result.content[0].text).ok, true);
+
+const missingDragEnd = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '15e',
+  method: 'tools/call',
+  params: { name: 'drag', arguments: { x: 40, y: 12 } },
+}, 'ws-9', run);
+assert.equal(missingDragEnd.body.result.isError, true);
+
 const missingKey = await respondToMcp({
   jsonrpc: '2.0',
   id: 16,
@@ -275,6 +306,23 @@ assert.equal(atPoint.ok, true);
 assert.equal(atPoint.tag, 'button');
 assert.equal(atPoint.clicked, 'Search');
 assert.equal(events.includes('click'), true);
+const hoverEvents = [];
+hit.dispatchEvent = (ev) => { hoverEvents.push(ev.type); return true; };
+const hoveredAt = clickAt({ x: 30, y: 25, action: 'hover' });
+assert.equal(hoveredAt.ok, true);
+assert.equal(hoveredAt.action, 'hover');
+assert.equal(hoveredAt.hovered, 'Search');
+assert.equal(hoverEvents.includes('mouseover'), true);
+assert.equal(hoverEvents.includes('click'), false);
+const dragEvents = [];
+hit.dispatchEvent = (ev) => { dragEvents.push(ev.type); return true; };
+const draggedAt = clickAt({ x: 10, y: 20, x2: 90, y2: 20, action: 'drag' });
+assert.equal(draggedAt.ok, true);
+assert.equal(draggedAt.action, 'drag');
+assert.equal(draggedAt.x2, 90);
+assert.equal(draggedAt.dragged, true);
+assert.equal(dragEvents.includes('pointerdown'), true);
+assert.equal(dragEvents.includes('pointerup'), true);
 const keyed = pressKeys({ selector: '[name="search_query"]', text: 'govind', key: 'Enter' });
 assert.equal(keyed.ok, true);
 assert.equal(inputEl.value, 'govind');

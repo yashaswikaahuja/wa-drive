@@ -31,6 +31,7 @@
     'input[type="date"]',
     'input[type="radio"]',
     'input[type="checkbox"]',
+    'input[type="range"]',
     'input:not([type])',
     'textarea',
     'select',

@@ -106,7 +106,7 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
       tabId: body.tabId || null,
       taskId,
     };
-    timeoutMs = 85000;
+    timeoutMs = 88000;
   } else if (task === 'fill_form') {
     const fields = slimFields(body && body.fields);
     if (!fields || !fields.length) return { status: 400, payload: { error: 'fields required' } };
@@ -117,7 +117,7 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
       fields,
       taskId,
     };
-    timeoutMs = 60000;
+    timeoutMs = 80000;
   } else if (task === 'snapshot') {
     const selector = body && body.selector ? String(body.selector).slice(0, 300) : '';
     let rect = null;
@@ -144,7 +144,7 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
       rect,
       taskId,
     };
-    timeoutMs = scope === 'page' ? 30000 : 20000;
+    timeoutMs = scope === 'page' ? 45000 : 20000;
   } else if (task === 'list_tabs') {
     message = { type: 'browser_task', task: 'list_tabs', taskId };
     timeoutMs = 10000;
@@ -186,24 +186,38 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
       taskId,
     };
     timeoutMs = 15000;
-  } else if (task === 'mouse_click') {
+  } else if (task === 'mouse_click' || task === 'hover' || task === 'drag') {
     const selector = body && body.selector ? String(body.selector).slice(0, 300) : '';
     const x = Number(body && body.x);
     const y = Number(body && body.y);
     const hasPoint = Number.isFinite(x) && Number.isFinite(y);
     if (!selector && !hasPoint) return { status: 400, payload: { error: 'x and y, or selector, required' } };
+    const toSelector = body && body.toSelector ? String(body.toSelector).slice(0, 300) : '';
+    const x2 = Number(body && body.x2);
+    const y2 = Number(body && body.y2);
+    const hasEnd = Number.isFinite(x2) && Number.isFinite(y2);
+    const action = task === 'hover' || (task === 'mouse_click' && body && body.action === 'hover')
+      ? 'hover'
+      : (task === 'drag' || (task === 'mouse_click' && body && body.action === 'drag') ? 'drag' : 'click');
+    if (action === 'drag' && !toSelector && !hasEnd) {
+      return { status: 400, payload: { error: 'x2 and y2, or toSelector, required' } };
+    }
     const button = body && (body.button === 'right' || body.button === 'middle') ? body.button : 'left';
     const count = Number(body && body.count) === 2 ? 2 : 1;
     message = {
       type: 'browser_task',
-      task: 'mouse_click',
+      task: action === 'click' ? 'mouse_click' : action,
       tabId: body && body.tabId || null,
       x: hasPoint ? Math.max(-8000, Math.min(8000, x)) : null,
       y: hasPoint ? Math.max(-8000, Math.min(8000, y)) : null,
+      x2: hasEnd ? Math.max(-8000, Math.min(8000, x2)) : null,
+      y2: hasEnd ? Math.max(-8000, Math.min(8000, y2)) : null,
       selector,
+      toSelector,
       frameId: Number.isFinite(Number(body && body.frameId)) ? Number(body.frameId) : null,
       button,
       count,
+      action,
       taskId,
     };
     timeoutMs = 15000;

@@ -176,6 +176,27 @@ console.log('\nNumber input');
   assert('type=number', formFields[0].type, 'number');
 }
 
+console.log('\nRange slider');
+{
+  const n = makeInput({ type: 'range', id: 'slider', min: '0', max: '100', value: '25', _label: 'Slider' });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [n] : []; } };
+  const { formFields } = scan(doc, helpers);
+  assert('range captured', formFields.length, 1);
+  assert('type=slider', formFields[0].type, 'slider');
+  assert('slider selector=#slider', formFields[0].selector, '#slider');
+}
+{
+  const n = makeInput({ type: 'range', min: '0', max: '100', value: '25', _label: 'Slider' });
+  const doc = {
+    querySelectorAll(s) {
+      if (String(s).includes('input[type="range"]') || String(s).includes('input[type="text"]')) return [n];
+      return [];
+    },
+  };
+  const { formFields } = scan(doc, helpers);
+  assert('unnamed range uses form-field index', formFields[0].selector, 'form-field-0');
+}
+
 // ── Radio grouping ────────────────────────────────────────────────────────────
 console.log('\nRadio grouping');
 {

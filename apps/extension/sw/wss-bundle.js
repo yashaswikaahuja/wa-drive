@@ -564,6 +564,62 @@ function pointerClickAt(spec) {
     if (typeof doc.elementFromPoint === "function") target = doc.elementFromPoint(x, y);
     if (!target) return { ok: false, error: "nothing_there", x: Math.round(x), y: Math.round(y) };
   }
+  var action = spec && spec.action === "hover" ? "hover" : spec && spec.action === "drag" ? "drag" : "click";
+  if (action === "hover") {
+    fire(target, point, 0, 0, ["pointerover", "pointerenter", "mouseover", "mouseenter", "pointermove", "mousemove"], 0);
+    return {
+      ok: true,
+      action: "hover",
+      url: String(g.location && g.location.href || "").split("?")[0].slice(0, 300),
+      title: doc.title || "",
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+      tag: String(target.tagName || "").toLowerCase(),
+      hovered: labelOf(target)
+    };
+  }
+  if (action === "drag") {
+    var end = null;
+    var toSel = spec && spec.toSelector ? String(spec.toSelector) : "";
+    if (toSel) {
+      var toEl = resolve(toSel);
+      if (!toEl) return { ok: false, error: "not_found" };
+      var toBox = typeof toEl.getBoundingClientRect === "function" ? toEl.getBoundingClientRect() : null;
+      if (!toBox || toBox.width < 1 || toBox.height < 1) return { ok: false, error: "not_visible" };
+      end = { x: toBox.left + toBox.width / 2, y: toBox.top + toBox.height / 2 };
+    } else {
+      var x2 = Number(spec && spec.x2);
+      var y2 = Number(spec && spec.y2);
+      if (!isFinite(x2) || !isFinite(y2)) return { ok: false, error: "x2 and y2, or toSelector, required" };
+      end = { x: x2, y: y2 };
+    }
+    var endTarget = target;
+    if (typeof doc.elementFromPoint === "function") {
+      var hitEnd = doc.elementFromPoint(end.x, end.y);
+      if (hitEnd) endTarget = hitEnd;
+    }
+    fire(target, point, 0, 1, ["pointerdown", "mousedown"], 1);
+    for (var step = 1; step <= 8; step++) {
+      var mid = {
+        x: point.x + (end.x - point.x) * step / 8,
+        y: point.y + (end.y - point.y) * step / 8
+      };
+      fire(step === 8 ? endTarget : target, mid, 0, 1, ["pointermove", "mousemove"], 0);
+    }
+    fire(endTarget, end, 0, 0, ["pointerup", "mouseup"], 1);
+    return {
+      ok: true,
+      action: "drag",
+      url: String(g.location && g.location.href || "").split("?")[0].slice(0, 300),
+      title: doc.title || "",
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+      x2: Math.round(end.x),
+      y2: Math.round(end.y),
+      tag: String(endTarget.tagName || "").toLowerCase(),
+      dragged: true
+    };
+  }
   var names = buttonName === "right" ? ["pointerdown", "mousedown", "pointerup", "mouseup", "contextmenu"] : ["pointerdown", "mousedown", "pointerup", "mouseup", "click"];
   fire(target, point, button, buttons, names, 1);
   if (count === 2 && buttonName === "left") {
@@ -585,6 +641,7 @@ function pointerClickAt(spec) {
   }
   return {
     ok: true,
+    action: "click",
     url: String(g.location && g.location.href || "").split("?")[0].slice(0, 300),
     title: doc.title || "",
     x: Math.round(point.x),
@@ -1323,6 +1380,10 @@ scrollRoot.CcScrollPage = { scrollPage };
           break;
         }
       }
+      if (!entry && api.findByText) {
+        var found = api.findByText(spec && spec.text, document);
+        if (found && found.field) entry = found.field;
+      }
     }
     if (!entry) return { ok: false, error: "not_found", url: location.href };
     var beforeUrl = location.href;
@@ -1404,6 +1465,24 @@ scrollRoot.CcScrollPage = { scrollPage };
     return new Promise(function(resolve) {
       setTimeout(resolve, ms);
     });
+  }
+  function isCaptureQuota(err) {
+    return /MAX_CAPTURE_VISIBLE_TAB|quota/i.test(String(err && err.message || err || ""));
+  }
+  async function captureVisibleJpeg(windowId, quality) {
+    var last = null;
+    for (var i = 0; i < 5; i++) {
+      try {
+        return await chrome.tabs.captureVisibleTab(windowId, { format: "jpeg", quality });
+      } catch (e) {
+        last = e;
+        if (!isCaptureQuota(e)) throw e;
+        await waitMs(600 + i * 300);
+      }
+    }
+    var quota = new Error("capture_quota");
+    quota.cause = last;
+    throw quota;
   }
   function bytesToBase64(bytes) {
     var parts = [];
@@ -1547,10 +1626,10 @@ scrollRoot.CcScrollPage = { scrollPage };
         },
         args: [top]
       });
-      await waitMs(180);
+      await waitMs(i === 0 ? 250 : 650);
       shots.push({
         y: top,
-        dataUrl: await chrome.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 60 })
+        dataUrl: await captureVisibleJpeg(windowId, 60)
       });
     }
     var bitmaps = [];
@@ -1663,23 +1742,15 @@ scrollRoot.CcScrollPage = { scrollPage };
     if (metrics.scrolled) await waitMs(200);
     var shot = null;
     try {
-      async function captureShown() {
-        return chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: scope === "page" ? 60 : 72 });
-      }
       if (scope === "page") {
         shot = await captureWholePage(tab.id, tab.windowId, metrics);
       } else {
-        var dataUrl = null;
-        try {
-          dataUrl = await captureShown();
-        } catch (eCap) {
-          await waitMs(300);
-          dataUrl = await captureShown();
-        }
+        var dataUrl = await captureVisibleJpeg(tab.windowId, 72);
         shot = await cropVisible(dataUrl, scope === "area" ? metrics.box : null, metrics.clientWidth);
       }
     } catch (e3) {
       var message = e3 && e3.message || "capture_failed";
+      if (isCaptureQuota(e3) || message === "capture_quota") message = "capture_quota";
       return { ok: false, error: String(message).slice(0, 180), tabId: tab.id, url: metrics.url || url };
     } finally {
       if (scope === "page" || metrics.scrolled) {
@@ -1902,11 +1973,21 @@ scrollRoot.CcScrollPage = { scrollPage };
       tabId: spec && spec.tabId || null,
       x: spec && spec.x,
       y: spec && spec.y,
+      x2: spec && spec.x2,
+      y2: spec && spec.y2,
       selector: spec && spec.selector || "",
+      toSelector: spec && spec.toSelector || "",
       frameId: spec && spec.frameId,
       button: spec && spec.button || "left",
-      count: spec && spec.count || 1
+      count: spec && spec.count || 1,
+      action: spec && spec.action || "click"
     }, api && api.clickAt);
+  }
+  function runHover(spec) {
+    return runMouseClick(Object.assign({}, spec, { action: "hover" }));
+  }
+  function runDrag(spec) {
+    return runMouseClick(Object.assign({}, spec, { action: "drag" }));
   }
   function runKeyboard(spec) {
     var api = root.CcPagePointer;
@@ -2001,6 +2082,22 @@ scrollRoot.CcScrollPage = { scrollPage };
         replyBrowserTask(msg.taskId, result);
       }).catch(function(err) {
         replyBrowserTask(msg.taskId, { ok: false, error: err && err.message || "mouse_click_failed" });
+      });
+      return;
+    }
+    if (msg.task === "hover") {
+      runHover(msg).then(function(result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function(err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: err && err.message || "hover_failed" });
+      });
+      return;
+    }
+    if (msg.task === "drag") {
+      runDrag(msg).then(function(result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function(err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: err && err.message || "drag_failed" });
       });
       return;
     }

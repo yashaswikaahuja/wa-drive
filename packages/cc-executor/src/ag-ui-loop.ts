@@ -55,6 +55,11 @@
       if (!p) return false;
       return norm(text) === p || norm(val) === p || (text && (norm(text).indexOf(p) !== -1 || p.indexOf(norm(text)) !== -1));
     }
+    if (t === 'range' || t === 'slider') {
+      var liveN = Number(el && el.value != null ? el.value : actual);
+      var planN = Number(planned);
+      return isFinite(liveN) && isFinite(planN) && liveN === planN;
+    }
     return norm(actual) === norm(planned);
   }
 

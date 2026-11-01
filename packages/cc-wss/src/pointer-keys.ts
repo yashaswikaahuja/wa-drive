@@ -97,6 +97,62 @@ function pointerClickAt(spec: any) {
     if (typeof doc.elementFromPoint === 'function') target = doc.elementFromPoint(x, y);
     if (!target) return { ok: false, error: 'nothing_there', x: Math.round(x), y: Math.round(y) };
   }
+  var action = spec && spec.action === 'hover' ? 'hover' : spec && spec.action === 'drag' ? 'drag' : 'click';
+  if (action === 'hover') {
+    fire(target, point, 0, 0, ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'pointermove', 'mousemove'], 0);
+    return {
+      ok: true,
+      action: 'hover',
+      url: String((g.location && g.location.href) || '').split('?')[0].slice(0, 300),
+      title: doc.title || '',
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+      tag: String(target.tagName || '').toLowerCase(),
+      hovered: labelOf(target),
+    };
+  }
+  if (action === 'drag') {
+    var end = null;
+    var toSel = spec && spec.toSelector ? String(spec.toSelector) : '';
+    if (toSel) {
+      var toEl = resolve(toSel);
+      if (!toEl) return { ok: false, error: 'not_found' };
+      var toBox = typeof toEl.getBoundingClientRect === 'function' ? toEl.getBoundingClientRect() : null;
+      if (!toBox || toBox.width < 1 || toBox.height < 1) return { ok: false, error: 'not_visible' };
+      end = { x: toBox.left + toBox.width / 2, y: toBox.top + toBox.height / 2 };
+    } else {
+      var x2 = Number(spec && spec.x2);
+      var y2 = Number(spec && spec.y2);
+      if (!isFinite(x2) || !isFinite(y2)) return { ok: false, error: 'x2 and y2, or toSelector, required' };
+      end = { x: x2, y: y2 };
+    }
+    var endTarget = target;
+    if (typeof doc.elementFromPoint === 'function') {
+      var hitEnd = doc.elementFromPoint(end.x, end.y);
+      if (hitEnd) endTarget = hitEnd;
+    }
+    fire(target, point, 0, 1, ['pointerdown', 'mousedown'], 1);
+    for (var step = 1; step <= 8; step++) {
+      var mid = {
+        x: point.x + (end.x - point.x) * step / 8,
+        y: point.y + (end.y - point.y) * step / 8,
+      };
+      fire(step === 8 ? endTarget : target, mid, 0, 1, ['pointermove', 'mousemove'], 0);
+    }
+    fire(endTarget, end, 0, 0, ['pointerup', 'mouseup'], 1);
+    return {
+      ok: true,
+      action: 'drag',
+      url: String((g.location && g.location.href) || '').split('?')[0].slice(0, 300),
+      title: doc.title || '',
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+      x2: Math.round(end.x),
+      y2: Math.round(end.y),
+      tag: String(endTarget.tagName || '').toLowerCase(),
+      dragged: true,
+    };
+  }
   var names = buttonName === 'right'
     ? ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'contextmenu']
     : ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
@@ -114,6 +170,7 @@ function pointerClickAt(spec: any) {
   }
   return {
     ok: true,
+    action: 'click',
     url: String((g.location && g.location.href) || '').split('?')[0].slice(0, 300),
     title: doc.title || '',
     x: Math.round(point.x),

@@ -12,7 +12,7 @@ MCP URL:
 
 Add that URL in the LLM app with no pasted token. The app opens a browser window. The operator signs in with the CyberControl email or phone and password. The app then holds the session and calls the tools below.
 
-If a tool returns `no_extension_connected`, the extension is not on the workspace socket. Ask the operator to open Chrome, confirm the CyberControl extension is signed in, and try again. `extension_timeout` means the extension did not answer in time. Read the page again before repeating the same action.
+If a tool returns `no_extension_connected`, the extension is not on the workspace socket. Ask the operator to open Chrome, confirm the CyberControl extension is signed in, and try again. `extension_timeout` means the extension did not answer in time. `fill` waits up to 88s, `fill_form` up to 80s, and a whole-page `snapshot` up to 45s. Read the page again before repeating the same action.
 
 ## Profiles and Fill
 
@@ -104,7 +104,35 @@ Clicks the GUI with the mouse. `x` and `y` are visible-screen CSS pixels. A snap
 { "selector": "button.ytSearchboxComponentSearchButton" }
 ```
 
-`button` is `left`, `right`, or `middle`. `count` 2 is a double-click. After it returns, `read_form` or `snapshot` again.
+`button` is `left`, `right`, or `middle`. `count` 2 is a double-click. `action` can be `click`, `hover`, or `drag`. For `drag`, also pass `x2` and `y2`, or `toSelector`. After it returns, `read_form` or `snapshot` again.
+
+### `hover`
+
+Moves the mouse over a point or a control so hover menus can open.
+
+```json
+{ "selector": "#menu" }
+```
+
+```json
+{ "x": 640, "y": 24 }
+```
+
+Then `read_form` or `snapshot`.
+
+### `drag`
+
+Drags from one point or selector to another. Use this for a slider that does not take a typed value.
+
+```json
+{ "x": 120, "y": 80, "x2": 260, "y2": 80 }
+```
+
+```json
+{ "selector": "input[type=\"range\"]", "toSelector": "#slider-end" }
+```
+
+Then `read_form` or `snapshot`.
 
 ### `keyboard`
 
@@ -162,7 +190,7 @@ One area. `selector` is a field or button from the latest `read_form`. `rect` is
 { "rect": { "x": 120, "y": 80, "width": 360, "height": 48 } }
 ```
 
-The result is a JPEG plus `url`, `scope`, `width`, `height` (JPEG pixels), `cssWidth`, `cssHeight` (CSS pixels of the captured area), `scaleX`, `scaleY`, `clickSpace: "css"`, and `clipped`. `mouse_click` uses CSS pixels: `cssX = imageX * scaleX`. `not_found` means that selector is not on the page. `open_a_form_page` means the active tab is not a normal web page. `unknown task` means the operator needs to reload the unpacked extension.
+The result is a JPEG plus `url`, `scope`, `width`, `height` (JPEG pixels), `cssWidth`, `cssHeight` (CSS pixels of the captured area), `scaleX`, `scaleY`, `clickSpace: "css"`, and `clipped`. `mouse_click` uses CSS pixels: `cssX = imageX * scaleX`. Whole-page stitches wait between shots and retry when Chrome hits the capture quota. `capture_quota` means the retry still failed; wait and try again. `not_found` means that selector is not on the page. `open_a_form_page` means the active tab is not a normal web page. `unknown task` means the operator needs to reload the unpacked extension.
 
 ### `read_form`
 
@@ -202,13 +230,13 @@ Types into fields from the latest read. It does not press buttons.
 }
 ```
 
-Every field needs `selector` and a non-empty `value`. Empty values are dropped. Send at most 80 fields. Copy `label` and `visualLabel` from the read so the extension can refuse a field whose label changed.
+Every field needs `selector` and a non-empty `value`. Empty values are dropped. Send at most 80 fields. Copy `label` and `visualLabel` from the read so the extension can refuse a field whose label changed. A slider from `read_form` has `type` `slider`; set `value` to the number.
 
 For a station box, a short value such as `SURAT` is what you type. The page may then replace it with a longer station line. Read the page again and confirm the box before leaving that field.
 
 ### `click`
 
-Presses one control from the latest read.
+Presses one control from the latest read. Visible links are type `link` and can be pressed by the same text, including the home “Dropdown” link on The Internet.
 
 By visible text:
 
@@ -263,7 +291,7 @@ Then `read_form` again. Continue when the field shows that choice. A record of `
 1. `list_tabs` when more than one page may be open. `focus_tab` with the `tabId` you want. `open_url` opens a new tab unless you pass `tabId` or `newTab: false`. `close_tab` closes extras.
 2. `read_form`. Choose fields and controls from that list only. Do not invent selectors.
 3. `snapshot` when you need to see the screen. `scroll` when the control is below the visible screen, then snapshot again.
-4. `fill_form` for text. `click` for named buttons. `mouse_click` for a point on the snapshot or a selector. `keyboard` to type or press Enter, Tab, Escape, and arrows.
+4. `fill_form` for text and sliders (`type` `slider`, value a number). `click` for named buttons and links. `mouse_click` for a point on the snapshot or a selector. `hover` to open a hover menu. `drag` to move a handle. `keyboard` to type or press Enter, Tab, Escape, and arrows.
 5. `read_form` again. `history` with `back` when the last page was the right one. Decide the next action from the new list.
 
 A click result has `clicked`, `selector`, `url`, and sometimes `reason`.
@@ -280,6 +308,6 @@ On the IRCTC train list, Book Now stays inactive until a class is chosen and an 
 
 Stop when the page asks for a CAPTCHA, an OTP, or a payment card. Tell the operator what is on screen. Do not solve the CAPTCHA. Do not invent card numbers, UPI ids, or OTPs.
 
-Do not store button presses as form mappings. Mappings are for typed fields. `open_url`, `read_form`, `snapshot`, `fill_form`, `click`, `mouse_click`, and `keyboard` are the page controls.
+Do not store button presses as form mappings. Mappings are for typed fields. `open_url`, `read_form`, `snapshot`, `fill_form`, `click`, `mouse_click`, `hover`, `drag`, and `keyboard` are the page controls.
 
 The extension’s own Fill button uses saved field mappings for the page key. These tools do not. `fill_form` types only the `value` you pass in that call.

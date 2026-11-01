@@ -168,6 +168,7 @@ assert('2 labeled inputs = has context',    hasFormContext(makeDocNoForm([labele
 assert('1 labeled input = has context',     hasFormContext(makeDocNoForm([labeledInput])), true);
 assert('0 labeled inputs = no context',     hasFormContext(makeDocNoForm([])), false);
 assert('a lone select is context',          hasFormContext(makeDocNoForm([{ closest() { return null; }, tagName: 'SELECT', placeholder: '' }])), true);
+assert('a lone range slider is context',    hasFormContext(makeDocNoForm([{ closest() { return null; }, tagName: 'INPUT', type: 'range', placeholder: '' }])), true);
 assert('nav inputs are skipped',            hasFormContext(makeDocNoForm([navInput, navInput])), false);
 
 // With ccDomUtils that provides getLabel

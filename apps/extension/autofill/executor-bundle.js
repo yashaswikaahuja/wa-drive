@@ -520,6 +520,7 @@ if (typeof module !== "undefined") module.exports = root.CcSettleAfterAct;
     'input[type="date"]',
     'input[type="radio"]',
     'input[type="checkbox"]',
+    'input[type="range"]',
     "input:not([type])",
     "textarea",
     "select"
@@ -851,15 +852,42 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
     var fields = [];
     for (var i = 0; i < nodes.length; i++) {
       var label = labelOf(nodes[i]);
+      var tag = String(nodes[i].tagName || "").toLowerCase();
+      var asLink = tag === "a";
       fields.push({
         selector: selectorFor(nodes[i], fields.length, doc),
         label,
         visualLabel: label,
-        type: "button",
-        role: "button"
+        type: asLink ? "link" : "button",
+        role: asLink ? "link" : "button"
       });
     }
     return fields;
+  }
+  function findByText(text, doc) {
+    var want = norm(text);
+    if (!want) return { node: null, field: null, reason: "not_found" };
+    var nodes = candidates(doc);
+    var fields = list(doc);
+    for (var i = 0; i < fields.length; i++) {
+      if (norm(fields[i].visualLabel) === want) return { node: nodes[i], field: fields[i] };
+    }
+    if (!doc || typeof doc.querySelectorAll !== "function") return { node: null, field: null, reason: "not_found" };
+    var links = doc.querySelectorAll("a[href]");
+    for (var j = 0; j < links.length; j++) {
+      if (inChrome(links[j]) || !visible(links[j])) continue;
+      var live = textOf(links[j]);
+      if (norm(live) !== want) continue;
+      var field = {
+        selector: selectorFor(links[j], fields.length, doc),
+        label: live.slice(0, 80),
+        visualLabel: live.slice(0, 80),
+        type: "link",
+        role: "link"
+      };
+      return { node: links[j], field };
+    }
+    return { node: null, field: null, reason: "not_found" };
   }
   function findNode(spec, doc) {
     var nodes = candidates(doc);
@@ -968,7 +996,7 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
     var found = findNode({ selector }, doc);
     return found && found.node ? found.node : null;
   }
-  root.CcClickControl = { list, press, chooseOption, norm, elementFor };
+  root.CcClickControl = { list, press, chooseOption, norm, elementFor, findByText };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined") module.exports = globalThis.CcClickControl;
 
@@ -1194,6 +1222,11 @@ if (typeof module !== "undefined") module.exports = globalThis.CcChooseAutocompl
       var p = norm(planned);
       if (!p) return false;
       return norm(text) === p || norm(val) === p || text && (norm(text).indexOf(p) !== -1 || p.indexOf(norm(text)) !== -1);
+    }
+    if (t === "range" || t === "slider") {
+      var liveN = Number(el && el.value != null ? el.value : actual);
+      var planN = Number(planned);
+      return isFinite(liveN) && isFinite(planN) && liveN === planN;
     }
     return norm(actual) === norm(planned);
   }
@@ -2306,6 +2339,32 @@ if (typeof module !== "undefined") module.exports = root.CcFillOneMat;
       try {
         el.dispatchEvent(new Event("change", { bubbles: true }));
       } catch (e2) {
+      }
+      return 1;
+    }
+    var t = String(el && el.type || "").toLowerCase();
+    if (t === "range") {
+      try {
+        el.focus();
+      } catch (eR) {
+      }
+      var min = Number(el.min);
+      var max = Number(el.max);
+      var n = Number(value);
+      if (!isFinite(n)) return 0;
+      if (isFinite(min) && n < min) n = min;
+      if (isFinite(max) && n > max) n = max;
+      var asStr = String(n);
+      var rangeNiv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
+      if (rangeNiv && rangeNiv.set) rangeNiv.set.call(el, asStr);
+      else el.value = asStr;
+      try {
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      } catch (eI) {
+      }
+      try {
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch (eC) {
       }
       return 1;
     }

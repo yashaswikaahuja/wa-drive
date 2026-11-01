@@ -159,15 +159,43 @@
     var fields = [];
     for (var i = 0; i < nodes.length; i++) {
       var label = labelOf(nodes[i]);
+      var tag = String(nodes[i].tagName || '').toLowerCase();
+      var asLink = tag === 'a';
       fields.push({
         selector: selectorFor(nodes[i], fields.length, doc),
         label: label,
         visualLabel: label,
-        type: 'button',
-        role: 'button',
+        type: asLink ? 'link' : 'button',
+        role: asLink ? 'link' : 'button',
       });
     }
     return fields;
+  }
+
+  function findByText(text: any, doc: any) {
+    var want = norm(text);
+    if (!want) return { node: null, field: null, reason: 'not_found' };
+    var nodes = candidates(doc);
+    var fields = list(doc);
+    for (var i = 0; i < fields.length; i++) {
+      if (norm(fields[i].visualLabel) === want) return { node: nodes[i], field: fields[i] };
+    }
+    if (!doc || typeof doc.querySelectorAll !== 'function') return { node: null, field: null, reason: 'not_found' };
+    var links = doc.querySelectorAll('a[href]');
+    for (var j = 0; j < links.length; j++) {
+      if (inChrome(links[j]) || !visible(links[j])) continue;
+      var live = textOf(links[j]);
+      if (norm(live) !== want) continue;
+      var field = {
+        selector: selectorFor(links[j], fields.length, doc),
+        label: live.slice(0, 80),
+        visualLabel: live.slice(0, 80),
+        type: 'link',
+        role: 'link',
+      };
+      return { node: links[j], field: field };
+    }
+    return { node: null, field: null, reason: 'not_found' };
   }
 
   function findNode(spec: any, doc: any) {
@@ -276,7 +304,7 @@
     return found && found.node ? found.node : null;
   }
 
-  root.CcClickControl = { list: list, press: press, chooseOption: chooseOption, norm: norm, elementFor: elementFor };
+  root.CcClickControl = { list: list, press: press, chooseOption: chooseOption, norm: norm, elementFor: elementFor, findByText: findByText };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 if (typeof module !== 'undefined') module.exports = (globalThis as any).CcClickControl;

@@ -24,7 +24,7 @@
   var INPUT_SELECTOR = (
     'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
     // type=search included for OTA From/To widgets (#311)
-    'input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select,' +
+    'input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input[type="range"],input:not([type]),textarea,select,' +
     // iframe bodies (TinyMCE on The Internet) — not added to FORM_FIELD_QUERY so form-field-N stays stable
     '[contenteditable="true"],[contenteditable=""]'
   );
@@ -79,6 +79,16 @@
     return null;
   }
 
+  function uniqueRangeSelector(el: any, doc: any) {
+    if (!doc || typeof doc.querySelectorAll !== 'function') return null;
+    var sel = 'input[type="range"]';
+    try {
+      var hits = doc.querySelectorAll(sel);
+      if (hits && hits.length === 1 && hits[0] === el) return sel;
+    } catch (e) {}
+    return null;
+  }
+
   // Same list as CcResolveCcSelector. form-field-N is an index into this
   // query, not the count of fields the scanner kept. A header input that is
   // skipped here is still input 0 on the page; numbering kept fields from 0
@@ -91,6 +101,7 @@
     'input[type="date"]',
     'input[type="radio"]',
     'input[type="checkbox"]',
+    'input[type="range"]',
     'input:not([type])',
     'textarea',
     'select',
@@ -273,6 +284,7 @@
       // must not become form-field-N. That index would point at a different input.
       if (!selector && pageSearch) selector = uniqueSearchSelector(el, doc);
       if (!selector && pageSearch) return;
+      if (!selector && t === 'range') selector = uniqueRangeSelector(el, doc);
       if (!selector) selector = 'form-field-' + idx;
 
       // ── Select ──
@@ -288,8 +300,8 @@
         return;
       }
 
-      // ── Text / email / tel / number / date / file / search ──
-      var type = pageSearch ? 'search' : (el.type || 'text');
+      // ── Text / email / tel / number / date / file / search / slider ──
+      var type = pageSearch ? 'search' : (t === 'range' ? 'slider' : (el.type || 'text'));
       if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
       formFields.push({ selector: selector, id: el.id, name: el.name, value: el.value,
         placeholder: el.placeholder || '', label: label, type: type, index: idx,

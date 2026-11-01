@@ -175,6 +175,7 @@ assert('four choices, nav link skipped', choiceFields.length, 4);
 assert('male label', choiceFields[0].visualLabel, 'Male');
 assert('yes label', choiceFields[1].visualLabel, 'Yes');
 assert('home link', choiceFields[2].visualLabel, 'Home');
+assert('home link type', choiceFields[2].type, 'link');
 assert('tree title', choiceFields[3].visualLabel, 'Desktop');
 const malePress = api.press(choiceFields[0], choiceDoc);
 assert('male pressed', malePress.pressed, true);
@@ -190,6 +191,33 @@ assert('option label', optFields[0].visualLabel, 'Red');
 const optPress = api.press(optFields[0], optDoc);
 assert('option pressed', optPress.pressed, true);
 assert('option native click', red.events.indexOf('native-click') !== -1, true);
+
+console.log('\nfindByText finds listed links and extra anchors');
+const dropdown = choice('A', 'Dropdown', { href: '/dropdown' });
+const dropDoc = {
+  querySelectorAll(sel) {
+    const s = String(sel);
+    if (s.indexOf('button') !== -1 || s === 'a[href]') return [dropdown];
+    if (sel.charAt(0) === '#') return [];
+    return [];
+  },
+};
+const listedLink = api.findByText('Dropdown', dropDoc);
+assert('findByText listed', listedLink.field && listedLink.field.visualLabel, 'Dropdown');
+assert('findByText type link', listedLink.field && listedLink.field.type, 'link');
+const longLabel = 'A very long documentation link that exceeds sixty characters of visible text';
+const longLink = choice('A', longLabel, { href: '/docs' });
+const longDoc = {
+  querySelectorAll(sel) {
+    const s = String(sel);
+    if (s.indexOf('button') !== -1) return [longLink];
+    if (s === 'a[href]') return [longLink];
+    return [];
+  },
+};
+const extraLink = api.findByText(longLabel, longDoc);
+assert('findByText extra anchor', extraLink.field && extraLink.field.type, 'link');
+assert('findByText extra label', extraLink.field && extraLink.field.visualLabel, longLabel);
 
 if (failed) { console.error('\n' + failed + ' failed'); process.exit(1); }
 console.log('\n' + passed + ' passed');

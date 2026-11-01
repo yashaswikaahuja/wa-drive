@@ -204,7 +204,7 @@
     // No <form> tag — one labeled control is enough (DemoQA / The Internet, #349)
     // Include type=search for OTA journey strips (#311).
     const inputs = doc.querySelectorAll(
-      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input[type="number"],input:not([type]),textarea,select,input[type="checkbox"],input[type="radio"],[role="combobox"],[role="checkbox"],[role="radio"]'
+      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input[type="number"],input[type="range"],input:not([type]),textarea,select,input[type="checkbox"],input[type="radio"],[role="combobox"],[role="checkbox"],[role="radio"]'
     );
     let labeled = 0;
     inputs.forEach(function (el: any) {
@@ -212,7 +212,7 @@
       const lbl = ccDomUtils && typeof ccDomUtils.getLabel === 'function'
         ? ccDomUtils.getLabel(el)
         : (el.getAttribute && el.getAttribute('aria-label')) || el.placeholder || '';
-      if (lbl || isJourneyLike(el, lbl) || (el.tagName && String(el.tagName).toLowerCase() === 'select') || el.type === 'number') labeled++;
+      if (lbl || isJourneyLike(el, lbl) || (el.tagName && String(el.tagName).toLowerCase() === 'select') || el.type === 'number' || el.type === 'range') labeled++;
     });
     return labeled >= 1;
   }

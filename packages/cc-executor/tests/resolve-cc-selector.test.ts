@@ -204,6 +204,8 @@ assert('FORM_FIELD_QUERY includes select',
   FORM_FIELD_QUERY.includes('select'), true);
 assert('FORM_FIELD_QUERY includes textarea',
   FORM_FIELD_QUERY.includes('textarea'), true);
+assert('FORM_FIELD_QUERY includes range',
+  FORM_FIELD_QUERY.includes('input[type="range"]'), true);
 assert('FORM_FIELD_QUERY does not include hidden',
   FORM_FIELD_QUERY.includes('hidden'), false);
 

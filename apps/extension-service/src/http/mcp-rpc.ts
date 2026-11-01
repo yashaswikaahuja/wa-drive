@@ -31,7 +31,7 @@ const tools = [
   },
   {
     name: 'fill_form',
-    description: 'Type into fields from the latest read_form. Each field needs selector and value. For a dropdown whose options are already listed, set type to dropdown, select, ng-dropdown, or mat-select and set value to one option string. Does not solve CAPTCHA or submit payment.',
+    description: 'Type into fields from the latest read_form. Each field needs selector and value. For a dropdown whose options are already listed, set type to dropdown, select, ng-dropdown, or mat-select and set value to one option string. For a slider (type slider or range), set value to the number. Does not solve CAPTCHA or submit payment.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -58,7 +58,7 @@ const tools = [
   },
   {
     name: 'click',
-    description: 'Press a button in the signed-in Chrome by visible text or by a control from read_form.',
+    description: 'Press a button or a visible link in the signed-in Chrome by visible text or by a control from read_form. Links from read_form have type "link".',
     inputSchema: {
       type: 'object',
       properties: {
@@ -130,7 +130,7 @@ const tools = [
   },
   {
     name: 'list_tabs',
-    description: 'List the open Chrome tabs for this extension: tabId, title, url without the query string, and active. Use a tabId with focus_tab, close_tab, read_form, snapshot, scroll, mouse_click, or keyboard.',
+    description: 'List the open Chrome tabs for this extension: tabId, title, url without the query string, and active. Use a tabId with focus_tab, close_tab, read_form, snapshot, scroll, mouse_click, hover, drag, or keyboard.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -183,17 +183,54 @@ const tools = [
   },
   {
     name: 'mouse_click',
-    description: 'Click the GUI with the mouse. Pass x and y in visible-screen pixels (the same space as a snapshot rect), or a selector from read_form to click the center of that control. button is left, right, or middle. count 2 is a double-click. After a snapshot, click the thing you see. Then read_form or snapshot again.',
+    description: 'Click the GUI with the mouse. Pass x and y in visible-screen pixels (the same space as a snapshot rect), or a selector from read_form to click the center of that control. button is left, right, or middle. count 2 is a double-click. action hover or drag uses the hover and drag tools. After a snapshot, click the thing you see. Then read_form or snapshot again.',
     inputSchema: {
       type: 'object',
       properties: {
         tabId: { type: 'number' },
         x: { type: 'number', description: 'Visible-screen CSS pixel X.' },
         y: { type: 'number', description: 'Visible-screen CSS pixel Y.' },
+        x2: { type: 'number', description: 'Drag end CSS pixel X.' },
+        y2: { type: 'number', description: 'Drag end CSS pixel Y.' },
         selector: { type: 'string', description: 'Control from read_form. Clicks its center.' },
+        toSelector: { type: 'string', description: 'Drag end control from read_form.' },
         frameId: { type: 'number', description: 'Frame from read_form for iframe fields.' },
         button: { type: 'string', enum: ['left', 'right', 'middle'] },
         count: { type: 'number', description: '1 for a single click, 2 for a double-click.' },
+        action: { type: 'string', enum: ['click', 'hover', 'drag'] },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'hover',
+    description: 'Move the mouse over a point or a control from read_form so hover menus can open. Then read_form or snapshot.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tabId: { type: 'number' },
+        x: { type: 'number', description: 'Visible-screen CSS pixel X.' },
+        y: { type: 'number', description: 'Visible-screen CSS pixel Y.' },
+        selector: { type: 'string', description: 'Control from read_form.' },
+        frameId: { type: 'number', description: 'Frame from read_form for iframe fields.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'drag',
+    description: 'Drag from one point or selector to another. Pass x,y and x2,y2 in visible-screen CSS pixels, or selector and toSelector. Use this for sliders that do not take a typed value. Then read_form or snapshot.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tabId: { type: 'number' },
+        x: { type: 'number', description: 'Start CSS pixel X.' },
+        y: { type: 'number', description: 'Start CSS pixel Y.' },
+        x2: { type: 'number', description: 'End CSS pixel X.' },
+        y2: { type: 'number', description: 'End CSS pixel Y.' },
+        selector: { type: 'string', description: 'Start control from read_form.' },
+        toSelector: { type: 'string', description: 'End control from read_form.' },
+        frameId: { type: 'number', description: 'Frame from read_form for iframe fields.' },
       },
       additionalProperties: false,
     },
@@ -288,7 +325,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
           'Dropdowns: if read_form includes options, fill_form with that type and value equal to one option. If options is null, click the dropdown, read_form, then click the choice. Read again before a dependent dropdown such as District after State.',
           'list_profiles and read_profile show the customers in this workspace. fill runs the extension Fill button for one profileId on the open page. It uses saved mappings and that profile. Call it once, then read_form to see what landed.',
           'snapshot photographs the GUI when read_form is not enough. Call it with no arguments for the visible screen, scope page for the whole page, or a selector or rect for one area. It does not type or click. The JPEG can be smaller than the screen: mouse_click x,y are CSS pixels, cssX = imageX * scaleX from the snapshot result.',
-          'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first. read_form includes iframe fields with frameId; copy frameId on fill_form, click, keyboard, and mouse_click. After any of those, read_form or snapshot before the next click or fill.',
+          'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. hover moves the mouse over a point or selector. drag moves from x,y to x2,y2 or from selector to toSelector. click also finds visible links by text. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first. read_form includes iframe fields with frameId; copy frameId on fill_form, click, keyboard, mouse_click, hover, and drag. After any of those, read_form or snapshot before the next click or fill.',
         ].join(' '),
       }),
     };
@@ -387,19 +424,31 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
       const out = await run(workspaceId, { task: 'history', action, tabId: args.tabId || null });
       return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(out.payload, out.status >= 400)) };
     }
-    if (name === 'mouse_click') {
+    if (name === 'mouse_click' || name === 'hover' || name === 'drag') {
       const selector = args.selector ? String(args.selector) : '';
       const hasPoint = Number.isFinite(Number(args.x)) && Number.isFinite(Number(args.y));
       if (!selector && !hasPoint) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'x and y, or selector, required' }, true)) };
+      const toSelector = args.toSelector ? String(args.toSelector) : '';
+      const hasEnd = Number.isFinite(Number(args.x2)) && Number.isFinite(Number(args.y2));
+      const action = name === 'hover' || (name === 'mouse_click' && args.action === 'hover')
+        ? 'hover'
+        : (name === 'drag' || (name === 'mouse_click' && args.action === 'drag') ? 'drag' : 'click');
+      if (action === 'drag' && !toSelector && !hasEnd) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'x2 and y2, or toSelector, required' }, true)) };
+      }
       const out = await run(workspaceId, {
-        task: 'mouse_click',
+        task: action === 'click' ? 'mouse_click' : action,
         tabId: args.tabId || null,
         x: hasPoint ? Number(args.x) : null,
         y: hasPoint ? Number(args.y) : null,
+        x2: hasEnd ? Number(args.x2) : null,
+        y2: hasEnd ? Number(args.y2) : null,
         selector,
+        toSelector,
         frameId: Number(args.frameId) || null,
         button: args.button === 'right' || args.button === 'middle' ? args.button : 'left',
         count: Number(args.count) === 2 ? 2 : 1,
+        action,
       });
       return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(out.payload, out.status >= 400)) };
     }

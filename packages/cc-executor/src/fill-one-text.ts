@@ -38,6 +38,23 @@
       try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e2) { /* stay */ }
       return 1;
     }
+    var t = String((el && el.type) || '').toLowerCase();
+    if (t === 'range') {
+      try { el.focus(); } catch (eR) { /* stay */ }
+      var min = Number(el.min);
+      var max = Number(el.max);
+      var n = Number(value);
+      if (!isFinite(n)) return 0;
+      if (isFinite(min) && n < min) n = min;
+      if (isFinite(max) && n > max) n = max;
+      var asStr = String(n);
+      var rangeNiv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      if (rangeNiv && rangeNiv.set) rangeNiv.set.call(el, asStr);
+      else el.value = asStr;
+      try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (eI) { /* stay */ }
+      try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (eC) { /* stay */ }
+      return 1;
+    }
     var isTextarea = el.tagName === 'TEXTAREA';
     var niv = isTextarea
       ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')

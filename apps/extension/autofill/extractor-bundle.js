@@ -163,13 +163,13 @@
     if (forms.length > 0) return true;
     if (hasContentEditable(doc)) return true;
     const inputs = doc.querySelectorAll(
-      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input[type="number"],input:not([type]),textarea,select,input[type="checkbox"],input[type="radio"],[role="combobox"],[role="checkbox"],[role="radio"]'
+      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input[type="number"],input[type="range"],input:not([type]),textarea,select,input[type="checkbox"],input[type="radio"],[role="combobox"],[role="checkbox"],[role="radio"]'
     );
     let labeled = 0;
     inputs.forEach(function(el) {
       if (isInSkipContext(el)) return;
       const lbl = ccDomUtils && typeof ccDomUtils.getLabel === "function" ? ccDomUtils.getLabel(el) : el.getAttribute && el.getAttribute("aria-label") || el.placeholder || "";
-      if (lbl || isJourneyLike(el, lbl) || el.tagName && String(el.tagName).toLowerCase() === "select" || el.type === "number") labeled++;
+      if (lbl || isJourneyLike(el, lbl) || el.tagName && String(el.tagName).toLowerCase() === "select" || el.type === "number" || el.type === "range") labeled++;
     });
     return labeled >= 1;
   }
@@ -189,7 +189,7 @@ if (typeof module !== "undefined" && module.exports) {
 /* ==== scan-standard-fields.ts ==== */
 (function(root2) {
   "use strict";
-  var INPUT_SELECTOR = 'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select,[contenteditable="true"],[contenteditable=""]';
+  var INPUT_SELECTOR = 'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input[type="range"],input:not([type]),textarea,select,[contenteditable="true"],[contenteditable=""]';
   var SKIP_META_HARD_RE = /captcha|otp|token|csrf|recaptcha/i;
   var SKIP_META_SOFT_RE = /search|query|filter/i;
   var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|onward|return|leaving|going|city|date)\b/i;
@@ -228,6 +228,16 @@ if (typeof module !== "undefined" && module.exports) {
     }
     return null;
   }
+  function uniqueRangeSelector(el, doc) {
+    if (!doc || typeof doc.querySelectorAll !== "function") return null;
+    var sel = 'input[type="range"]';
+    try {
+      var hits = doc.querySelectorAll(sel);
+      if (hits && hits.length === 1 && hits[0] === el) return sel;
+    } catch (e) {
+    }
+    return null;
+  }
   var FORM_FIELD_QUERY = [
     'input[type="text"]',
     'input[type="email"]',
@@ -236,6 +246,7 @@ if (typeof module !== "undefined" && module.exports) {
     'input[type="date"]',
     'input[type="radio"]',
     'input[type="checkbox"]',
+    'input[type="range"]',
     "input:not([type])",
     "textarea",
     "select"
@@ -406,6 +417,7 @@ if (typeof module !== "undefined" && module.exports) {
       var selector = makeSelector(el, doc);
       if (!selector && pageSearch) selector = uniqueSearchSelector(el, doc);
       if (!selector && pageSearch) return;
+      if (!selector && t === "range") selector = uniqueRangeSelector(el, doc);
       if (!selector) selector = "form-field-" + idx;
       if (el.tagName === "SELECT") {
         var options = Array.from(el.querySelectorAll("option")).map(function(o) {
@@ -429,7 +441,7 @@ if (typeof module !== "undefined" && module.exports) {
         idx++;
         return;
       }
-      var type = pageSearch ? "search" : el.type || "text";
+      var type = pageSearch ? "search" : t === "range" ? "slider" : el.type || "text";
       if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15));
       formFields.push({
         selector,
