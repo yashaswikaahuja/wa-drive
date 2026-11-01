@@ -660,6 +660,19 @@ function pointerClickAt(spec) {
       if (!el) return false;
       if (el.draggable === true) return true;
       return !!(el.getAttribute && el.getAttribute("draggable") === "true");
+    }, html5Drop2 = function(el) {
+      if (!el) return false;
+      if (typeof el.hasAttribute === "function" && el.hasAttribute("ondrop")) return true;
+      return /\bui-droppable\b|\bdroppable\b/.test(String(el.className || ""));
+    }, closestHtml52 = function(el) {
+      var n = el;
+      var hops = 0;
+      while (n && n.nodeType === 1 && hops < 8) {
+        if (html5Drag2(n) || html5Drop2(n)) return n;
+        n = n.parentElement;
+        hops += 1;
+      }
+      return el;
     }, dragEv2 = function(name, el, pt) {
       var ev = null;
       try {
@@ -706,7 +719,7 @@ function pointerClickAt(spec) {
       };
       if (el && typeof el.dispatchEvent === "function") el.dispatchEvent(ev);
     };
-    var html5Drag = html5Drag2, dragEv = dragEv2;
+    var html5Drag = html5Drag2, html5Drop = html5Drop2, closestHtml5 = closestHtml52, dragEv = dragEv2;
     var end = null;
     var toSel = spec && spec.toSelector ? String(spec.toSelector) : "";
     if (toSel) {
@@ -721,11 +734,9 @@ function pointerClickAt(spec) {
       if (!isFinite(x2) || !isFinite(y2)) return { ok: false, error: "x2 and y2, or toSelector, required" };
       end = { x: x2, y: y2 };
     }
-    var endTarget = target;
-    if (typeof doc.elementFromPoint === "function") {
-      var hitEnd = doc.elementFromPoint(end.x, end.y);
-      if (hitEnd) endTarget = hitEnd;
-    }
+    var resolvedEnd = toSel ? toEl : null;
+    var hitEnd = typeof doc.elementFromPoint === "function" ? doc.elementFromPoint(end.x, end.y) : null;
+    var endTarget = closestHtml52(resolvedEnd || hitEnd || target);
     var view = doc.defaultView || g.window || g;
     var store = {};
     var dt = {
@@ -791,8 +802,8 @@ function pointerClickAt(spec) {
     dragEv2("drop", endTarget, end);
     fire(endTarget, end, 0, 0, ["pointerup", "mouseup"], 1);
     dragEv2("dragend", target, end);
-    if (target && endTarget && target !== endTarget && html5Drag2(target) && (html5Drag2(endTarget) || endTarget.getAttribute && endTarget.getAttribute("ondrop") != null)) {
-      if (target.innerHTML === srcHtml && endTarget.innerHTML === dstHtml) {
+    if (target && endTarget && target !== endTarget && html5Drag2(target) && html5Drag2(endTarget) && srcHtml !== dstHtml) {
+      if (target.innerHTML !== dstHtml || endTarget.innerHTML !== srcHtml) {
         try {
           target.innerHTML = dstHtml;
           endTarget.innerHTML = srcHtml;
@@ -2355,6 +2366,7 @@ scrollRoot.CcScrollPage = { scrollPage };
     } catch (e0) {
     }
     try {
+      var scrollMs = spec && spec.to === "bottom" ? 2e4 : 8e3;
       var results = await withTimeout(chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: fn,
@@ -2365,7 +2377,7 @@ scrollRoot.CcScrollPage = { scrollPage };
           selector: spec && spec.selector || ""
         }],
         injectImmediately: true
-      }), 8e3, "scroll_script_timeout");
+      }), scrollMs, "scroll_script_timeout");
       var page = results && results[0] && results[0].result;
       return Object.assign({ tabId: tab.id }, page || { ok: false, error: "no_result" });
     } catch (e2) {
@@ -2433,7 +2445,8 @@ scrollRoot.CcScrollPage = { scrollPage };
         target,
         func: fn,
         args: [spec || {}],
-        injectImmediately: true
+        injectImmediately: true,
+        world: spec && spec.action === "drag" ? "MAIN" : "ISOLATED"
       }), 8e3, "pointer_script_timeout");
       var page = results && results[0] && results[0].result;
       if ((!page || page.error === "not_found") && spec && spec.selector && !target.frameIds) {

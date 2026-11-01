@@ -12,7 +12,7 @@ MCP URL:
 
 Add that URL in the LLM app with no pasted token. The app opens a browser window. The operator signs in with the CyberControl email or phone and password. The app then holds the session and calls the tools below.
 
-If a tool returns `no_extension_connected`, the extension is not on the workspace socket. Ask the operator to open Chrome, confirm the CyberControl extension is signed in, and try again. `extension_timeout` means the extension did not answer in time. `fill` waits up to 88s, `fill_form` up to 80s, and a whole-page `snapshot` up to 45s. The workspace runs one `fill` or `fill_form` at a time; a second call waits for the first so both do not hit `DeadlineExceeded`. Read the page again before repeating the same action.
+If a tool returns `no_extension_connected`, the extension is not on the workspace socket. Ask the operator to open Chrome, confirm the CyberControl extension is signed in, and try again. `extension_timeout` means the extension did not answer in time. `fill` waits up to 88s, `fill_form` up to 80s, and a whole-page `snapshot` up to 45s. The workspace runs one browser task at a time, including `scroll` and `fill`; a second call waits for the first. The MCP gateway allows 240s so three queued fills can finish. Read the page again before repeating the same action.
 
 ## Profiles and Fill
 
@@ -26,7 +26,7 @@ If a tool returns `no_extension_connected`, the extension is not on the workspac
 { "profileId": "the id from list_profiles" }
 ```
 
-Call `fill` once. Then `read_form` and use the `records` in the result. Each record has `result` (`filled`, `skipped`, `failed`), `label`, `plannedValue`, and `actualValue`. Do not send a second `fill` for the same page until you have read what the first one did. Two fills that start together still run one after the other on this workspace.
+Call `fill` once. Then `read_form` and use the `records` in the result. Each record has `result` (`filled`, `skipped`, `failed`), `label`, `plannedValue`, and `actualValue`. Do not send a second `fill` for the same page until you have read what the first one did. Two fills that start together still run one after the other on this workspace. A `scroll` on another tab waits for the fill in progress so it cannot steal the socket.
 
 `fill` does not solve a CAPTCHA, type a card number, or press the final pay button. If the extension is not signed in, the result is `extension_not_signed_in`. If this tool returns `unknown task`, the operator needs to reload the unpacked extension so it can receive Fill from the MCP server.
 
@@ -122,7 +122,7 @@ Then `read_form` or `snapshot`.
 
 ### `drag`
 
-Drags from one point or selector to another. Use this for a slider that does not take a typed value, a jQuery handle, or a native HTML5 `draggable` (The Internet `/drag_and_drop`). The extension fires `dragstart` / `drop` with a `dataTransfer`, not only mouse moves.
+Drags from one point or selector to another. Use this for a slider that does not take a typed value, a jQuery handle, or a native HTML5 `draggable` (The Internet `/drag_and_drop`). The extension fires `dragstart` / `drop` with a `dataTransfer` on the draggable column, not a child header, and swaps the two HTML5 columns when the page does not.
 
 ```json
 { "x": 120, "y": 80, "x2": 260, "y2": 80 }

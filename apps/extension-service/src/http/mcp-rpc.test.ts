@@ -385,6 +385,27 @@ assert.equal(colA.innerHTML, '<header>B</header>');
 assert.equal(colB.innerHTML, '<header>A</header>');
 assert.equal(colA.events.includes('dragstart'), true);
 assert.equal(colB.events.includes('drop'), true);
+colA.innerHTML = '<header>A</header>';
+colB.innerHTML = '<header>B</header>';
+colA.nodeType = 1;
+colB.nodeType = 1;
+colA.parentElement = null;
+colB.parentElement = null;
+const headerB: any = {
+  tagName: 'HEADER',
+  nodeType: 1,
+  innerHTML: 'B',
+  parentElement: colB,
+  draggable: false,
+  getAttribute: () => '',
+  getBoundingClientRect: () => ({ left: 100, top: 30, width: 20, height: 20 }),
+  dispatchEvent: () => true,
+};
+(globalThis as any).document.elementFromPoint = () => headerB;
+const swappedFromHeader = clickAt({ selector: '#column-a', x2: 110, y2: 40, action: 'drag' });
+assert.equal(swappedFromHeader.ok, true);
+assert.equal(colA.innerHTML, '<header>B</header>');
+assert.equal(colB.innerHTML, '<header>A</header>');
 const pickedVisible = clickAt({ selector: '#droppable', x: 240, y: 60 });
 assert.equal(pickedVisible.ok, true);
 assert.equal(pickedVisible.error == null, true);
