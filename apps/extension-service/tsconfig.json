@@ -26,5 +26,5 @@
     "scripts/migrate-files-to-db.ts",
     "scripts/seed-knowledge.ts"
   ],
-  "exclude": ["dist", ".tsbuild", "node_modules"]
+  "exclude": ["dist", ".tsbuild", "node_modules", "src/**/*.test.ts"]
 }

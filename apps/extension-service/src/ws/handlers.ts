@@ -231,11 +231,34 @@ handlers.set('teach_observation', (session, message, ctx) => {
   }
 });
 
+function publicPageUrl(value: any) {
+  const raw = String(value || '');
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    return (parsed.origin + parsed.pathname).slice(0, 300);
+  } catch {
+    return raw.split('?')[0].slice(0, 300);
+  }
+}
+
+function slimReportedTab(tab: any) {
+  if (!tab || typeof tab !== 'object') return null;
+  return {
+    tabId: tab.tabId || tab.id || null,
+    windowId: tab.windowId || null,
+    title: String(tab.title || '').slice(0, 120),
+    url: publicPageUrl(tab.url),
+    active: tab.active === true,
+  };
+}
+
 handlers.set('browser_task_result', (_session, message) => {
+  const tabs = Array.isArray(message.tabs) ? message.tabs.map(slimReportedTab).filter(Boolean).slice(0, 40) : null;
   resolveBrowserTask(message.taskId, {
     ok: message.ok === true,
     tabId: message.tabId || null,
-    url: message.url || null,
+    url: message.url ? publicPageUrl(message.url) : null,
     error: message.error || null,
     title: message.title || null,
     snapshotId: message.snapshotId || null,
@@ -247,6 +270,42 @@ handlers.set('browser_task_result', (_session, message) => {
     clicked: message.clicked || null,
     selector: message.selector || null,
     reason: message.reason || null,
+    scope: message.scope || null,
+    width: message.width || null,
+    height: message.height || null,
+    mimeType: message.mimeType || null,
+    clipped: message.clipped === true,
+    cssWidth: message.cssWidth == null ? null : Number(message.cssWidth),
+    cssHeight: message.cssHeight == null ? null : Number(message.cssHeight),
+    scaleX: message.scaleX == null ? null : Number(message.scaleX),
+    scaleY: message.scaleY == null ? null : Number(message.scaleY),
+    clickSpace: message.clickSpace || null,
+    closed: message.closed === true,
+    navigated: message.navigated === true,
+    scrollRoot: message.scrollRoot || null,
+    image: typeof message.image === 'string' && message.image.length > 0 && message.image.length <= 1500000 ? message.image : null,
+    tabs,
+    scrollX: message.scrollX == null ? null : Number(message.scrollX),
+    scrollY: message.scrollY == null ? null : Number(message.scrollY),
+    scrollHeight: message.scrollHeight == null ? null : Number(message.scrollHeight),
+    clientHeight: message.clientHeight == null ? null : Number(message.clientHeight),
+    moved: message.moved === true,
+    active: message.active === true,
+    action: message.action || null,
+    x: message.x == null ? null : Number(message.x),
+    y: message.y == null ? null : Number(message.y),
+    x2: message.x2 == null ? null : Number(message.x2),
+    y2: message.y2 == null ? null : Number(message.y2),
+    hovered: message.hovered ? String(message.hovered).slice(0, 80) : null,
+    dragged: message.dragged === true,
+    toSelector: message.toSelector ? String(message.toSelector).slice(0, 300) : null,
+    tag: message.tag ? String(message.tag).slice(0, 40) : null,
+    button: message.button ? String(message.button).slice(0, 16) : null,
+    count: message.count == null ? null : Number(message.count),
+    key: message.key ? String(message.key).slice(0, 40) : null,
+    typed: message.typed ? String(message.typed).slice(0, 80) : null,
+    focused: message.focused ? String(message.focused).slice(0, 80) : null,
+    value: message.value ? String(message.value).slice(0, 80) : null,
   });
 });
 

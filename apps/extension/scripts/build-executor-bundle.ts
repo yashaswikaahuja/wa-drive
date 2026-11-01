@@ -25,6 +25,8 @@ await writeConcatBundle({
     'verify-fill-value.ts',
     'label-still-matches.ts',
     'click-control.ts',
+    'choose-autocomplete.ts',
+    'ag-ui-loop.ts',
     'detect-fill-strategy.ts',
     'post-fill-corrections.ts',
     'fill-one-ng.ts',

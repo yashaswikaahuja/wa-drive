@@ -520,10 +520,42 @@ if (typeof module !== "undefined") module.exports = root.CcSettleAfterAct;
     'input[type="date"]',
     'input[type="radio"]',
     'input[type="checkbox"]',
+    'input[type="range"]',
     "input:not([type])",
     "textarea",
     "select"
   ].join(",");
+  function queryDeep(d, selector) {
+    if (!d || !selector) return null;
+    var hit = null;
+    try {
+      hit = d.querySelector(selector);
+    } catch (e) {
+      hit = null;
+    }
+    if (hit) return hit;
+    var frames = [];
+    try {
+      frames = d.querySelectorAll("iframe,frame");
+    } catch (e2) {
+      return null;
+    }
+    for (var i = 0; i < frames.length; i++) {
+      var frame = frames[i];
+      var tag = String(frame && frame.tagName || "").toLowerCase();
+      if (tag && tag !== "iframe" && tag !== "frame") continue;
+      var child = null;
+      try {
+        child = frame.contentDocument;
+      } catch (e3) {
+        child = null;
+      }
+      if (!child) continue;
+      hit = queryDeep(child, selector);
+      if (hit) return hit;
+    }
+    return null;
+  }
   function resolveCcSelector(selector, doc) {
     var d = doc || (typeof document !== "undefined" ? document : null);
     if (!d) return null;
@@ -537,7 +569,7 @@ if (typeof module !== "undefined") module.exports = root.CcSettleAfterAct;
       var dropdowns = d.querySelectorAll("div.ng-dropdown");
       return dropdowns[ngIdx] || null;
     }
-    return d.querySelector(selector);
+    return queryDeep(d, selector);
   }
   root2.CcResolveCcSelector = {
     resolveCcSelector,
@@ -588,11 +620,16 @@ if (typeof module !== "undefined") module.exports = root.CcSortFieldsByDomOrder;
     }
     var tag = (liveEl.tagName || "").toLowerCase();
     if (liveEl.type === "checkbox") {
+      var expCb = String(expected || "").trim().toLowerCase();
+      var wantOff = /^(false|off|unchecked|no|0)$/.test(expCb);
+      var wantOn = /^(true|on|checked|yes|1)$/.test(expCb) || !wantOff && !!expCb;
+      var isOn = !!liveEl.checked;
+      var okCb = wantOff ? !isOn : wantOn ? isOn : isOn;
       return {
-        ok: !!liveEl.checked,
-        actualValue: liveEl.checked ? "true" : "false",
+        ok: okCb,
+        actualValue: isOn ? liveEl.value || "on" : "false",
         normExpected: String(expected || ""),
-        normActual: liveEl.checked ? "true" : "false"
+        normActual: isOn ? "true" : "false"
       };
     }
     if (liveEl.type === "radio") {
@@ -618,9 +655,11 @@ if (typeof module !== "undefined") module.exports = root.CcSortFieldsByDomOrder;
     if (tag === "select") {
       var opt = liveEl.options[liveEl.selectedIndex];
       var actualVal = (opt ? opt.text || opt.value : "") || "";
+      var optVal = opt ? String(opt.value || "") : "";
       var normExpS = String(expected || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       var normActS = actualVal.toLowerCase().replace(/[^a-z0-9]/g, "");
-      var okS = normExpS.length > 0 && (normActS === normExpS || normActS.includes(normExpS) || normExpS.includes(normActS));
+      var normValS = optVal.toLowerCase().replace(/[^a-z0-9]/g, "");
+      var okS = normExpS.length > 0 && (normActS === normExpS || normValS === normExpS || normActS.includes(normExpS) || normExpS.includes(normActS) || normValS.includes(normExpS));
       return { ok: okS, actualValue: actualVal, normExpected: normExpS, normActual: normActS };
     }
     var actual = liveEl.value || "";
@@ -701,9 +740,37 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
     return aria === "true";
   }
   function visible(el) {
-    if (!el || typeof el.getBoundingClientRect !== "function") return true;
-    var box = el.getBoundingClientRect();
-    return box.width >= 2 && box.height >= 2;
+    if (!el) return false;
+    if (typeof el.getBoundingClientRect === "function") {
+      var box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) return false;
+    }
+    try {
+      var view = el.ownerDocument && el.ownerDocument.defaultView || (typeof window !== "undefined" ? window : null);
+      if (view && view.getComputedStyle) {
+        var cs = view.getComputedStyle(el);
+        if (cs && (cs.display === "none" || cs.visibility === "hidden")) return false;
+      }
+    } catch (e) {
+    }
+    if (el.closest) {
+      if (el.closest('[hidden], [aria-hidden="true"]')) return false;
+      var pane = el.closest('.tab-pane, [role="tabpanel"]');
+      if (pane && pane !== el) {
+        var paneCls = String(pane.className || "");
+        var inactive = /\btab-pane\b/.test(paneCls) && !/\bactive\b/.test(paneCls) && !/\bshow\b/.test(paneCls);
+        var ariaHidden = pane.getAttribute && pane.getAttribute("aria-hidden") === "true";
+        if (inactive || ariaHidden) return false;
+      }
+    }
+    return true;
+  }
+  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable, .ui-droppable, .droppable, [ondrop]';
+  var CLASS_WORD = /\b(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)\b/i;
+  var CLASS_ONLY = /^(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)$/i;
+  var AVAIL_WORD = /\b(AVAILABLE|GNWL|RAC|REGRET|CURR)\b/i;
+  function inChrome(el) {
+    return !!(el && el.closest && el.closest('nav,header,footer,[role="navigation"],[role="banner"]'));
   }
   function isButton(el) {
     if (!el || !el.tagName) return false;
@@ -716,15 +783,121 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
     var role = el.getAttribute && el.getAttribute("role");
     return role === "button";
   }
+  function isChoice(el) {
+    if (!el || !el.tagName || inChrome(el)) return false;
+    var role = el.getAttribute && el.getAttribute("role");
+    if (role === "checkbox" || role === "radio" || role === "option") return true;
+    if (/\b\S*auto-complete__option\b/.test(String(el.className || ""))) return true;
+    var tag = String(el.tagName).toLowerCase();
+    var cls = String(el.className || "");
+    if (tag === "a") {
+      var href = el.getAttribute && el.getAttribute("href");
+      var text = textOf(el);
+      return !!(href && text && text.length >= 2 && text.length <= 60);
+    }
+    if (tag === "label") {
+      if (/custom-control-label|form-check-label|rct-text/.test(cls)) return true;
+      if (el.getAttribute && el.getAttribute("for")) return true;
+      if (el.querySelector && el.querySelector('input[type="radio"], input[type="checkbox"], .rct-checkbox')) return true;
+    }
+    if (/\brct-checkbox\b|\brct-title\b|\bcustom-control-label\b/.test(cls)) return true;
+    return false;
+  }
+  function isHoverable(el) {
+    if (!el || !el.tagName || inChrome(el)) return false;
+    var tag = String(el.tagName).toLowerCase();
+    if (tag === "figure") return true;
+    var cls = String(el.className || "");
+    if (/\bfigure\b/.test(cls)) return true;
+    var popup = el.getAttribute && el.getAttribute("aria-haspopup");
+    if (popup && popup !== "false" && !isButton(el)) return true;
+    return false;
+  }
+  function isDraggable(el) {
+    if (!el || !el.tagName || inChrome(el)) return false;
+    if (el.draggable === true) return true;
+    var attr = el.getAttribute && el.getAttribute("draggable");
+    if (attr === "true") return true;
+    return /\bui-draggable\b/.test(String(el.className || ""));
+  }
+  function isDroppable(el) {
+    if (!el || !el.tagName || inChrome(el)) return false;
+    if (isDraggable(el)) return false;
+    var ondrop = el.getAttribute && el.getAttribute("ondrop") != null;
+    var cls = String(el.className || "");
+    if (!ondrop && !/\bui-droppable\b|\bdroppable\b/.test(cls)) return false;
+    if (el.querySelector && el.querySelector(".ui-droppable, .droppable, [ondrop]")) return false;
+    return true;
+  }
+  function isLinkCell(el) {
+    return String(el.tagName || "").toLowerCase() === "td" && /(?:^|\s)link(?:\s|$)/.test(String(el.className || ""));
+  }
+  function inTrainCard(el, text) {
+    if (!el || typeof el.closest !== "function") return true;
+    if (el.closest(".bull-back, app-train-avl-enq")) return true;
+    return CLASS_ONLY.test(text);
+  }
+  function isClassCell(el) {
+    if (!el || !el.tagName) return false;
+    var tag = String(el.tagName).toLowerCase();
+    if (!/^(td|div|span|a|li|strong|button|p|label|small)$/.test(tag)) return false;
+    var text = textOf(el);
+    if (!text || text.length > 80) return false;
+    var coded = CLASS_WORD.test(text);
+    var avail = AVAIL_WORD.test(text);
+    if (!isLinkCell(el) && !coded && !avail) return false;
+    if (!isLinkCell(el) && !inTrainCard(el, text)) return false;
+    if (typeof el.querySelectorAll === "function") {
+      var kids = el.querySelectorAll("td, div, span, a, li, strong, button, p, label, small");
+      for (var i = 0; i < kids.length; i++) {
+        var kt = textOf(kids[i]);
+        if (!kt || kt.length >= text.length || kt.length > 80) continue;
+        if (CLASS_WORD.test(kt) || AVAIL_WORD.test(kt) || isLinkCell(kids[i])) return false;
+      }
+    }
+    return true;
+  }
+  function labelOf(el) {
+    if (isHoverable(el)) {
+      var blob = String(el.textContent || "").replace(/\s+/g, " ").trim();
+      if (blob) return blob.slice(0, 80);
+      var img = el.querySelector && el.querySelector("img");
+      var alt = img && img.getAttribute && img.getAttribute("alt");
+      if (alt) return String(alt).slice(0, 80);
+      return "hover";
+    }
+    if (isDraggable(el)) {
+      var dragText = textOf(el);
+      if (dragText) return dragText.slice(0, 80);
+      if (el.id) return String(el.id);
+      return "drag";
+    }
+    if (isDroppable(el)) {
+      var dropText = textOf(el);
+      if (dropText) return dropText.slice(0, 80);
+      if (el.id) return String(el.id);
+      return "drop";
+    }
+    var label = textOf(el);
+    if (isClassCell(el)) return label.slice(0, 80);
+    return label;
+  }
   function candidates(doc) {
     if (!doc || typeof doc.querySelectorAll !== "function") return [];
-    var nodes = doc.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"]');
+    var nodes = doc.querySelectorAll(CONTROL_QUERY);
     var out = [];
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
-      if (!isButton(el) || !visible(el)) continue;
-      var label = textOf(el);
-      if (!label || label.length > 80) continue;
+      var button = isButton(el);
+      var klass = !button && isClassCell(el);
+      var choice = !button && !klass && isChoice(el);
+      var hover = !button && !klass && !choice && isHoverable(el);
+      var drag = !button && !klass && !choice && !hover && isDraggable(el);
+      var drop = !button && !klass && !choice && !hover && !drag && isDroppable(el);
+      if (!button && !klass && !choice && !hover && !drag && !drop) continue;
+      if (!visible(el)) continue;
+      var label = labelOf(el);
+      if (!label || button && label.length > 80) continue;
       if (/captcha|otp/i.test(label)) continue;
       out.push(el);
     }
@@ -734,6 +907,14 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
     if (el.id && /^[A-Za-z][\w:-]*$/.test(el.id)) {
       var byId = "#" + el.id;
       if (doc.querySelectorAll && doc.querySelectorAll(byId).length === 1) return byId;
+      var parent = el.parentElement;
+      while (parent && parent !== (doc.documentElement || null)) {
+        if (parent.id && /^[A-Za-z][\w:-]*$/.test(parent.id)) {
+          var scoped = "#" + parent.id + " #" + el.id;
+          if (doc.querySelectorAll && doc.querySelectorAll(scoped).length === 1) return scoped;
+        }
+        parent = parent.parentElement;
+      }
     }
     var cls = String(el.className || "").trim().split(/\s+/).filter(function(c) {
       return c && c.length < 40 && /^[A-Za-z][\w-]*$/.test(c);
@@ -748,16 +929,47 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
     var nodes = candidates(doc);
     var fields = [];
     for (var i = 0; i < nodes.length; i++) {
-      var label = textOf(nodes[i]);
+      var label = labelOf(nodes[i]);
+      var tag = String(nodes[i].tagName || "").toLowerCase();
+      var asLink = tag === "a";
+      var asHover = !asLink && isHoverable(nodes[i]);
+      var asDrag = !asLink && !asHover && isDraggable(nodes[i]);
+      var asDrop = !asLink && !asHover && !asDrag && isDroppable(nodes[i]);
+      var kind = asLink ? "link" : asHover ? "hover" : asDrag ? "drag" : asDrop ? "drop" : "button";
       fields.push({
         selector: selectorFor(nodes[i], fields.length, doc),
         label,
         visualLabel: label,
-        type: "button",
-        role: "button"
+        type: kind,
+        role: kind
       });
     }
     return fields;
+  }
+  function findByText(text, doc) {
+    var want = norm(text);
+    if (!want) return { node: null, field: null, reason: "not_found" };
+    var nodes = candidates(doc);
+    var fields = list(doc);
+    for (var i = 0; i < fields.length; i++) {
+      if (norm(fields[i].visualLabel) === want) return { node: nodes[i], field: fields[i] };
+    }
+    if (!doc || typeof doc.querySelectorAll !== "function") return { node: null, field: null, reason: "not_found" };
+    var links = doc.querySelectorAll("a[href]");
+    for (var j = 0; j < links.length; j++) {
+      if (inChrome(links[j]) || !visible(links[j])) continue;
+      var live = textOf(links[j]);
+      if (norm(live) !== want) continue;
+      var field = {
+        selector: selectorFor(links[j], fields.length, doc),
+        label: live.slice(0, 80),
+        visualLabel: live.slice(0, 80),
+        type: "link",
+        role: "link"
+      };
+      return { node: links[j], field };
+    }
+    return { node: null, field: null, reason: "not_found" };
   }
   function findNode(spec, doc) {
     var nodes = candidates(doc);
@@ -781,20 +993,52 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
     }
     return { node: null, reason: "not_found" };
   }
+  function centerOf(el) {
+    if (!el || typeof el.getBoundingClientRect !== "function") return null;
+    var box = el.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2) return null;
+    return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+  }
   function fire(el) {
+    if (typeof el.scrollIntoView === "function") {
+      try {
+        el.scrollIntoView({ block: "center", inline: "center" });
+      } catch (e) {
+      }
+    }
+    var target = el;
+    var point = centerOf(el);
+    var doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
+    if (point && doc && typeof doc.elementFromPoint === "function") {
+      var hit = doc.elementFromPoint(point.x, point.y);
+      if (hit && (hit === el || typeof el.contains === "function" && el.contains(hit))) target = hit;
+    }
     var view = el.ownerDocument && el.ownerDocument.defaultView || (typeof window !== "undefined" ? window : null);
     var names = ["pointerdown", "mousedown", "pointerup", "mouseup", "click"];
     for (var i = 0; i < names.length; i++) {
       var ev = null;
+      var init = {
+        bubbles: true,
+        cancelable: true,
+        view,
+        clientX: point ? point.x : 0,
+        clientY: point ? point.y : 0,
+        button: 0,
+        buttons: 1
+      };
       try {
-        if (view && typeof view.MouseEvent === "function") {
-          ev = new view.MouseEvent(names[i], { bubbles: true, cancelable: true, view });
+        if (names[i].indexOf("pointer") === 0 && view && typeof view.PointerEvent === "function") {
+          ev = new view.PointerEvent(names[i], Object.assign({ pointerId: 1, pointerType: "mouse", isPrimary: true }, init));
+        } else if (view && typeof view.MouseEvent === "function") {
+          ev = new view.MouseEvent(names[i], init);
         }
       } catch (e) {
       }
-      if (ev) el.dispatchEvent(ev);
-      else if (typeof el.dispatchEvent === "function") el.dispatchEvent({ type: names[i], bubbles: true, cancelable: true });
+      if (ev && typeof target.dispatchEvent === "function") target.dispatchEvent(ev);
+      else if (typeof target.dispatchEvent === "function") target.dispatchEvent({ type: names[i], bubbles: true, cancelable: true });
     }
+    if (typeof target.click === "function") target.click();
+    else if (typeof el.click === "function") el.click();
     var type = String(el.getAttribute && el.getAttribute("type") || el.type || "").toLowerCase();
     var form = el.form || (typeof el.closest === "function" ? el.closest("form") : null);
     if (form && type === "submit" && typeof form.requestSubmit === "function") {
@@ -804,6 +1048,106 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
       }
     }
   }
+  function forceHoverCss(el) {
+    var rootDoc = el && el.ownerDocument || (typeof document !== "undefined" ? document : null);
+    if (!rootDoc) return;
+    try {
+      var marked = rootDoc.documentElement;
+      if (marked && marked.getAttribute && marked.getAttribute("data-cc-hover-css") !== "1") {
+        if (marked.setAttribute) marked.setAttribute("data-cc-hover-css", "1");
+        var sheets = rootDoc.styleSheets || [];
+        for (var s = 0; s < sheets.length; s++) {
+          var rules = null;
+          try {
+            rules = sheets[s].cssRules;
+          } catch (e0) {
+            continue;
+          }
+          if (!rules || !sheets[s].insertRule) continue;
+          var add = [];
+          for (var r = 0; r < rules.length; r++) {
+            var rule = rules[r];
+            if (!rule || !rule.selectorText || String(rule.selectorText).indexOf(":hover") === -1) continue;
+            add.push(String(rule.selectorText).replace(/:hover/g, ".cc-force-hover") + "{" + (rule.style && rule.style.cssText || "") + "}");
+          }
+          for (var a = 0; a < add.length; a++) {
+            try {
+              sheets[s].insertRule(add[a], sheets[s].cssRules.length);
+            } catch (e1) {
+            }
+          }
+        }
+      }
+    } catch (e2) {
+    }
+    try {
+      var prev = rootDoc.querySelectorAll && rootDoc.querySelectorAll(".cc-force-hover");
+      if (prev) {
+        for (var c = 0; c < prev.length; c++) {
+          if (prev[c] && prev[c].classList) prev[c].classList.remove("cc-force-hover");
+        }
+      }
+    } catch (e3) {
+    }
+    var node = el;
+    while (node && node.classList) {
+      try {
+        node.classList.add("cc-force-hover");
+      } catch (e4) {
+        break;
+      }
+      node = node.parentElement || node.parentNode;
+    }
+  }
+  function fireHover(el) {
+    if (typeof el.scrollIntoView === "function") {
+      try {
+        el.scrollIntoView({ block: "center", inline: "center" });
+      } catch (e) {
+      }
+    }
+    var point = centerOf(el);
+    var view = el.ownerDocument && el.ownerDocument.defaultView || (typeof window !== "undefined" ? window : null);
+    var names = ["pointerover", "pointerenter", "mouseover", "mouseenter", "pointermove", "mousemove"];
+    for (var i = 0; i < names.length; i++) {
+      var ev = null;
+      var init = {
+        bubbles: true,
+        cancelable: true,
+        view,
+        clientX: point ? point.x : 0,
+        clientY: point ? point.y : 0,
+        button: 0,
+        buttons: 0
+      };
+      try {
+        if (names[i].indexOf("pointer") === 0 && view && typeof view.PointerEvent === "function") {
+          ev = new view.PointerEvent(names[i], Object.assign({ pointerId: 1, pointerType: "mouse", isPrimary: true }, init));
+        } else if (view && typeof view.MouseEvent === "function") {
+          ev = new view.MouseEvent(names[i], init);
+        }
+      } catch (e2) {
+      }
+      if (ev && typeof el.dispatchEvent === "function") el.dispatchEvent(ev);
+      else if (typeof el.dispatchEvent === "function") el.dispatchEvent({ type: names[i], bubbles: true, cancelable: true });
+    }
+    forceHoverCss(el);
+  }
+  function chooseOption(doc, text) {
+    var want = norm(text);
+    if (!want || !doc || typeof doc.querySelectorAll !== "function") {
+      return { pressed: false, reason: "not_found", clicked: "" };
+    }
+    var nodes = doc.querySelectorAll('[role="option"]');
+    for (var i = 0; i < nodes.length; i++) {
+      var label = textOf(nodes[i]);
+      if (!label || norm(label).indexOf(want) === -1) continue;
+      if (!visible(nodes[i])) continue;
+      fire(nodes[i]);
+      return { pressed: true, reason: "", clicked: label };
+    }
+    return { pressed: false, reason: "not_found", clicked: "" };
+  }
   function press(spec, doc) {
     var found = findNode(spec || {}, doc);
     if (!found.node) {
@@ -812,12 +1156,424 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
     if (isDisabled(found.node)) {
       return { pressed: false, reason: "disabled", clicked: textOf(found.node), selector: found.field.selector };
     }
+    if (found.field && found.field.type === "hover") {
+      fireHover(found.node);
+      return { pressed: true, reason: "", clicked: labelOf(found.node), selector: found.field.selector, hovered: true };
+    }
     fire(found.node);
     return { pressed: true, reason: "", clicked: textOf(found.node), selector: found.field.selector };
   }
-  root.CcClickControl = { list, press, norm };
+  function elementFor(selector, doc) {
+    var found = findNode({ selector }, doc);
+    return found && found.node ? found.node : null;
+  }
+  root.CcClickControl = { list, press, chooseOption, norm, elementFor, findByText };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined") module.exports = globalThis.CcClickControl;
+
+/* ==== choose-autocomplete.ts ==== */
+(function(root) {
+  "use strict";
+  var OPTION_QUERY = [
+    '[role="option"]',
+    '[role="listbox"] li',
+    ".p-autocomplete-item",
+    ".ui-autocomplete-list-item",
+    ".auto-complete__option",
+    '[class*="auto-complete__option"]',
+    '[class*="-option"]',
+    '[id^="react-select-"][id*="-option"]',
+    '[id*="-option-"]'
+  ].join(",");
+  function norm(s) {
+    return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function tokens(s) {
+    var n = norm(s);
+    return n ? n.split(" ") : [];
+  }
+  function score(option, value) {
+    var o = norm(option);
+    var v = norm(value);
+    if (!o || !v) return 0;
+    if (o === v) return 100;
+    var oTokens = tokens(option);
+    var vTokens = tokens(value);
+    if (o.indexOf(v) === 0 && (o.length === v.length || o.charAt(v.length) === " ")) return 90;
+    if (oTokens[0] && oTokens[0] === v) return 88;
+    if (vTokens.length > 1 && o.indexOf(v) === 0) return 86;
+    var all = vTokens.length > 0 && vTokens.every(function(t) {
+      return oTokens.indexOf(t) !== -1;
+    });
+    if (all && oTokens[0] === vTokens[0]) return 84;
+    return 0;
+  }
+  function best(labels, value) {
+    var list = Array.isArray(labels) ? labels : [];
+    var winner = -1;
+    var winnerScore = 0;
+    var winnerLen = 0;
+    for (var i = 0; i < list.length; i++) {
+      var s = score(list[i], value);
+      var len = norm(list[i]).length;
+      if (s > winnerScore || s === winnerScore && s > 0 && len < winnerLen) {
+        winner = i;
+        winnerScore = s;
+        winnerLen = len;
+      }
+    }
+    if (winner < 0 || winnerScore < 84) return null;
+    return { index: winner, label: String(list[winner]), score: winnerScore };
+  }
+  function textOf(el) {
+    if (!el) return "";
+    var raw = el.innerText || el.textContent || el.value || "";
+    return String(raw).replace(/\s+/g, " ").trim();
+  }
+  function visible(el) {
+    if (!el || typeof el.getBoundingClientRect !== "function") return true;
+    var box = el.getBoundingClientRect();
+    return box.width >= 2 && box.height >= 2;
+  }
+  function options(doc) {
+    if (!doc || typeof doc.querySelectorAll !== "function") return [];
+    var nodes = doc.querySelectorAll(OPTION_QUERY);
+    var out = [];
+    for (var i = 0; i < nodes.length; i++) {
+      if (!visible(nodes[i]) || !textOf(nodes[i])) continue;
+      out.push(nodes[i]);
+    }
+    return out;
+  }
+  function typeKeepFocus(el, value) {
+    if (!el) return false;
+    var str = String(value == null ? "" : value);
+    var proto = el.tagName === "TEXTAREA" ? typeof window !== "undefined" && window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : null : typeof window !== "undefined" && window.HTMLInputElement ? window.HTMLInputElement.prototype : null;
+    var desc = proto ? Object.getOwnPropertyDescriptor(proto, "value") : null;
+    var setVal = desc && desc.set ? function(v) {
+      desc.set.call(el, v);
+    } : function(v) {
+      el.value = v;
+    };
+    try {
+      el.focus();
+    } catch (e) {
+    }
+    try {
+      el.click();
+    } catch (e) {
+    }
+    if (el.value) {
+      try {
+        el.select();
+      } catch (e) {
+      }
+      setVal("");
+      try {
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+      } catch (e) {
+      }
+    }
+    var current = "";
+    for (var i = 0; i < str.length; i++) {
+      var ch = str.charAt(i);
+      var kc = ch.charCodeAt(0);
+      var code = /[a-z]/i.test(ch) ? "Key" + ch.toUpperCase() : /[0-9]/.test(ch) ? "Digit" + ch : "";
+      try {
+        el.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: ch, code, keyCode: kc, which: kc }));
+      } catch (e) {
+      }
+      current += ch;
+      setVal(current);
+      try {
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: ch }));
+      } catch (e) {
+        try {
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        } catch (e2) {
+        }
+      }
+      try {
+        el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: ch, code, keyCode: kc, which: kc }));
+      } catch (e) {
+      }
+    }
+    return true;
+  }
+  function open(el) {
+    if (!el) return;
+    if (typeof el.scrollIntoView === "function") {
+      try {
+        el.scrollIntoView({ block: "center", inline: "nearest" });
+      } catch (e) {
+      }
+    }
+    if (typeof el.focus === "function") el.focus();
+    if (typeof el.click === "function") el.click();
+    if (typeof el.dispatchEvent !== "function") return;
+    var view = el.ownerDocument && el.ownerDocument.defaultView || (typeof window !== "undefined" ? window : null);
+    try {
+      el.dispatchEvent(new Event("focus", { bubbles: true }));
+    } catch (e) {
+    }
+    var names = ["pointerdown", "mousedown", "pointerup", "mouseup", "click"];
+    for (var i = 0; i < names.length; i++) {
+      try {
+        var ev = view && typeof view.MouseEvent === "function" ? new view.MouseEvent(names[i], { bubbles: true, cancelable: true, view, button: 0 }) : { type: names[i], bubbles: true, cancelable: true };
+        el.dispatchEvent(ev);
+      } catch (e) {
+      }
+    }
+    try {
+      var keyInit = { bubbles: true, cancelable: true, key: "ArrowDown", code: "ArrowDown", keyCode: 40, which: 40 };
+      var key = view && typeof view.KeyboardEvent === "function" ? new view.KeyboardEvent("keydown", keyInit) : Object.assign({ type: "keydown" }, keyInit);
+      el.dispatchEvent(key);
+    } catch (e) {
+    }
+  }
+  function activate(el) {
+    if (!el) return;
+    if (typeof el.dispatchEvent === "function") {
+      try {
+        el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      } catch (e) {
+        el.dispatchEvent({ type: "click", bubbles: true, cancelable: true });
+      }
+    }
+    if (typeof el.click === "function") el.click();
+  }
+  function choose(doc, value) {
+    var nodes = options(doc);
+    var labels = [];
+    for (var i = 0; i < nodes.length; i++) labels.push(textOf(nodes[i]));
+    var picked = best(labels, value);
+    if (!picked) return { pressed: false, reason: "not_found", clicked: "", score: 0 };
+    activate(nodes[picked.index]);
+    return { pressed: true, reason: "", clicked: picked.label, score: picked.score };
+  }
+  root.CcChooseAutocomplete = { best, options, open, choose, score, typeKeepFocus };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = globalThis.CcChooseAutocomplete;
+
+/* ==== ag-ui-loop.ts ==== */
+(function(root) {
+  "use strict";
+  function norm(s) {
+    return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function landed(typed, actual, chosen) {
+    var a = norm(actual);
+    var t = norm(typed);
+    var c = norm(chosen);
+    if (c && t && !a && c === t) return true;
+    if (!a) return false;
+    if (c && a === c) return true;
+    if (c && a !== t && (a.indexOf(c) !== -1 || c.indexOf(a) !== -1)) return true;
+    if (!c && t && a === t) return true;
+    return false;
+  }
+  function truthyChoice(v) {
+    var n = norm(v);
+    return n === "true" || n === "on" || n === "checked" || n === "yes" || n === "1";
+  }
+  function valuesMatch(field, el, actual) {
+    var planned = String(field && field.value || "");
+    var t = String(el && el.type || field && field.type || "").toLowerCase();
+    var tag = String(el && el.tagName || "").toLowerCase();
+    if (t === "checkbox" || t === "checkbox-agreement" || t === "checkbox-group") {
+      var checked = !!(el && el.checked);
+      if (truthyChoice(planned)) return checked;
+      if (norm(planned) === "false" || norm(planned) === "off" || norm(planned) === "unchecked") return !checked;
+      return checked && (norm(actual) === norm(planned) || truthyChoice(actual));
+    }
+    if (tag === "select" || t === "dropdown" || t === "select") {
+      var opt = el && el.options && el.selectedIndex >= 0 ? el.options[el.selectedIndex] : null;
+      var text = opt ? String(opt.text || "") : "";
+      var val = opt ? String(opt.value || "") : String(actual || "");
+      var p = norm(planned);
+      if (!p) return false;
+      return norm(text) === p || norm(val) === p || text && (norm(text).indexOf(p) !== -1 || p.indexOf(norm(text)) !== -1);
+    }
+    if (t === "range" || t === "slider") {
+      var liveN = Number(el && el.value != null ? el.value : actual);
+      var planN = Number(planned);
+      return isFinite(liveN) && isFinite(planN) && liveN === planN;
+    }
+    return norm(actual) === norm(planned);
+  }
+  function isButton(field) {
+    return /^(button|submit)$/i.test(field && field.type || "");
+  }
+  function labelOf(field) {
+    return field && (field.visualLabel || field.label) || "";
+  }
+  function needsList(field, el) {
+    var label = labelOf(field).toLowerCase();
+    if (label.indexOf("station") !== -1) return true;
+    if (!el || !el.getAttribute) return false;
+    return !!(el.getAttribute("aria-autocomplete") || el.getAttribute("aria-controls"));
+  }
+  function readValue(el) {
+    if (!el) return "";
+    var ceAttr = el.getAttribute && el.getAttribute("contenteditable");
+    if (el.isContentEditable === true || ceAttr != null && (String(ceAttr).toLowerCase().trim() === "true" || String(ceAttr).trim() === "")) {
+      return String(el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+    }
+    return el.value != null ? String(el.value) : "";
+  }
+  function liveDeps(doc) {
+    return {
+      resolve: function(selector) {
+        var resolver = root.CcResolveCcSelector;
+        if (!resolver || typeof resolver.resolveCcSelector !== "function") return null;
+        return resolver.resolveCcSelector(selector, doc);
+      },
+      fill: async function(field) {
+        if (typeof root.fillFormFieldsSequential !== "function") return;
+        var label = labelOf(field);
+        var mapping = {};
+        var fbs = {};
+        mapping[field.selector] = { value: String(field.value), type: field.type || "text", label, visualLabel: label };
+        fbs[field.selector] = { label, visualLabel: label, source: "operator" };
+        await root.fillFormFieldsSequential(mapping, fbs, {}, [field]);
+      },
+      open: function(el) {
+        var chooser = root.CcChooseAutocomplete;
+        if (chooser && typeof chooser.open === "function") chooser.open(el);
+      },
+      choose: function(value) {
+        var chooser = root.CcChooseAutocomplete;
+        if (!chooser || typeof chooser.choose !== "function") return { pressed: false, clicked: "" };
+        return chooser.choose(doc, value);
+      },
+      press: function(field) {
+        var clickApi = root.CcClickControl;
+        if (!clickApi || typeof clickApi.press !== "function") return { pressed: false, reason: "not_found", clicked: "" };
+        return clickApi.press(field, doc);
+      },
+      sleep: function(ms) {
+        return new Promise(function(resolve) {
+          setTimeout(resolve, ms);
+        });
+      },
+      url: function() {
+        return doc.defaultView && doc.defaultView.location && doc.defaultView.location.href || "";
+      },
+      title: function() {
+        return doc.defaultView && doc.defaultView.document && doc.defaultView.document.title || (doc.title || "");
+      }
+    };
+  }
+  async function actOnce(field, doc, deps) {
+    var el = deps.resolve(field.selector, doc);
+    if (!el) {
+      return { selector: field.selector, label: labelOf(field), result: "failed", failReason: "not_found", plannedValue: String(field.value || ""), actualValue: "" };
+    }
+    await deps.fill(field, el, doc);
+    if (!needsList(field, el)) {
+      var live = deps.resolve(field.selector, doc) || el;
+      var plain = readValue(live);
+      if (live && live.type === "checkbox") plain = live.checked ? live.value || "on" : "false";
+      if (live && String(live.tagName || "").toLowerCase() === "select" && live.options && live.selectedIndex >= 0) {
+        var opt = live.options[live.selectedIndex];
+        plain = opt && (opt.text || opt.value) || plain;
+      }
+      var ok = valuesMatch(field, live, plain);
+      return {
+        selector: field.selector,
+        label: labelOf(field),
+        result: ok ? "filled" : "failed",
+        failReason: ok ? "" : "value_mismatch",
+        plannedValue: String(field.value || ""),
+        actualValue: plain
+      };
+    }
+    el = deps.resolve(field.selector, doc) || el;
+    var chooser = root.CcChooseAutocomplete;
+    if (chooser && typeof chooser.typeKeepFocus === "function") chooser.typeKeepFocus(el, field.value);
+    if (deps.open) deps.open(el);
+    if (deps.sleep) await deps.sleep(300);
+    var chosen = null;
+    var attempts = 0;
+    while (attempts < 12) {
+      chosen = deps.choose(String(field.value), doc);
+      if (chosen && chosen.pressed) break;
+      if (deps.open && attempts === 3) deps.open(el);
+      attempts += 1;
+      if (deps.sleep) await deps.sleep(250);
+    }
+    if (chosen && chosen.pressed && deps.sleep) await deps.sleep(200);
+    var actual = readValue(deps.resolve(field.selector, doc) || el);
+    var choice = chosen && chosen.clicked || "";
+    if (landed(field.value, actual, choice)) {
+      return {
+        selector: field.selector,
+        label: labelOf(field),
+        result: "chosen",
+        failReason: "",
+        plannedValue: String(field.value || ""),
+        actualValue: actual || choice
+      };
+    }
+    return {
+      selector: field.selector,
+      label: labelOf(field),
+      result: chosen && chosen.pressed ? "not_landed" : "no_option",
+      failReason: chosen && chosen.pressed ? "not_landed" : "no_option",
+      plannedValue: String(field.value || ""),
+      actualValue: actual || choice
+    };
+  }
+  async function run(fields, doc, deps) {
+    var list = Array.isArray(fields) ? fields : [];
+    deps = deps || liveDeps(doc || (typeof document !== "undefined" ? document : null));
+    var records = [];
+    var stopped = false;
+    var i = 0;
+    for (i = 0; i < list.length; i++) {
+      var field = list[i];
+      if (!field || !field.selector) continue;
+      if (isButton(field)) continue;
+      if (field.value == null || String(field.value) === "") continue;
+      if (stopped) {
+        records.push({ selector: field.selector, label: labelOf(field), result: "skipped", failReason: "previous_field", plannedValue: String(field.value), actualValue: "" });
+        continue;
+      }
+      var record = await actOnce(field, doc, deps);
+      if (record.result !== "filled" && record.result !== "chosen") {
+        record = await actOnce(field, doc, deps);
+      }
+      records.push(record);
+      if (record.result === "not_landed" || record.result === "no_option") stopped = true;
+    }
+    for (i = 0; i < list.length; i++) {
+      var button = list[i];
+      if (!button || !isButton(button)) continue;
+      if (stopped) {
+        records.push({ selector: button.selector, label: labelOf(button), result: "skipped", failReason: "previous_field", plannedValue: labelOf(button), actualValue: "" });
+        continue;
+      }
+      var beforeUrl = deps.url ? deps.url() : "";
+      var beforeTitle = deps.title ? deps.title() : "";
+      var pressed = deps.press ? deps.press(button, doc) : { pressed: false, reason: "not_found", clicked: "" };
+      if (deps.sleep) await deps.sleep(700);
+      var changed = (deps.url ? deps.url() : "") !== beforeUrl || (deps.title ? deps.title() : "") !== beforeTitle;
+      var didPress = !!(pressed && pressed.pressed);
+      records.push({
+        selector: pressed && pressed.selector || button.selector,
+        label: labelOf(button),
+        result: didPress ? "clicked" : "no_effect",
+        failReason: didPress ? "" : pressed && pressed.reason || "not_found",
+        plannedValue: labelOf(button),
+        actualValue: pressed && pressed.clicked || "",
+        moved: changed
+      });
+    }
+    return { stopped, records };
+  }
+  root.CcAgUiLoop = { landed, run, needsList };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = globalThis.CcAgUiLoop;
 
 /* ==== detect-fill-strategy.ts ==== */
 (function(root2) {
@@ -1737,6 +2493,52 @@ if (typeof module !== "undefined") module.exports = root.CcFillOneMat;
 (function(root2) {
   "use strict";
   function fillText(el, value) {
+    var ceAttr = el && el.getAttribute && el.getAttribute("contenteditable");
+    var ce = !!(el && (el.isContentEditable === true || ceAttr != null && (String(ceAttr).toLowerCase().trim() === "true" || String(ceAttr).trim() === "")));
+    if (ce) {
+      try {
+        el.focus();
+      } catch (e0) {
+      }
+      var text = String(value == null ? "" : value);
+      if (typeof el.innerText === "string") el.innerText = text;
+      else el.textContent = text;
+      try {
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      } catch (e1) {
+      }
+      try {
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch (e2) {
+      }
+      return 1;
+    }
+    var t = String(el && el.type || "").toLowerCase();
+    if (t === "range") {
+      try {
+        el.focus();
+      } catch (eR) {
+      }
+      var min = Number(el.min);
+      var max = Number(el.max);
+      var n = Number(value);
+      if (!isFinite(n)) return 0;
+      if (isFinite(min) && n < min) n = min;
+      if (isFinite(max) && n > max) n = max;
+      var asStr = String(n);
+      var rangeNiv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
+      if (rangeNiv && rangeNiv.set) rangeNiv.set.call(el, asStr);
+      else el.value = asStr;
+      try {
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      } catch (eI) {
+      }
+      try {
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch (eC) {
+      }
+      return 1;
+    }
     var isTextarea = el.tagName === "TEXTAREA";
     var niv = isTextarea ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value") : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
     if (typeof window.keystrokeFillSync === "function") {

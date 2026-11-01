@@ -17,7 +17,7 @@ const { code: src } = await esbuild.transform(srcTs, { loader: 'ts', target: 'es
 const root = {};
 const fn = new Function('globalThis', src);
 fn(root);
-const { isInSkipContext, isGoodLabel, hasFormContext, isVisuallyPresent } = root.CcFormContext;
+const { isInSkipContext, isGoodLabel, hasFormContext, isVisuallyPresent, sameOriginDocs } = root.CcFormContext;
 
 let passed = 0;
 let failed = 0;
@@ -92,6 +92,12 @@ assert('zero-size control is noise', isVisuallyPresent(painted({
 }
 {
   const el = painted();
+  view._top = { tagName: 'INS', id: 'google_vignette', className: 'adsbygoogle', parentElement: null };
+  assert('ad overlay does not drop painted control', isVisuallyPresent(el, view), true);
+  view._top = el;
+}
+{
+  const el = painted();
   const hiddenView = Object.assign({}, view, {
     getComputedStyle: () => ({ display: 'none', visibility: 'visible', opacity: '1' }),
   });
@@ -159,8 +165,10 @@ const navInput = {
 };
 
 assert('2 labeled inputs = has context',    hasFormContext(makeDocNoForm([labeledInput, labeledInput])), true);
-assert('1 labeled input = no context',      hasFormContext(makeDocNoForm([labeledInput, unlabeledInput])), false);
+assert('1 labeled input = has context',     hasFormContext(makeDocNoForm([labeledInput])), true);
 assert('0 labeled inputs = no context',     hasFormContext(makeDocNoForm([])), false);
+assert('a lone select is context',          hasFormContext(makeDocNoForm([{ closest() { return null; }, tagName: 'SELECT', placeholder: '' }])), true);
+assert('a lone range slider is context',    hasFormContext(makeDocNoForm([{ closest() { return null; }, tagName: 'INPUT', type: 'range', placeholder: '' }])), true);
 assert('nav inputs are skipped',            hasFormContext(makeDocNoForm([navInput, navInput])), false);
 
 // With ccDomUtils that provides getLabel
@@ -171,6 +179,29 @@ assert('ccDomUtils.getLabel used when provided',
   hasFormContext(makeDocNoForm([inputWithLabel, inputWithLabel]), ccDomUtils), true);
 assert('ccDomUtils.getLabel — no label = no context',
   hasFormContext(makeDocNoForm([inputNoLabel, inputNoLabel]), ccDomUtils), false);
+
+const editorDoc = {
+  querySelectorAll(sel) {
+    if (sel === 'form') return [];
+    if (String(sel).includes('contenteditable')) {
+      return [{ tagName: 'BODY', isContentEditable: true, getAttribute: (k) => k === 'contenteditable' ? 'true' : null }];
+    }
+    return [];
+  },
+};
+assert('contenteditable body is form context', hasFormContext(editorDoc), true);
+
+const iframeHost = {
+  querySelectorAll(sel) {
+    if (sel === 'form') return [];
+    if (sel === 'iframe,frame') {
+      return [{ tagName: 'IFRAME', contentDocument: editorDoc }];
+    }
+    return [];
+  },
+};
+assert('TinyMCE iframe contentDocument is form context', hasFormContext(iframeHost), true);
+assert('sameOriginDocs walks iframe', sameOriginDocs(iframeHost).length, 2);
 
 // ── Summary ────────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);

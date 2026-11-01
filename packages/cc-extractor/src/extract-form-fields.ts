@@ -4,6 +4,7 @@ function extractFormFieldsWithFingerprint() {
   var _ssf = (globalThis as any).CcScanStandardFields || {};
   var _smw = (globalThis as any).CcScanMatWidgets     || {};
   var _sng = (globalThis as any).CcScanNgDropdowns    || {};
+  var _scw = (globalThis as any).CcScanCustomChoice   || {};
   var _sfv = (globalThis as any).CcSortFieldsVisual   || {};
   var _fp  = (globalThis as any).CcFingerprintForm    || {};
 
@@ -33,35 +34,47 @@ function extractFormFieldsWithFingerprint() {
         !!(s && s.trim().length >= 2 && /[a-zA-Z0-9]/.test(s));
     },
     isVisuallyPresent: function (el) {
-      return _fc.isVisuallyPresent ? _fc.isVisuallyPresent(el) : true;
+      if (!_fc.isVisuallyPresent) return true;
+      var view = (el && el.ownerDocument && el.ownerDocument.defaultView) || undefined;
+      return _fc.isVisuallyPresent(el, view);
     },
   };
 
-  // Guard — bail early if no form context
+  var docs = _fc.sameOriginDocs ? _fc.sameOriginDocs(doc) : [doc];
+  // Guard — bail early if no form context on this page or a same-origin iframe
   if (_fc.hasFormContext && !_fc.hasFormContext(doc, ccDomUtils)) {
     return { formFields: [], formKey: '' };
   }
 
-  // Collect all fields from all scan passes
+  // Collect all fields from all scan passes, including TinyMCE iframe bodies
   var formFields = [];
   var labelList  = [];
 
-  if (_ssf.scan) {
-    var std = _ssf.scan(doc, helpers);
-    formFields = formFields.concat(std.formFields);
-    labelList  = labelList.concat(std.labelList);
-  }
+  for (var d = 0; d < docs.length; d++) {
+    var one = docs[d];
+    if (_ssf.scan) {
+      var std = _ssf.scan(one, helpers);
+      formFields = formFields.concat(std.formFields);
+      labelList  = labelList.concat(std.labelList);
+    }
 
-  if (_smw.scan) {
-    var mat = _smw.scan(doc, formFields, helpers, 10000);
-    formFields = formFields.concat(mat.formFields);
-    labelList  = labelList.concat(mat.labelList);
-  }
+    if (_smw.scan) {
+      var mat = _smw.scan(one, formFields, helpers, 10000 + formFields.length);
+      formFields = formFields.concat(mat.formFields);
+      labelList  = labelList.concat(mat.labelList);
+    }
 
-  if (_sng.scan) {
-    var ng = _sng.scan(doc, formFields, helpers, 10000 + formFields.length);
-    formFields = formFields.concat(ng.formFields);
-    labelList  = labelList.concat(ng.labelList);
+    if (_sng.scan) {
+      var ng = _sng.scan(one, formFields, helpers, 10000 + formFields.length);
+      formFields = formFields.concat(ng.formFields);
+      labelList  = labelList.concat(ng.labelList);
+    }
+
+    if (_scw.scan) {
+      var custom = _scw.scan(one, formFields, helpers, 20000 + formFields.length);
+      formFields = formFields.concat(custom.formFields);
+      labelList  = labelList.concat(custom.labelList);
+    }
   }
 
   // Sort by visual position (_el refs still present here)

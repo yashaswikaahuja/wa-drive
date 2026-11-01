@@ -16,7 +16,7 @@ Returns `true` if the label string is non-empty, contains at least one alphanume
 ### `hasFormContext(doc, ccDomUtils?)`
 Returns `true` if the page has a real form worth scanning. Requires either:
 - At least one `<form>` element, **or**
-- At least 2 labeled non-skip inputs (`input[type=text/email/tel]`, `textarea`)
+- At least one labeled non-skip control (`input` text/email/tel/search/date/number, `select`, checkbox, radio, `textarea`, `[role=combobox|checkbox|radio]`)
 
 Returns `false` early — callers should bail out if this returns false.
 
@@ -25,4 +25,4 @@ Returns `false` early — callers should bail out if this returns false.
 
 ## Notes
 - `isInSkipContext` uses `Element.closest()` — available in all modern browsers and extension contexts.
-- The 2-labeled-input threshold is intentional — some Indian govt forms (SSC, RRB, NTA) don't use `<form>` tags.
+- One labeled control is enough when there is no `<form>` (DemoQA, The Internet, #349). Indian govt forms that omit `<form>` still scan.

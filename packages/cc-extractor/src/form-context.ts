@@ -6,8 +6,8 @@
  *   isInSkipContext(el)           — true if el is inside nav/header/footer/banner
  *                                   (role=search allowed when journey-like — #311)
  *   isGoodLabel(s, ccDomUtils)    — true if label is non-empty, meaningful, min 2 chars
- *   hasFormContext(doc, ccDomUtils) — true if page has a <form> OR 2+ labeled inputs
- *                                   (includes journey search widgets — #311)
+ *   hasFormContext(doc, ccDomUtils) — true if page has a <form> OR 1+ labeled
+ *                                   fillable control (select, number, checkbox, radio, combobox)
  *
  * ccDomUtils is injected (not read from window) so the functions are testable in Node.
  *
@@ -100,9 +100,25 @@
       var cx = box.left + box.width / 2;
       var cy = box.top + box.height / 2;
       var inView = cx >= 0 && cy >= 0 && cx <= iw && cy <= ih;
-      if (inView && !hitsControl(el, hit(cx, cy))) return false;
+      var top = inView ? hit(cx, cy) : null;
+      if (inView && !hitsControl(el, top) && !isAdCover(top, el)) return false;
     }
     return true;
+  }
+
+  function isAdCover(top: any, el: any) {
+    if (!top || top === el) return false;
+    var node = top;
+    var hops = 0;
+    while (node && hops < 6) {
+      var tag = String(node.tagName || '').toLowerCase();
+      if (tag === 'iframe' || tag === 'ins') return true;
+      var blob = ((node.id || '') + ' ' + (typeof node.className === 'string' ? node.className : '')).toLowerCase();
+      if (/adplus|adsbygoogle|google_ads|google_vignette|ad-overlay|ad_overlay/.test(blob)) return true;
+      node = node.parentElement;
+      hops += 1;
+    }
+    return false;
   }
 
   function isInSkipContext(el: any) {
@@ -133,22 +149,62 @@
     return t.length >= 2 && /[a-zA-Z0-9]/.test(t);
   }
 
+  function isAdFrameUrl(url: any) {
+    return /doubleclick|googlesyndication|googleads|adservice|adnxs|adplus|facebook\.com\/tr|hotjar|clarity\.ms/i.test(String(url || ''));
+  }
+
   /**
-   * Returns true if the page has a real form worth scanning.
-   * Requires either a <form> element OR at least 2 labeled visible inputs
-   * (including type=search / combobox journey widgets — #311).
-   *
-   * @param {Document} doc
-   * @param {object} [ccDomUtils]
-   * @returns {boolean}
+   * Top document plus same-origin iframe/frame documents (TinyMCE about:blank).
+   * Cross-origin frames are skipped because contentDocument is null.
    */
-  function hasFormContext(doc: any, ccDomUtils: any) {
+  function sameOriginDocs(rootDoc: any) {
+    var out: any[] = [];
+    function walk(doc: any) {
+      if (!doc || out.indexOf(doc) !== -1) return;
+      var href = '';
+      try { href = (doc.location && doc.location.href) || ''; } catch (e) { href = ''; }
+      if (isAdFrameUrl(href)) return;
+      out.push(doc);
+      var frames: any = [];
+      try { frames = doc.querySelectorAll('iframe,frame'); } catch (e2) { return; }
+      for (var i = 0; i < frames.length; i++) {
+        var frame = frames[i];
+        var tag = String((frame && frame.tagName) || '').toLowerCase();
+        if (tag && tag !== 'iframe' && tag !== 'frame') continue;
+        var child = null;
+        try { child = frame.contentDocument; } catch (e3) { child = null; }
+        if (child) walk(child);
+      }
+    }
+    walk(rootDoc);
+    return out;
+  }
+
+  function hasContentEditable(doc: any) {
+    var nodes: any = [];
+    try { nodes = doc.querySelectorAll('[contenteditable="true"],[contenteditable=""],[contenteditable]'); } catch (e) { return false; }
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var tag = String((el && el.tagName) || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') continue;
+      if (el && el.isContentEditable === true) return true;
+      var raw = el && el.getAttribute && el.getAttribute('contenteditable');
+      if (raw == null) continue;
+      raw = String(raw).toLowerCase().trim();
+      if (raw === 'true' || raw === '') return true;
+    }
+    return false;
+  }
+
+  function hasLocalFormContext(doc: any, ccDomUtils: any) {
+    if (!doc || typeof doc.querySelectorAll !== 'function') return false;
     const forms = doc.querySelectorAll('form');
     if (forms.length > 0) return true;
-    // No <form> tag — check for 2+ labeled inputs (some govt sites don't use <form>)
+    if (hasContentEditable(doc)) return true;
+    // No <form> tag — one labeled control is enough (DemoQA / The Internet, #349)
     // Include type=search for OTA journey strips (#311).
     const inputs = doc.querySelectorAll(
-      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input:not([type]),textarea,[role="combobox"]'
+      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input[type="number"],input[type="range"],input:not([type]),textarea,select,input[type="checkbox"],input[type="radio"],[role="combobox"],[role="checkbox"],[role="radio"]'
     );
     let labeled = 0;
     inputs.forEach(function (el: any) {
@@ -156,12 +212,30 @@
       const lbl = ccDomUtils && typeof ccDomUtils.getLabel === 'function'
         ? ccDomUtils.getLabel(el)
         : (el.getAttribute && el.getAttribute('aria-label')) || el.placeholder || '';
-      if (lbl || isJourneyLike(el, lbl)) labeled++;
+      if (lbl || isJourneyLike(el, lbl) || (el.tagName && String(el.tagName).toLowerCase() === 'select') || el.type === 'number' || el.type === 'range') labeled++;
     });
-    return labeled >= 2;
+    return labeled >= 1;
   }
 
-  root.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike, isVisuallyPresent };
+  /**
+   * Returns true if the page has a real form worth scanning.
+   * Requires either a <form> element, a contenteditable editor (TinyMCE iframe),
+   * or at least one labeled visible control (select, number, checkbox, radio, combobox — #349).
+   * Same-origin iframe documents count (#349 P1).
+   *
+   * @param {Document} doc
+   * @param {object} [ccDomUtils]
+   * @returns {boolean}
+   */
+  function hasFormContext(doc: any, ccDomUtils: any) {
+    var docs = sameOriginDocs(doc);
+    for (var i = 0; i < docs.length; i++) {
+      if (hasLocalFormContext(docs[i], ccDomUtils)) return true;
+    }
+    return false;
+  }
+
+  root.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike, isVisuallyPresent, sameOriginDocs };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 

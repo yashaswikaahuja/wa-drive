@@ -31,6 +31,8 @@ import versionsRouter from './src/http/routes/versions.js';
 import syncRouter from './src/http/routes/sync.js';
 import fillRouter from './src/http/routes/fill.js';
 import browserTaskRouter from './src/http/routes/browser-task.js';
+import mcpRouter from './src/http/routes/mcp.js';
+import { discoveryRouter } from './src/http/mcp-oauth.js';
 import { ensureSchema } from './src/db/store.js';
 import { pool } from './src/db/db.js';
 import { mutateDoc, KEYS } from './src/db/store.js';
@@ -54,12 +56,13 @@ const app = express();
 app.use((req: any, res: any, next: any) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, MCP-Protocol-Version, Mcp-Session-Id');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
 app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 
 // Health endpoint (unauthenticated, for nginx + smoke tests + deploy lock)
 const healthPayload = () => ({
@@ -89,6 +92,8 @@ app.use('/api/sync', syncRouter);
 // ActionPlan v3 product path: POST /api/fill-plan, POST /api/fill-observation
 app.use('/api', fillRouter);
 app.use('/api/browser-task', browserTaskRouter);
+app.use('/api/mcp', mcpRouter);
+app.use('/.well-known', discoveryRouter);
 
 // 404 fallthrough
 app.use((req: any, res: any) => res.status(404).json({ error: 'not found', path: req.path }));

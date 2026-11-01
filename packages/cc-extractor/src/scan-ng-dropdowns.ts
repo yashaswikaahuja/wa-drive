@@ -21,7 +21,7 @@
   'use strict';
 
   var NG_TRIGGER_SEL = '.value-area, .select-type, .ng-value-container, .ng-select-container';
-  var NG_CONTAINER_SEL = 'ng-select, ng-dropdown, .ng-select, .ng-dropdown, [class*="custom-dropdown"], [class*="select-control"]';
+  var NG_CONTAINER_SEL = 'ng-select, ng-dropdown, .ng-select, .ng-dropdown, [class*="custom-dropdown"], [class*="select-control"], [class*="-container"][class*="css-"]';
 
   function isAlreadyCaptured(el: any, existingFields: any) {
     return existingFields.some(function (f: any) {

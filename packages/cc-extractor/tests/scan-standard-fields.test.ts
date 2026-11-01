@@ -41,7 +41,7 @@ function makeDoc(elements) {
 
 // ── Skip types ────────────────────────────────────────────────────────────────
 console.log('\nSkip types');
-for (const t of ['hidden','submit','button','search','password','image','reset']) {
+for (const t of ['hidden','submit','button','password','image','reset']) {
   const { formFields } = scan(makeDoc([makeInput({ type: t })]), helpers);
   assert(`type="${t}" skipped`, formFields.length, 0);
 }
@@ -53,9 +53,13 @@ console.log('\nSkip context');
 
 // ── Skip meta (search/captcha/otp) ────────────────────────────────────────────
 console.log('\nSkip meta');
-for (const kw of ['search', 'captcha', 'otp', 'csrf', 'recaptcha']) {
+for (const kw of ['captcha', 'otp', 'csrf', 'recaptcha']) {
   const { formFields } = scan(makeDoc([makeInput({ id: kw, _label: 'Field' })]), helpers);
   assert(`id="${kw}" skipped`, formFields.length, 0);
+}
+{
+  const { formFields } = scan(makeDoc([makeInput({ id: 'filter', name: 'filter', _label: 'Filter' })]), helpers);
+  assert('id="filter" skipped', formFields.length, 0);
 }
 
 // ── Not on screen ──────────────────────────────────────────────────────────────
@@ -67,6 +71,18 @@ console.log('\nNot on screen');
   });
   const { formFields } = scan(makeDoc([hidden]), helpersHidden);
   assert('hidden aadhaar input is not captured', formFields.length, 0);
+}
+{
+  const label = { id: 'yes-label' };
+  const hiddenBox = makeInput({ type: 'checkbox', id: 'yes', name: 'yes', _label: 'I agree to terms' });
+  hiddenBox.ownerDocument = { querySelector(sel) { return sel === 'label[for="yes"]' ? label : null; } };
+  const helpersHiddenBox = Object.assign({}, helpers, {
+    isVisuallyPresent: (el) => el === label,
+  });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [hiddenBox] : []; } };
+  const { formFields } = scan(doc, helpersHiddenBox);
+  assert('hidden checkbox kept when its label is visible', formFields.length, 1);
+  assert('hidden checkbox is agreement', formFields[0].type, 'checkbox-agreement');
 }
 
 // ── Text input ────────────────────────────────────────────────────────────────
@@ -99,6 +115,43 @@ console.log('\nPositional selector');
   assert('gender keeps document index 3', byLabel['Passenger Gender'], 'form-field-3');
 }
 
+// ── Page search box ───────────────────────────────────────────────────────────
+console.log('\nPage search');
+{
+  const headerSearch = makeInput({ _skip: true, name: 'search_query', _label: 'Search' });
+  const name = makeInput({ _label: 'Full Name as per Govt. ID' });
+  const { formFields } = scan(makeDoc([headerSearch, name]), helpers);
+  const byLabel = {};
+  formFields.forEach((f) => { byLabel[f.label] = f; });
+  assert('header search box is captured', byLabel.Search.selector, '[name="search_query"]');
+  assert('header search type is search', byLabel.Search.type, 'search');
+  assert('name index stays 1 beside a search box', byLabel['Full Name as per Govt. ID'].selector, 'form-field-1');
+  assert('search box does not take form-field-0', formFields.some((f) => f.selector === 'form-field-0'), false);
+}
+{
+  const box = makeInput({ type: 'search', id: 'site-search', _label: 'Search' });
+  const { formFields } = scan(makeDoc([box]), helpers);
+  assert('type=search captured', formFields.length, 1);
+  assert('type=search selector=#site-search', formFields[0].selector, '#site-search');
+  assert('type=search reported as search', formFields[0].type, 'search');
+}
+{
+  const poisoned = makeInput({ type: 'search', id: 'captcha', _label: 'Search' });
+  const { formFields } = scan(makeDoc([poisoned]), helpers);
+  assert('search box named captcha stays out', formFields.length, 0);
+}
+{
+  const box = makeInput({ type: 'search', _label: 'Search' });
+  const doc = {
+    querySelectorAll(sel) {
+      if (String(sel).includes('input[type="search"]')) return [box];
+      return [];
+    },
+  };
+  const { formFields } = scan(doc, helpers);
+  assert('unnamed search uses type selector', formFields[0].selector, 'input[type="search"]');
+}
+
 // ── Select ────────────────────────────────────────────────────────────────────
 console.log('\nSelect');
 {
@@ -112,6 +165,36 @@ console.log('\nSelect');
   assert('select captured', formFields.length, 1);
   assert('type=dropdown', formFields[0].type, 'dropdown');
   assert('placeholder option filtered', JSON.stringify(formFields[0].options), JSON.stringify(['Delhi','Mumbai']));
+}
+
+console.log('\nNumber input');
+{
+  const n = makeInput({ type: 'number', id: 'age', _label: 'Age' });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [n] : []; } };
+  const { formFields } = scan(doc, helpers);
+  assert('number captured', formFields.length, 1);
+  assert('type=number', formFields[0].type, 'number');
+}
+
+console.log('\nRange slider');
+{
+  const n = makeInput({ type: 'range', id: 'slider', min: '0', max: '100', value: '25', _label: 'Slider' });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [n] : []; } };
+  const { formFields } = scan(doc, helpers);
+  assert('range captured', formFields.length, 1);
+  assert('type=slider', formFields[0].type, 'slider');
+  assert('slider selector=#slider', formFields[0].selector, '#slider');
+}
+{
+  const n = makeInput({ type: 'range', min: '0', max: '100', value: '25', _label: 'Slider' });
+  const doc = {
+    querySelectorAll(s) {
+      if (String(s).includes('input[type="range"]') || String(s).includes('input[type="text"]')) return [n];
+      return [];
+    },
+  };
+  const { formFields } = scan(doc, helpers);
+  assert('unnamed range uses form-field index', formFields[0].selector, 'form-field-0');
 }
 
 // ── Radio grouping ────────────────────────────────────────────────────────────
@@ -145,6 +228,23 @@ console.log('\nCheckbox grouping');
   assert('two checkboxes → one group', formFields.length, 1);
   assert('type=checkbox-group', formFields[0].type, 'checkbox-group');
   assert('options=[Reading,Sports]', JSON.stringify(formFields[0].options), JSON.stringify(['Reading','Sports']));
+}
+
+// ── Contenteditable (iframe body) ────────────────────────────────────────────
+console.log('\nContenteditable');
+{
+  const body = {
+    tagName: 'BODY', type: '', id: 'tinymce', name: '', value: '', className: '',
+    placeholder: '', _label: '', _skip: false, isContentEditable: true,
+    innerText: 'hello', textContent: 'hello',
+    getAttribute: (k) => k === 'contenteditable' ? 'true' : '',
+    closest: () => null, querySelectorAll: () => [],
+  };
+  const doc = { querySelectorAll(s) { return s.includes('contenteditable') ? [body] : []; } };
+  const { formFields } = scan(doc, helpers);
+  assert('contenteditable captured', formFields.length, 1);
+  assert('type=contenteditable', formFields[0].type, 'contenteditable');
+  assert('selector=#tinymce', formFields[0].selector, '#tinymce');
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────
