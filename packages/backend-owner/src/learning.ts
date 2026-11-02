@@ -325,6 +325,15 @@ router.patch('/mappings/:formKey/:label', async (req: any, res) => {
   }
 });
 
+router.delete('/mappings', async (req: any, res) => {
+  try {
+    await mutateDoc(req.pool, MAPPINGS_KEY, () => ({}));
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.delete('/mappings/:formKey/:label', async (req: any, res) => {
   const formKey = req.params.formKey;
   const label = decodeURIComponent(req.params.label);

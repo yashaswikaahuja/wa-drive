@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
 import { ArrowLeft, Brain, Trash, ArrowClockwise } from '@phosphor-icons/react';
 import type { Config, FormMappingSummary } from '../api';
 import {
   ApiError,
+  deleteAllMappings,
   deleteMappingField,
   deleteMappingForm,
   fetchMappingForm,
@@ -29,16 +30,106 @@ interface FieldMapping {
   type?: string;
   order?: number;
   options?: string[] | null;
+  optionsDynamic?: boolean;
   profileKey: string | null;
   relation?: MappingRelation | null;
-  fillMode?: FillMode | null;
+  fillMode?: FillMode | string | null;
   rules?: Rule[] | null;
+  validation?: Record<string, string | number | boolean> | null;
+  humanGate?: string | null;
+  dependsOn?: string | null;
   constantValue?: string | null;
   fallback?: string | null;
   fills: number;
   corrections: number;
   lastSeen: string;
   source?: string;
+}
+
+function optionLabel(opt: unknown): string {
+  if (opt == null) return '';
+  if (typeof opt === 'string') return opt === 'dynamic' ? '' : opt;
+  if (typeof opt === 'object') {
+    const o = opt as { text?: string; label?: string; labelEn?: string; labelHi?: string; value?: string };
+    return String(o.text || o.labelEn || o.label || o.labelHi || o.value || '').trim();
+  }
+  return String(opt);
+}
+
+function optionLabels(options: unknown): string[] {
+  if (!options || options === 'dynamic') return [];
+  if (!Array.isArray(options)) return [];
+  return options.map(optionLabel).filter(Boolean);
+}
+
+function isDynamicOptions(field: { options?: unknown; optionsDynamic?: boolean } | null | undefined): boolean {
+  if (!field) return false;
+  return field.options === 'dynamic' || field.optionsDynamic === true;
+}
+
+function choiceRules(rules: unknown): Rule[] | null {
+  return Array.isArray(rules) ? rules as Rule[] : null;
+}
+
+function asText(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  return null;
+}
+
+function toFieldMapping(raw: Record<string, unknown>): FieldMapping {
+  const rulesArr = choiceRules(raw.rules);
+  const validation = (!Array.isArray(raw.rules) && raw.rules && typeof raw.rules === 'object')
+    ? raw.rules as Record<string, string | number | boolean>
+    : (raw.validation && typeof raw.validation === 'object' && !Array.isArray(raw.validation)
+      ? raw.validation as Record<string, string | number | boolean>
+      : null);
+  return {
+    label: asText(raw.label) || undefined,
+    type: asText(raw.type) || undefined,
+    order: typeof raw.order === 'number' ? raw.order : undefined,
+    options: optionLabels(raw.options),
+    optionsDynamic: isDynamicOptions(raw),
+    profileKey: asText(raw.profileKey),
+    relation: (raw.relation && typeof raw.relation === 'object' && !Array.isArray(raw.relation))
+      ? raw.relation as MappingRelation
+      : null,
+    fillMode: asText(raw.fillMode),
+    rules: rulesArr,
+    validation,
+    humanGate: asText(raw.humanGate),
+    dependsOn: asText(raw.dependsOn),
+    constantValue: asText(raw.constantValue),
+    fallback: asText(raw.fallback),
+    fills: typeof raw.fills === 'number' ? raw.fills : 0,
+    corrections: typeof raw.corrections === 'number' ? raw.corrections : 0,
+    lastSeen: asText(raw.lastSeen) || '',
+    source: asText(raw.source) || undefined,
+  };
+}
+
+class MappingErrorBoundary extends Component<{ children: ReactNode; onReset: () => void }, { message: string | null }> {
+  state = { message: null as string | null };
+  static getDerivedStateFromError(err: Error) {
+    return { message: err.message || 'This mapping could not be shown.' };
+  }
+  componentDidCatch(err: Error, info: ErrorInfo) {
+    console.error('[MappingsPanel]', err, info.componentStack);
+  }
+  render() {
+    if (this.state.message) {
+      return (
+        <div className="card" style={{ padding: 16 }}>
+          <p className="banner" role="alert">{this.state.message}</p>
+          <button className="btn" style={{ marginTop: 12 }} onClick={() => { this.setState({ message: null }); this.props.onReset(); }}>
+            Back to all forms
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 const OPERATORS: { op: string; label: string; needsValue: boolean }[] = [
@@ -134,7 +225,10 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
       const cleaned: Record<string, FieldMapping> = {};
       for (const [k, v] of Object.entries(data || {})) {
         if (k === '_meta') continue;
-        cleaned[k] = v as FieldMapping;
+        const raw = (v && typeof v === 'object' && !Array.isArray(v))
+          ? v as Record<string, unknown>
+          : {};
+        cleaned[k] = toFieldMapping(raw);
       }
       setFields(cleaned);
     } catch (e) {
@@ -222,6 +316,20 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
     }
   }
 
+  async function removeAllForms() {
+    if (!forms.length) return;
+    if (!window.confirm(`Remove ALL ${forms.length} form mappings? This cannot be undone.`)) return;
+    try {
+      await deleteAllMappings(cfg);
+      setForms([]);
+      setSelected(null);
+      setFields({});
+      setMsg('All mappings removed');
+    } catch (e) {
+      setMsg((e as ApiError).message || 'Delete failed');
+    }
+  }
+
   async function saveTranslation(key: string, value: string) {
     try {
       await patchMappingTranslations(cfg, { [key]: value });
@@ -245,6 +353,18 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
   }
 
   if (selected) {
+    return (
+      <MappingErrorBoundary
+        key={selected.formKey}
+        onReset={() => { setSelected(null); setFields({}); }}
+      >
+        {renderSelectedForm()}
+      </MappingErrorBoundary>
+    );
+  }
+
+  function renderSelectedForm() {
+    if (!selected) return null;
     const fieldEntries = Object.entries(fields).sort((a, b) => {
       const ao = a[1].order, bo = b[1].order;
       if (ao !== undefined && bo !== undefined) return ao - bo;
@@ -346,7 +466,8 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
             const rel = normalizeRelation(m.relation, m.profileKey);
             const status = statusFromSource(m.source);
             const isOpen = expandedKey === key;
-            const hasOptions = !!(m.options && m.options.length > 0);
+            const optLabels = optionLabels(m.options);
+            const hasOptions = optLabels.length > 0;
 
             return (
               <div
@@ -373,6 +494,9 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
                           </span>
                           {m.fillMode ? ` · ${m.fillMode}` : ''}
                           {m.constantValue ? ` · const:${m.constantValue}` : ''}
+                          {m.optionsDynamic ? ' · options:dynamic' : ''}
+                          {m.humanGate ? ` · gate:${m.humanGate}` : ''}
+                          {m.dependsOn ? ` · dependsOn:${m.dependsOn}` : ''}
                         </div>
                       </div>
                     </div>
@@ -405,13 +529,14 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
                   </div>
                 </div>
 
-                {hasOptions && (
+                {(hasOptions || m.optionsDynamic) && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8, marginLeft: 26 }}>
-                    {m.options!.slice(0, 12).map((opt, i) => (
+                    {m.optionsDynamic && <span className="pill">dynamic</span>}
+                    {optLabels.slice(0, 12).map((opt, i) => (
                       <span key={i} className="pill" style={{ color: meta.color }}>{opt}</span>
                     ))}
-                    {m.options!.length > 12 && (
-                      <span className="muted" style={{ fontSize: 11 }}>+{m.options!.length - 12} more</span>
+                    {optLabels.length > 12 && (
+                      <span className="muted" style={{ fontSize: 11 }}>+{optLabels.length - 12} more</span>
                     )}
                   </div>
                 )}
@@ -463,10 +588,21 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
           <h2 className="display" style={{ fontSize: 17, fontWeight: 700 }}>Form Mappings</h2>
           <span className="muted num" style={{ fontSize: 12 }}>{forms.length}</span>
         </div>
-        <button className="btn" onClick={() => loadList()} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <ArrowClockwise size={14} weight="bold" />
-          {loading ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          {forms.length > 0 && (
+            <button
+              className="btn"
+              onClick={() => void removeAllForms()}
+              style={{ color: 'hsl(var(--danger))', display: 'flex', alignItems: 'center', gap: 5 }}
+            >
+              <Trash size={14} /> Delete all
+            </button>
+          )}
+          <button className="btn" onClick={() => loadList()} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <ArrowClockwise size={14} weight="bold" />
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
@@ -620,7 +756,7 @@ function FieldRuleEditor({
   onSave: (cfg: Partial<FieldMapping>) => void;
   onClose: () => void;
 }) {
-  const options = mapping.options || [];
+  const options = optionLabels(mapping.options);
   const isCheckbox = typeGroup === 'checkbox';
   const isMulti = mapping.type === 'checkbox-group' || (isCheckbox && options.length > 1);
   const [mode, setMode] = useState<FillMode>(
@@ -628,9 +764,10 @@ function FieldRuleEditor({
   );
   const [profileKey, setProfileKey] = useState(mapping.profileKey || '');
   const [constantValue, setConstantValue] = useState(mapping.constantValue || '');
+  const existingRules = choiceRules(mapping.rules);
   const [rules, setRules] = useState<Rule[]>(
-    mapping.rules && mapping.rules.length
-      ? mapping.rules
+    existingRules && existingRules.length
+      ? existingRules
       : [{ when: [{ key: '', op: 'eq', value: '' }], then: isCheckbox ? 'check' : (options[0] || '') }],
   );
   const [fallback, setFallback] = useState(mapping.fallback || '');
@@ -825,11 +962,11 @@ function BindingEditor({
         <h3 className="display" style={{ fontSize: 15, fontWeight: 700 }}>Edit mapping</h3>
         <p className="muted" style={{ fontSize: 12, marginTop: 2, marginBottom: 14 }}>{mapping.label || fieldKey}</p>
 
-        {mapping.options && mapping.options.length > 0 && (
+        {optionLabels(mapping.options).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div className="label" style={{ marginBottom: 6 }}>Form options</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {mapping.options.map((o, i) => <span key={i} className="pill">{o}</span>)}
+              {optionLabels(mapping.options).map((o, i) => <span key={i} className="pill">{o}</span>)}
             </div>
             <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
               For dropdown/radio/checkbox fill behaviour, close this and open <strong>Rules</strong> on the field row.
