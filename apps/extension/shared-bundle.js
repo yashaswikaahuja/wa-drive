@@ -276,7 +276,24 @@ const SEMANTIC_ALIASES = {
   "postal code": "pincode",
   "pincode": "pincode",
   "state name": "state",
-  "district name": "district"
+  "district name": "district",
+  "police station": "police_station",
+  "thana": "police_station",
+  "post office": "post_office",
+  "sub division": "sub_division",
+  "subdivision": "sub_division",
+  "local body": "local_body_type",
+  "local body type": "local_body_type",
+  "residence type": "residence_type",
+  "type of residence": "residence_type",
+  "supporting document": "supporting_document_type",
+  "document type": "supporting_document_type",
+  "male female third gender": "gender",
+  "male female": "gender",
+  "name of applicant": "name",
+  "name of father": "father_name",
+  "name of mother": "mother_name",
+  "name of husband": "husband_name"
 };
 function normalizeLabel(label) {
   return (label || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
@@ -322,7 +339,7 @@ function normalizeFieldLabel(label) {
     var excludePlaceholders = config.excludePlaceholders !== false;
     var opts = options.map(function(o) {
       if (typeof o === "string") return { text: o, value: o, _original: o };
-      return { text: o.text || o.label || "", value: o.value || "", _original: o };
+      return { text: o.text || o.labelEn || o.label || o.labelHi || "", value: o.value || "", _original: o };
     });
     if (excludePlaceholders) {
       opts = opts.filter(function(o) {

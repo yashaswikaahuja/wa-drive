@@ -65,6 +65,24 @@ if (typeof module !== "undefined" && typeof globalThis !== "undefined") {
       flat[k] = v && typeof v === "object" && "value" in v ? v.value : v;
     }
     if (profile && profile.name) flat.name = flat.name || profile.name;
+    function copyIfEmpty(fromKey, toKey) {
+      if (flat[fromKey] != null && String(flat[fromKey]).trim() !== "" && (flat[toKey] == null || String(flat[toKey]).trim() === "")) {
+        flat[toKey] = flat[fromKey];
+      }
+    }
+    var keys = Object.keys(flat);
+    for (var i = 0; i < keys.length; i++) {
+      var src = keys[i];
+      copyIfEmpty(src, src.replace(/-/g, "_"));
+      copyIfEmpty(src, src.replace(/_/g, "-"));
+    }
+    copyIfEmpty("email-id", "email");
+    copyIfEmpty("email_id", "email");
+    copyIfEmpty("email", "email_id");
+    copyIfEmpty("phone", "mobile");
+    copyIfEmpty("mobile", "phone");
+    copyIfEmpty("sub-division", "sub_division");
+    copyIfEmpty("sub_division", "sub-division");
     return flat;
   }
   root2.CcFlattenProfile = { flattenProfile };
@@ -122,8 +140,15 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
     if (maxLen > 0 && s.length > maxLen) return false;
     return true;
   }
+  function isPerApplicationField(field) {
+    if (!field) return false;
+    if (field.relationHint === "per_application") return true;
+    var ck = String(field.canonicalKey || "");
+    return ck === "purpose" || ck === "apply_to_office";
+  }
   function normalizeRelation(entry, field) {
     if (entry && entry.relation && entry.relation.kind) return Object.assign({}, entry.relation);
+    if (isPerApplicationField(field)) return { kind: "per_application" };
     var pk = entry && entry.profileKey;
     if (!pk) return { kind: "unknown" };
     if (looksLikePartField(field) && isCompoundAtom(pk)) return { kind: "unknown" };
@@ -147,7 +172,7 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
   }
   function applyRelation(relation, profile, profileKey, field) {
     var kind = relation && relation.kind || "unknown";
-    if (kind === "unknown") return null;
+    if (kind === "unknown" || kind === "per_application") return null;
     var atom = profileAtom(profile, profileKey);
     if (atom == null) return null;
     var value = null;
@@ -178,6 +203,7 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
     return String(value);
   }
   function induceRelation(profile, profileKey, actualOrPlanned, field) {
+    if (isPerApplicationField(field)) return { kind: "per_application" };
     if (!profileKey) return { kind: "unknown" };
     var atom = profileAtom(profile, profileKey);
     var sample = actualOrPlanned == null ? "" : String(actualOrPlanned).trim();
@@ -232,6 +258,11 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
   }
   function lookupSavedEntry(savedMap, field) {
     if (!savedMap || !field) return null;
+    if (field.catalogKey && savedMap[field.catalogKey]) return savedMap[field.catalogKey];
+    if (field.section && field.canonicalKey && savedMap[field.section + "." + field.canonicalKey]) {
+      return savedMap[field.section + "." + field.canonicalKey];
+    }
+    if (field.canonicalKey && savedMap[field.canonicalKey]) return savedMap[field.canonicalKey];
     var keys = labelKeys(field.label).concat(labelKeys(field.name));
     var i;
     for (i = 0; i < keys.length; i++) {
@@ -281,9 +312,13 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
     for (var i = 0; i < (fields || []).length; i++) {
       var f = fields[i];
       if (!f || !f.selector || map[f.selector]) continue;
+      if (f.fillMode === "auto" || f.fillMode === "skip") continue;
+      if (f.humanGate === "captcha" || f.humanGate === "otp" || f.humanGate === "submit" || f.humanGate === "upload") continue;
+      if (isPerApplicationField(f)) continue;
       if (/radio|checkbox/i.test(String(f.type || ""))) continue;
       var entry = lookupSavedEntry(savedMap, f);
       if (!entry || !entry.profileKey) continue;
+      if (entry.relation && entry.relation.kind === "per_application") continue;
       if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS[String(entry.profileKey)]) continue;
       var relation = normalizeRelation(entry, f);
       var value = applyRelation(relation, profile, entry.profileKey, f);
@@ -348,12 +383,8 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
         var extracted2 = extractFormFieldsWithFingerprint();
         var formFields = extracted2.formFields, formKey = extracted2.formKey, semanticFormKey = extracted2.semanticFormKey;
         if (!formFields.length) return { ok: false, error: "no fields detected" };
-        var visible = formFields.filter(function(f2) {
-          return f2 && f2.visible === true;
-        });
-        if (!visible.length) return { ok: false, error: "no fields detected" };
-        var snapshotId = extracted2.snapshotId || visible[0] && visible[0].snapshotId || "";
-        var fields = visible.map(function(f2) {
+        var snapshotId = extracted2.snapshotId || formFields[0] && formFields[0].snapshotId || "";
+        var fields = formFields.map(function(f2) {
           return {
             selector: f2.selector,
             id: f2.id || "",
@@ -365,10 +396,27 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
             type: f2.type || "text",
             options: f2.options || null,
             optionSelectors: f2.optionSelectors || null,
-            placeholder: f2.placeholder || ""
+            placeholder: f2.placeholder || "",
+            locators: f2.locators || null,
+            lastLocator: f2.lastLocator || null,
+            canonicalKey: f2.canonicalKey || null,
+            catalogKey: f2.catalogKey || null,
+            section: f2.section || null,
+            dependsOn: f2.dependsOn || null,
+            fillMode: f2.fillMode || null,
+            humanGate: f2.humanGate || null,
+            rules: f2.rules || null,
+            needsReview: !!f2.needsReview,
+            optionsDynamic: !!f2.optionsDynamic,
+            optionDetails: f2.optionDetails || null,
+            constantValue: f2.constantValue || null,
+            transliterate: !!f2.transliterate,
+            hidden: !!f2.hidden,
+            showWhen: f2.showWhen || null,
+            relationHint: f2.relationHint || null
           };
         });
-        return { ok: true, fields, profile: prof, formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href, snapshotId };
+        return { ok: true, fields, profile: prof, formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href, snapshotId, meta: extracted2.meta || null };
       }
     });
     var extracted = extractResults && extractResults[0] && extractResults[0].result;
@@ -468,6 +516,7 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
         if (spaced && spaced !== gsk) out.push(spaced);
         return out;
       }, hasTaughtMapping = function(f2) {
+        if (f2 && f2.canonicalKey && savedMaps[f2.canonicalKey] && savedMaps[f2.canonicalKey].profileKey) return true;
         var keys = labelKeys(f2 && f2.label).concat(labelKeys(f2 && f2.name));
         for (var i2 = 0; i2 < keys.length; i2++) {
           var entry = savedMaps[keys[i2]];
@@ -667,6 +716,17 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
           if (!fbs[bf.selector].fieldId) fbs[bf.selector].fieldId = bent.fieldId;
         }
       }
+      for (var di2 = 0; di2 < (fields || []).length; di2++) {
+        var df = fields[di2];
+        if (!df || !df.selector) continue;
+        var gate = df.humanGate;
+        if (df.fillMode === "skip" || gate === "captcha" || gate === "otp" || gate === "upload" || gate === "submit") {
+          delete mapping[df.selector];
+          if (df.optionSelectors) {
+            for (var oi = 0; oi < df.optionSelectors.length; oi++) delete mapping[df.optionSelectors[oi]];
+          }
+        }
+      }
       var filledCount = await fillFormFieldsSequential(mapping, fbs, adapters2 || {}, fields);
       var records = [];
       try {
@@ -806,6 +866,22 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
       }
     }
     try {
+      let mappingProfileKey = function(field) {
+        var info2 = syncFbs[field.selector];
+        var mapEntry2 = syncMapping[field.selector];
+        if (info2 && info2.profileKey) return info2.profileKey;
+        if (mapEntry2 && mapEntry2.profileKey) return mapEntry2.profileKey;
+        var sels = field.optionSelectors || [];
+        for (var si2 = 0; si2 < sels.length; si2++) {
+          var optInfo = syncFbs[sels[si2]];
+          var optMap = syncMapping[sels[si2]];
+          if (optInfo && optInfo.profileKey) return optInfo.profileKey;
+          if (optMap && optMap.profileKey) return optMap.profileKey;
+        }
+        if (field.relationHint === "per_application" || field.canonicalKey === "purpose" || field.canonicalKey === "apply_to_office") return null;
+        if (field.canonicalKey) return field.canonicalKey;
+        return null;
+      };
       var pk = extracted.semanticFormKey || extracted.formKey;
       var syncMapping = r._mapping || {};
       var syncFbs = r._fbs || {};
@@ -818,13 +894,18 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
       };
       for (var i = 0; i < syncFields.length; i++) {
         var f = syncFields[i];
-        var sk = gsk2(f.label);
+        var sk = f.catalogKey || (f.section && f.canonicalKey ? f.section + "." + f.canonicalKey : "") || f.canonicalKey || gsk2(f.label);
         if (!sk || sk.length < 2) sk = gsk2(f.name);
         if (!sk || sk.length < 2) sk = gsk2(f.id);
         if (!sk || sk.length < 2) continue;
+        if (updates[sk]) {
+          var extra = gsk2(f.id) || gsk2(f.selector) || String(i);
+          if (extra) sk = sk + "." + extra;
+        }
+        if (updates[sk]) continue;
         var info = syncFbs[f.selector];
         var mapEntry = syncMapping[f.selector];
-        var profileKey = info && info.profileKey || mapEntry && mapEntry.profileKey || null;
+        var profileKey = mappingProfileKey(f);
         var filledRec = syncRecords.find(function(rec) {
           return rec.selector === f.selector && rec.result === "filled";
         });
@@ -836,7 +917,9 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
           evidence = mapEntry.value;
         }
         var relation = info && info.relation || mapEntry && mapEntry.relation || null;
-        if ((!relation || !relation.kind || relation.kind === "unknown") && profileKey && typeof relApi.induceRelation === "function") {
+        if (f.relationHint === "per_application" || f.canonicalKey === "purpose" || f.canonicalKey === "apply_to_office") {
+          relation = { kind: "per_application" };
+        } else if ((!relation || !relation.kind || relation.kind === "unknown") && profileKey && typeof relApi.induceRelation === "function") {
           var induced = relApi.induceRelation(syncProfile, profileKey, evidence, f);
           if (induced && induced.kind && induced.kind !== "unknown") relation = induced;
           else if (!relation || !relation.kind) relation = induced || { kind: "unknown" };
@@ -850,7 +933,22 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
           label: f.label || f.name || f.id || sk,
           type: f.type,
           order: i,
-          options: f.options || null,
+          options: f.optionsDynamic ? "dynamic" : f.optionDetails || f.options || null,
+          locators: f.locators || null,
+          lastLocator: f.lastLocator || null,
+          canonicalKey: f.canonicalKey || null,
+          catalogKey: f.catalogKey || sk,
+          section: f.section || null,
+          dependsOn: f.dependsOn || null,
+          fillMode: f.fillMode || null,
+          humanGate: f.humanGate || null,
+          rules: f.rules || null,
+          needsReview: !profileKey || !!f.needsReview,
+          constantValue: f.constantValue || null,
+          selector: f.selector || null,
+          transliterate: !!f.transliterate,
+          hidden: !!f.hidden,
+          showWhen: f.showWhen || null,
           delta: { fills: wasFilled ? 1 : 0, corrections: 0 }
         };
       }
@@ -858,7 +956,7 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
         await fetch(backendUrl + "/mappings/" + encodeURIComponent(pk), {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": "Bearer " + accessToken },
-          body: JSON.stringify({ updates, meta: { hostname: r.hostname || extracted.hostname, title: "", lastSeen: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), syncVersion: 3 } })
+          body: JSON.stringify({ updates, meta: { hostname: r.hostname || extracted.hostname, title: extracted.meta && extracted.meta.title || "", serviceId: extracted.meta && extracted.meta.serviceId || "", structuralFingerprint: extracted.meta && extracted.meta.structuralFingerprint || "", lastSeen: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), syncVersion: 3 } })
         });
       }
     } catch (e) {

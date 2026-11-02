@@ -14,7 +14,9 @@ Returns all standard form fields found, plus a flat `labelList` array for finger
 ## Skipped inputs
 - Types: `hidden`, `submit`, `button`, `password`, `image`, `reset`
 - Elements in skip contexts (nav/header/footer), except a visible page search box
-- Inputs with `id/name/class` matching: `filter`, `captcha`, `otp`, `token`, `csrf`, `recaptcha`
+- Inputs with `id/name/class` matching: `filter`, `token`, `csrf`, `recaptcha`
+- `captcha` and `otp` are kept and marked `humanGate` (operator pause; never solved)
+- Hidden `<select>` cascade children (panchayat) are kept with `optionsDynamic`
 - `search` and `query` in the id, name, or class mark a page search box. That box is kept, including when it sits in the header. Its selector is its id or name, or `input[type="search"]` when that matches only one element. It is not given a `form-field-N` index.
 
 ## Field types emitted

@@ -92,13 +92,23 @@ function extractFormFieldsWithFingerprint() {
   var hostname = location.hostname;
   var title = (document.querySelector('h1,h2,legend,.form-title,.page-title')
     ?.textContent || document.title || '').trim().slice(0, 50);
+  var serviceId = '';
+  try {
+    var params = new URL(location.href).searchParams;
+    serviceId = params.get('serviceId') || params.get('serviceid') || params.get('service_id') || '';
+  } catch (e) {}
+  if (!serviceId) {
+    var sidEl = document.querySelector('input[name="serviceId"],input[id="serviceId"],input[name="serviceid"]');
+    if (sidEl && (sidEl as any).value) serviceId = String((sidEl as any).value);
+  }
 
-  var result = { formKey: '', semanticFormKey: '', pageModel: null };
+  var result: any = { formKey: '', semanticFormKey: '', pageModel: null, structuralFingerprint: '' };
   if (_fp.fingerprint) {
     result = _fp.fingerprint(formFields, labelList, {
       hostname: hostname,
       title: title,
       url: location.href,
+      serviceId: serviceId,
       ccModels: (typeof window !== 'undefined' && window.ccModels) || null,
     });
   }
@@ -109,6 +119,13 @@ function extractFormFieldsWithFingerprint() {
     semanticFormKey: result.semanticFormKey,
     pageModel: result.pageModel,
     snapshotId: snapshotId,
+    meta: {
+      title: title,
+      hostname: hostname,
+      url: location.href,
+      serviceId: serviceId || '',
+      structuralFingerprint: result.structuralFingerprint || '',
+    },
   };
 }
 

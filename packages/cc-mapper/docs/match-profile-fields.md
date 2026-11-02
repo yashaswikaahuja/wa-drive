@@ -8,7 +8,7 @@ Second-stage handlers inside `fuzzyMatch`. Runs after special-field handlers dec
   Always consumes the field (maps or leaves unmapped).
 
 ## Order
-1. Skip Hindi / changed-name (when profile has no changed_name)
+1. Skip Hindi / `fillMode: auto` / captcha-otp-submit human gates / changed-name (when profile has no changed_name)
 2. Granular first/middle/last name parts
 3. DOB day/month/year and combined date fields
-4. Longest-alias win against `fieldAliases`
+4. Longest whole-token alias win against `fieldAliases` (`po` cannot match `police_station`)

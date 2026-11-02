@@ -82,5 +82,50 @@ console.log('\nCcFuzzyMatch ISO dob + split');
   assert('iso split year', isoMap['#year']?.value, '1995');
 }
 
+console.log('\nRTPS residence mapper');
+{
+  const sudhir = {
+    name: 'SUDHIR PRASAD',
+    father_name: 'RAM PRASAD',
+    mother_name: 'SITA DEVI',
+    gender: 'MALE',
+    state: 'Bihar',
+    district: 'Gaya',
+    'sub-division': 'Neemchak Bathani',
+    block: 'Mohra',
+    village: 'charwara',
+    panchayat: 'Tetar',
+    post_office: 'Atri',
+    police_station: 'Atri Thana',
+    pincode: '823311',
+    aadhaar_number: '123456789012',
+    'email-id': 'sudhir@example.com',
+    phone: '9876543210',
+  };
+  const rtps = [
+    { selector: '[id="78250"]', label: 'Name of Applicant', id: '78250', name: '', type: 'text', canonicalKey: 'name' },
+    { selector: '[id="17287"]', label: 'आवेदक / आवेदिका का नाम', id: '17287', name: '', type: 'text', canonicalKey: 'name_hindi', fillMode: 'auto' },
+    { selector: '[name="17290"]', label: 'पुरुष / Male / स्त्री / Female / तृतीय लिंग / Third Gender', id: '', name: '17290', type: 'radio-group', canonicalKey: 'gender', options: ['पुरुष / Male', 'स्त्री / Female', 'तृतीय लिंग / Third Gender'], optionSelectors: ['#m', '#f', '#o'] },
+    { selector: '[id="po"]', label: 'Post Office', id: 'po', name: '', type: 'dropdown', canonicalKey: 'post_office' },
+    { selector: '[id="65015"]', label: 'थाना / Police Station', id: '65015', name: '', type: 'dropdown', canonicalKey: 'police_station', optionsDynamic: true, options: [] },
+    { selector: '[id="email"]', label: 'Email ID', id: 'email', name: '', type: 'email', canonicalKey: 'email' },
+    { selector: '[id="56886"]', label: 'Panchayat', id: '56886', name: '', type: 'dropdown', canonicalKey: 'panchayat', optionsDynamic: true, dependsOn: 'address.block' },
+    { selector: '[id="circle"]', label: 'CIRCLE', id: 'circle', name: '', type: 'dropdown', canonicalKey: 'circle', section: 'office', catalogKey: 'office.circle' },
+    { selector: '[id="purpose"]', label: 'Purpose', id: 'purpose', name: '', type: 'text', canonicalKey: 'purpose', relationHint: 'per_application' },
+  ];
+  const map = fuzzyMatch(rtps, sudhir);
+  assert('applicant name', map['[id="78250"]']?.value, 'SUDHIR PRASAD');
+  assert('hindi name skipped (auto)', map['[id="17287"]'], undefined);
+  assertTruthy('gender mapped to option', map['#m'] || map['[name="17290"]']);
+  assert('gender profileKey', (map['#m'] || map['[name="17290"]'])?.profileKey, 'gender');
+  assert('post office not thana', map['[id="po"]']?.profileKey, 'post_office');
+  assert('thana is police_station', map['[id="65015"]']?.profileKey, 'police_station');
+  assert('thana does not steal post_office', map['[id="65015"]']?.profileKey !== 'post_office', true);
+  assert('email-id flattens via profileAtom', map['[id="email"]']?.value, 'sudhir@example.com');
+  assert('panchayat is panchayat not village', map['[id="56886"]']?.profileKey, 'panchayat');
+  assert('circle not sub_division', map['[id="circle"]'], undefined);
+  assert('purpose skipped (per_application)', map['[id="purpose"]'], undefined);
+}
+
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

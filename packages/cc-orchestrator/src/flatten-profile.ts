@@ -25,6 +25,24 @@
       flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
     }
     if (profile && profile.name) flat.name = flat.name || profile.name;
+    function copyIfEmpty(fromKey: any, toKey: any) {
+      if (flat[fromKey] != null && String(flat[fromKey]).trim() !== '' && (flat[toKey] == null || String(flat[toKey]).trim() === '')) {
+        flat[toKey] = flat[fromKey];
+      }
+    }
+    var keys = Object.keys(flat);
+    for (var i = 0; i < keys.length; i++) {
+      var src = keys[i];
+      copyIfEmpty(src, src.replace(/-/g, '_'));
+      copyIfEmpty(src, src.replace(/_/g, '-'));
+    }
+    copyIfEmpty('email-id', 'email');
+    copyIfEmpty('email_id', 'email');
+    copyIfEmpty('email', 'email_id');
+    copyIfEmpty('phone', 'mobile');
+    copyIfEmpty('mobile', 'phone');
+    copyIfEmpty('sub-division', 'sub_division');
+    copyIfEmpty('sub_division', 'sub-division');
     return flat;
   }
 

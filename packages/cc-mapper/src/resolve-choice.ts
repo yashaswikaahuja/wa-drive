@@ -1,7 +1,7 @@
 /**
  * resolve-choice — Map planned value onto radio/checkbox option selector
  */
-import { normChoice } from './field-ident.ts';
+import { normChoice, optionTexts } from './field-ident.ts';
 import type { ChoiceResolved, FormField, MappingEntry } from './types.ts';
 
 export { normChoice };
@@ -25,7 +25,7 @@ export function resolveChoiceToOption(
   const planned = String(plannedValue).trim();
   const plannedNorm = normChoice(planned);
   const type = field.type || '';
-  const opts = field.options || [];
+  const opts = optionTexts(field.options);
   const isYesNo = looksLikeYesNo(opts);
 
   // Reject free-text dumps on Yes/No style groups

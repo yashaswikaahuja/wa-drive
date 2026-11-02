@@ -58,7 +58,8 @@ async function runJobDispatch(envelope, tabId) {
       args: [profile, backendUrl, accessToken],
       func: async (prof, bUrl, aToken) => {
         const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + aToken };
-        const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
+        const extracted = extractFormFieldsWithFingerprint();
+        const { formFields, formKey, semanticFormKey } = extracted;
         if (!formFields.length) return { ok: false, error: 'no fields detected' };
         const pk = semanticFormKey || formKey;
         // Try saved mappings first
@@ -66,6 +67,17 @@ async function runJobDispatch(envelope, tabId) {
         try { const r = await fetch(bUrl + '/mappings/' + pk, { headers }); const d = await r.json(); if (d && typeof d === 'object' && Object.keys(d).length > 0) saved = d; } catch {}
         let mapping = {}, fbs = {};
         const gsk = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        const catalogKey = (f) => f.canonicalKey || gsk(f.label) || gsk(f.name) || gsk(f.id);
+        const mappingProfileKey = (f, mapping, fbs) => {
+          if (fbs[f.selector] && fbs[f.selector].profileKey) return fbs[f.selector].profileKey;
+          if (mapping[f.selector] && mapping[f.selector].profileKey) return mapping[f.selector].profileKey;
+          const sels = f.optionSelectors || [];
+          for (let si = 0; si < sels.length; si++) {
+            if (fbs[sels[si]] && fbs[sels[si]].profileKey) return fbs[sels[si]].profileKey;
+            if (mapping[sels[si]] && mapping[sels[si]].profileKey) return mapping[sels[si]].profileKey;
+          }
+          return f.canonicalKey || null;
+        };
         // #302: never raw-dump compound atoms onto part-looking fields.
         const partish = (f) => {
           const lbl = String(f.label || '').trim();
@@ -84,7 +96,8 @@ async function runJobDispatch(envelope, tabId) {
         };
         if (saved) {
           for (const f of formFields) {
-            const sk = gsk(f.label); const s = saved[sk];
+            if (f.fillMode === 'auto' || f.humanGate === 'captcha' || f.humanGate === 'otp' || f.humanGate === 'submit') continue;
+            const sk = catalogKey(f); const s = saved[sk] || saved[gsk(f.label)];
             if (!s || !s.profileKey) continue;
             const atom = atomOf(s.profileKey);
             if (!atom) continue;
@@ -129,18 +142,27 @@ async function runJobDispatch(envelope, tabId) {
           const updates = {};
           for (let i = 0; i < formFields.length; i++) {
             const f = formFields[i];
-            const sk = gsk(f.label);
+            const sk = catalogKey(f);
             if (!sk || sk.length < 2) continue;
             const info = fbs[f.selector];
-            const profileKey = info?.profileKey || mapping[f.selector]?.profileKey || (mapping[f.selector] ? Object.entries(prof).find(([,v]) => v === mapping[f.selector].value)?.[0] : null) || null;
+            const profileKey = mappingProfileKey(f, mapping, fbs) || info?.profileKey || mapping[f.selector]?.profileKey || (mapping[f.selector] ? Object.entries(prof).find(([,v]) => v === mapping[f.selector].value)?.[0] : null) || null;
             const wasFilled = records.some(r => r.selector === f.selector && r.result === 'filled');
             const relation = info?.relation || mapping[f.selector]?.relation || (profileKey ? { kind: partish(f) && compound(profileKey) ? 'unknown' : 'identity' } : { kind: 'unknown' });
-            updates[sk] = { profileKey, relation, label: f.label, type: f.type, order: i, options: f.options || null, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+            updates[sk] = {
+              profileKey, relation, label: f.label, type: f.type, order: i,
+              options: f.optionsDynamic ? 'dynamic' : (f.optionDetails || f.options || null),
+              locators: f.locators || null, lastLocator: f.lastLocator || null,
+              canonicalKey: f.canonicalKey || null, dependsOn: f.dependsOn || null,
+              fillMode: f.fillMode || null, humanGate: f.humanGate || null,
+              rules: f.rules || null, needsReview: !profileKey || !!f.needsReview,
+              constantValue: f.constantValue || null,
+              delta: { fills: wasFilled ? 1 : 0, corrections: 0 },
+            };
           }
           if (Object.keys(updates).length > 0) {
             await fetch(bUrl + '/mappings/' + pk, {
               method: 'POST', headers,
-              body: JSON.stringify({ updates, meta: { hostname: location.hostname, title: document.title.slice(0, 80), lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
+              body: JSON.stringify({ updates, meta: { hostname: location.hostname, title: (extracted.meta && extracted.meta.title) || document.title.slice(0, 80), serviceId: (extracted.meta && extracted.meta.serviceId) || '', structuralFingerprint: (extracted.meta && extracted.meta.structuralFingerprint) || '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
             });
           }
         } catch (e) { console.warn('[CC] bg mapping sync failed:', e.message); }

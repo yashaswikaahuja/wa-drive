@@ -2,6 +2,21 @@
 
 export type Profile = Record<string, string | number | boolean | null | undefined>;
 
+export interface FieldLocator {
+  type: string;
+  value: string;
+}
+
+export interface OptionRecord {
+  value?: string;
+  text?: string;
+  label?: string;
+  labelHi?: string;
+  labelEn?: string;
+}
+
+export type FieldOptions = string[] | OptionRecord[] | 'dynamic';
+
 export interface FormField {
   selector: string;
   label?: string;
@@ -9,9 +24,26 @@ export interface FormField {
   name?: string;
   placeholder?: string;
   type?: string;
-  options?: string[];
+  options?: FieldOptions;
+  optionDetails?: OptionRecord[];
   optionSelectors?: string[];
   value?: string;
+  locators?: FieldLocator[];
+  lastLocator?: string;
+  canonicalKey?: string | null;
+  catalogKey?: string | null;
+  section?: string | null;
+  dependsOn?: string | null;
+  fillMode?: string;
+  humanGate?: string | null;
+  rules?: Record<string, string | number | boolean> | null;
+  needsReview?: boolean;
+  optionsDynamic?: boolean;
+  constantValue?: string | null;
+  transliterate?: boolean;
+  hidden?: boolean;
+  showWhen?: Record<string, string> | null;
+  relationHint?: string | null;
 }
 
 export interface MappingEntry {
@@ -22,6 +54,7 @@ export interface MappingEntry {
   label?: string | null;
   monthNum?: number;
   monthShort?: string;
+  needsReview?: boolean;
   /** Present when planned via mapping-relation (#302). */
   relation?: {
     kind: string;

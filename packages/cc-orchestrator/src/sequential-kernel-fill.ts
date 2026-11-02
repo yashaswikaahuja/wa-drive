@@ -62,18 +62,25 @@
         var extracted = extractFormFieldsWithFingerprint();
         var formFields = extracted.formFields, formKey = extracted.formKey, semanticFormKey = extracted.semanticFormKey;
         if (!formFields.length) return { ok: false, error: 'no fields detected' };
-        var visible = formFields.filter(function (f: any) { return f && f.visible === true; });
-        if (!visible.length) return { ok: false, error: 'no fields detected' };
-        var snapshotId = extracted.snapshotId || (visible[0] && visible[0].snapshotId) || '';
-        var fields = visible.map(function (f: any) {
+        var snapshotId = extracted.snapshotId || (formFields[0] && formFields[0].snapshotId) || '';
+        var fields = formFields.map(function (f: any) {
           return {
             selector: f.selector, id: f.id || '', name: f.name || '', label: f.label || '',
             visualLabel: f.visualLabel || f.label || '', fieldId: f.fieldId || '',
             snapshotId: f.snapshotId || snapshotId, type: f.type || 'text',
             options: f.options || null, optionSelectors: f.optionSelectors || null, placeholder: f.placeholder || '',
+            locators: f.locators || null, lastLocator: f.lastLocator || null,
+            canonicalKey: f.canonicalKey || null, catalogKey: f.catalogKey || null,
+            section: f.section || null, dependsOn: f.dependsOn || null,
+            fillMode: f.fillMode || null, humanGate: f.humanGate || null,
+            rules: f.rules || null, needsReview: !!f.needsReview,
+            optionsDynamic: !!f.optionsDynamic, optionDetails: f.optionDetails || null,
+            constantValue: f.constantValue || null,
+            transliterate: !!f.transliterate, hidden: !!f.hidden,
+            showWhen: f.showWhen || null, relationHint: f.relationHint || null,
           };
         });
-        return { ok: true, fields: fields, profile: prof, formKey: formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href, snapshotId: snapshotId };
+        return { ok: true, fields: fields, profile: prof, formKey: formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href, snapshotId: snapshotId, meta: extracted.meta || null };
       },
     });
 
@@ -188,6 +195,7 @@
         return out;
       }
       function hasTaughtMapping(f: any) {
+        if (f && f.canonicalKey && savedMaps[f.canonicalKey] && savedMaps[f.canonicalKey].profileKey) return true;
         var keys = labelKeys(f && f.label).concat(labelKeys(f && f.name));
         for (var i = 0; i < keys.length; i++) {
           var entry = savedMaps[keys[i]];
@@ -360,6 +368,17 @@
           if (!fbs[bf.selector].fieldId) fbs[bf.selector].fieldId = bent.fieldId;
         }
       }
+      for (var di = 0; di < (fields || []).length; di++) {
+        var df = fields[di];
+        if (!df || !df.selector) continue;
+        var gate = df.humanGate;
+        if (df.fillMode === 'skip' || gate === 'captcha' || gate === 'otp' || gate === 'upload' || gate === 'submit') {
+          delete mapping[df.selector];
+          if (df.optionSelectors) {
+            for (var oi = 0; oi < df.optionSelectors.length; oi++) delete mapping[df.optionSelectors[oi]];
+          }
+        }
+      }
       var filledCount = await fillFormFieldsSequential(mapping, fbs, adapters || {}, fields);
       var records = [];
       try { var raw = document.body.getAttribute('data-cc-records'); if (raw) records = JSON.parse(raw); } catch (e) {}
@@ -491,16 +510,37 @@
       var syncProfile = extracted.profile || {};
       var updates = {};
       var gsk2 = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
+      function mappingProfileKey(field: any) {
+        var info = syncFbs[field.selector];
+        var mapEntry = syncMapping[field.selector];
+        if (info && info.profileKey) return info.profileKey;
+        if (mapEntry && mapEntry.profileKey) return mapEntry.profileKey;
+        var sels = field.optionSelectors || [];
+        for (var si = 0; si < sels.length; si++) {
+          var optInfo = syncFbs[sels[si]];
+          var optMap = syncMapping[sels[si]];
+          if (optInfo && optInfo.profileKey) return optInfo.profileKey;
+          if (optMap && optMap.profileKey) return optMap.profileKey;
+        }
+        if (field.relationHint === 'per_application' || field.canonicalKey === 'purpose' || field.canonicalKey === 'apply_to_office') return null;
+        if (field.canonicalKey) return field.canonicalKey;
+        return null;
+      }
       for (var i = 0; i < syncFields.length; i++) {
         var f = syncFields[i];
-        // Catalog key: prefer label, fall back to name/id so fields still appear in Admin Mappings.
-        var sk = gsk2(f.label);
+        // Namespaced catalog key (address.district vs office.district); never overwrite on collision.
+        var sk = f.catalogKey || (f.section && f.canonicalKey ? f.section + '.' + f.canonicalKey : '') || f.canonicalKey || gsk2(f.label);
         if (!sk || sk.length < 2) sk = gsk2(f.name);
         if (!sk || sk.length < 2) sk = gsk2(f.id);
         if (!sk || sk.length < 2) continue;
+        if (updates[sk]) {
+          var extra = gsk2(f.id) || gsk2(f.selector) || String(i);
+          if (extra) sk = sk + '.' + extra;
+        }
+        if (updates[sk]) continue;
         var info = syncFbs[f.selector];
         var mapEntry = syncMapping[f.selector];
-        var profileKey = (info && info.profileKey) || (mapEntry && mapEntry.profileKey) || null;
+        var profileKey = mappingProfileKey(f);
         var filledRec = syncRecords.find(function (rec: any) { return rec.selector === f.selector && rec.result === 'filled'; });
         var wasFilled = !!filledRec;
         var evidence = null;
@@ -510,7 +550,9 @@
           evidence = mapEntry.value;
         }
         var relation = (info && info.relation) || (mapEntry && mapEntry.relation) || null;
-        if ((!relation || !relation.kind || relation.kind === 'unknown') && profileKey && typeof relApi.induceRelation === 'function') {
+        if (f.relationHint === 'per_application' || f.canonicalKey === 'purpose' || f.canonicalKey === 'apply_to_office') {
+          relation = { kind: 'per_application' };
+        } else if ((!relation || !relation.kind || relation.kind === 'unknown') && profileKey && typeof relApi.induceRelation === 'function') {
           var induced = relApi.induceRelation(syncProfile, profileKey, evidence, f);
           if (induced && induced.kind && induced.kind !== 'unknown') relation = induced;
           else if (!relation || !relation.kind) relation = induced || { kind: 'unknown' };
@@ -525,7 +567,22 @@
           label: f.label || f.name || f.id || sk,
           type: f.type,
           order: i,
-          options: f.options || null,
+          options: f.optionsDynamic ? 'dynamic' : (f.optionDetails || f.options || null),
+          locators: f.locators || null,
+          lastLocator: f.lastLocator || null,
+          canonicalKey: f.canonicalKey || null,
+          catalogKey: f.catalogKey || sk,
+          section: f.section || null,
+          dependsOn: f.dependsOn || null,
+          fillMode: f.fillMode || null,
+          humanGate: f.humanGate || null,
+          rules: f.rules || null,
+          needsReview: !profileKey || !!f.needsReview,
+          constantValue: f.constantValue || null,
+          selector: f.selector || null,
+          transliterate: !!f.transliterate,
+          hidden: !!f.hidden,
+          showWhen: f.showWhen || null,
           delta: { fills: wasFilled ? 1 : 0, corrections: 0 },
         };
       }
@@ -533,7 +590,7 @@
         await fetch(backendUrl + '/mappings/' + encodeURIComponent(pk), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 3 } }),
+          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: (extracted.meta && extracted.meta.title) || '', serviceId: (extracted.meta && extracted.meta.serviceId) || '', structuralFingerprint: (extracted.meta && extracted.meta.structuralFingerprint) || '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 3 } }),
         });
       }
     } catch (e) { console.warn('[CC] mapping sync failed:', e.message); }

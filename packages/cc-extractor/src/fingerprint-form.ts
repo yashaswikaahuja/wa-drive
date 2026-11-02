@@ -60,6 +60,13 @@
     var semRaw = hostname + '|' + semanticLabels.join('|');
     var semanticFormKey = 's_' + djb2(semRaw);
 
+    var idSig = formFields
+      .map(function (f: any) { return String(f.id || f.name || '').trim(); })
+      .filter(Boolean)
+      .sort()
+      .join(',');
+    var structuralFingerprint = djb2((opts.serviceId || '') + '|' + idSig);
+
     // ── pageModel (optional) ──
     var pageModel = null;
     if (ccModels && typeof ccModels.createPageModel === 'function') {
@@ -72,7 +79,12 @@
     // ── Strip DOM references (not serialisable) ──
     formFields.forEach(function (f: any) { delete f._el; });
 
-    return { formKey: formKey, semanticFormKey: semanticFormKey, pageModel: pageModel };
+    return {
+      formKey: formKey,
+      semanticFormKey: semanticFormKey,
+      pageModel: pageModel,
+      structuralFingerprint: structuralFingerprint,
+    };
   }
 
   root.CcFingerprintForm = { fingerprint: fingerprint, _djb2: djb2 };

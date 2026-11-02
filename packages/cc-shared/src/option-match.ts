@@ -66,7 +66,7 @@
     var excludePlaceholders = config.excludePlaceholders !== false;
     var opts = options.map(function (o: any) {
       if (typeof o === 'string') return { text: o, value: o, _original: o };
-      return { text: o.text || o.label || '', value: o.value || '', _original: o };
+      return { text: o.text || o.labelEn || o.label || o.labelHi || '', value: o.value || '', _original: o };
     });
 
     if (excludePlaceholders) {

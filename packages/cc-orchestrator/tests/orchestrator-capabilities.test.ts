@@ -50,9 +50,10 @@ console.log('\nCcFlattenProfile');
 const { flattenProfile } = CcFlattenProfile;
 
 // Flat profile passthrough
-assert('flat profile unchanged',
-  flattenProfile({ name: 'Rahul', mobile: '9999999999' }),
-  { name: 'Rahul', mobile: '9999999999' });
+const flatPass = flattenProfile({ name: 'Rahul', mobile: '9999999999' });
+assert('flat profile name', flatPass.name, 'Rahul');
+assert('flat profile mobile', flatPass.mobile, '9999999999');
+assert('mobile aliases to phone', flatPass.phone, '9999999999');
 
 // Nested { value } objects flattened
 assert('nested value objects flattened',
@@ -60,9 +61,9 @@ assert('nested value objects flattened',
   { name: 'Rahul', dob: '01/01/1990' });
 
 // profile.data unwrapped
-assert('profile.data unwrapped',
-  flattenProfile({ data: { name: 'Rahul', mobile: '9999' } }),
-  { name: 'Rahul', mobile: '9999' });
+const fromData = flattenProfile({ data: { name: 'Rahul', mobile: '9999' } });
+assert('profile.data name', fromData.name, 'Rahul');
+assert('profile.data mobile', fromData.mobile, '9999');
 
 // profile.name preserved
 assert('profile.name preserved on top-level',
@@ -70,9 +71,14 @@ assert('profile.name preserved on top-level',
   'Rahul');
 
 // Mixed nested and flat
-assert('mixed nested and flat',
-  flattenProfile({ name: 'Rahul', dob: { value: '01/01/1990' }, mobile: '9999' }),
-  { name: 'Rahul', dob: '01/01/1990', mobile: '9999' });
+const mixed = flattenProfile({ name: 'Rahul', dob: { value: '01/01/1990' }, mobile: '9999' });
+assert('mixed name', mixed.name, 'Rahul');
+assert('mixed dob', mixed.dob, '01/01/1990');
+assert('mixed mobile', mixed.mobile, '9999');
+
+const hyphen = flattenProfile({ 'email-id': 'a@b.c', 'sub-division': 'Gaya' });
+assert('email-id aliases to email', hyphen.email, 'a@b.c');
+assert('sub-division aliases to sub_division', hyphen.sub_division, 'Gaya');
 
 // null/empty
 assert('null profile → empty', flattenProfile(null), {});

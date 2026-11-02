@@ -106,7 +106,16 @@ export function tryMatch(
   if (field.type === 'radio' || field.type === 'radio-group') {
     const condDecision = helpers.decideConditionalChoice(field, profile);
     if (condDecision) {
-      const resolvedCond = helpers.resolveChoiceToOption(field, condDecision, null);
+      const blob = `${field.label || ''} ${field.name || ''} ${field.id || ''} ${field.canonicalKey || ''}`.toLowerCase();
+      let condKey = field.canonicalKey || null;
+      if (!condKey) {
+        if (/gender|sex|ling|पुरुष|महिला|स्त्री|तृतीय/.test(blob)) condKey = 'gender';
+        else if (/marital/.test(blob)) condKey = 'marital_status';
+        else if (/disabilit|pwd|divyang/.test(blob)) condKey = 'is_pwd';
+        else if (/ex.?serviceman/.test(blob)) condKey = 'ex_serviceman';
+        else if (/changed|new_name|name_change/.test(blob)) condKey = 'changed_name';
+      }
+      const resolvedCond = helpers.resolveChoiceToOption(field, condDecision, condKey);
       if (resolvedCond) { mapping[resolvedCond.selector] = resolvedCond.entry; return true; }
     }
   }
