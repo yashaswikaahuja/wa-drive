@@ -23,7 +23,8 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { randomUUID } from 'node:crypto';
-import { resolveAllMappings, FieldClassification } from './mapping-engine.js';
+import { resolveAllMappings, classifyField, isEligibleForFill } from './mapping-engine.js';
+import { validateCandidateMappings, toConfirmationItems, applyEphemeralCandidates } from './candidate-mappings.js';
 import { resolveFillOrder } from './dependency-resolver.js';
 import { buildPlan, buildSupersedingPlan } from './plan-builder.js';
 import {
@@ -46,6 +47,8 @@ import { deriveProfile } from './deriveProfile.js';
  * @property {object} [profile_overrides] — Pre-resolved profile data (skips derivation)
  * @property {string} [supersedes_plan_id] — Plan being replaced (re-perception)
  * @property {string} [session_id] — Existing session to continue
+ * @property {object[]} [candidate_mappings] — Ephemeral Semantic Mapper candidates for this request
+ * @property {object[]} [confirmed_candidates] — Human-confirmed candidates for a subsequent planning pass
  */
 
 /**
@@ -131,6 +134,14 @@ export function validateSnapshot(snapshot: any) {
   return { valid: errors.length === 0, errors };
 }
 
+function candidateHandoffDiagnostics(handoff: any) {
+  return {
+    accepted: (handoff && handoff.accepted && handoff.accepted.length) || 0,
+    confirmation_required: (handoff && handoff.confirmation_required && handoff.confirmation_required.length) || 0,
+    rejected: handoff && Array.isArray(handoff.rejected) ? handoff.rejected : [],
+  };
+}
+
 /**
  * Generate a fill plan for a page snapshot.
  * This is the main entry point for the fill planner.
@@ -139,7 +150,10 @@ export function validateSnapshot(snapshot: any) {
  * @returns {Promise<FillPlanResponse>}
  */
 export async function generateFillPlan(request: any) {
-  const { snapshot, workspace_id, phone, person_key, profile_overrides, supersedes_plan_id, session_id } = request;
+  const {
+    snapshot, workspace_id, phone, person_key, profile_overrides,
+    supersedes_plan_id, session_id, candidate_mappings, confirmed_candidates,
+  } = request;
 
   const correlationId = `corr:${randomUUID().replace(/-/g, '').slice(0, 24)}`;
   const startTime = Date.now();
@@ -199,7 +213,16 @@ export async function generateFillPlan(request: any) {
   // 3. Derive scope from snapshot
   const scope = deriveScope(snapshot);
 
-  // 4. Resolve field mappings
+  // 4. Resolve field mappings (stored knowledge + same-request ephemeral candidates)
+  const handoff = validateCandidateMappings({
+    snapshot,
+    scope: { ...scope, organization_id: workspace_id },
+    candidates: candidate_mappings,
+    confirmed: confirmed_candidates,
+    isNodeEligible: (node: any) => isEligibleForFill(classifyField(node)),
+  });
+  const confirmation_required = toConfirmationItems(handoff.confirmation_required);
+
   let mappingResult;
   try {
     mappingResult = await resolveAllMappings(snapshot, profile, {
@@ -208,16 +231,19 @@ export async function generateFillPlan(request: any) {
       organization_id: workspace_id,
       country: scope.country,
     });
+    applyEphemeralCandidates(snapshot, profile, mappingResult, handoff.accepted);
   } catch (err) {
     return {
       success: false,
       plan: null,
       session_id: session_id || null,
+      confirmation_required,
       diagnostics: {
         correlation_id: correlationId,
         errors: [`Mapping resolution failed: ${err.message}`],
         phase: 'mapping',
         duration_ms: Date.now() - startTime,
+        candidate_handoff: candidateHandoffDiagnostics(handoff),
       },
     };
   }
@@ -229,13 +255,16 @@ export async function generateFillPlan(request: any) {
       success: false,
       plan: null,
       session_id: session_id || null,
+      confirmation_required,
       diagnostics: {
         correlation_id: correlationId,
         errors: ['No fields could be mapped to profile data'],
         phase: 'mapping',
         unmapped_count: unmapped.length,
+        unmapped_node_ids: unmapped,
         excluded_count: excluded.length,
         duration_ms: Date.now() - startTime,
+        candidate_handoff: candidateHandoffDiagnostics(handoff),
       },
     };
   }
@@ -275,12 +304,16 @@ export async function generateFillPlan(request: any) {
       success: false,
       plan: null,
       session_id: session_id || null,
+      confirmation_required,
       diagnostics: {
         correlation_id: correlationId,
         errors: ['Plan builder produced no steps (all mapped values were empty)'],
         phase: 'plan_building',
         mapped_count: mappings.length,
+        unmapped_count: unmapped.length,
+        unmapped_node_ids: unmapped,
         duration_ms: Date.now() - startTime,
+        candidate_handoff: candidateHandoffDiagnostics(handoff),
       },
     };
   }
@@ -323,17 +356,20 @@ export async function generateFillPlan(request: any) {
     success: true,
     plan,
     session_id: fillSession.session_id,
+    confirmation_required,
     diagnostics: {
       correlation_id: correlationId,
       phase: 'complete',
       mapped_count: mappings.length,
       unmapped_count: unmapped.length,
+      unmapped_node_ids: unmapped,
       excluded_count: excluded.length,
       step_count: plan.steps.length,
       dependency_levels: fillOrder.levels.length,
       has_cycle: fillOrder.cycle !== null,
       scope,
       duration_ms: Date.now() - startTime,
+      candidate_handoff: candidateHandoffDiagnostics(handoff),
     },
   };
 }
