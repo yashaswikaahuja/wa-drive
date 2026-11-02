@@ -101,7 +101,8 @@
     const raw = [field == null ? void 0 : field.label, field == null ? void 0 : field.name, field == null ? void 0 : field.id, field == null ? void 0 : field.placeholder, field == null ? void 0 : field.selector].filter(Boolean).join(" ").toLowerCase();
     if (!raw.trim()) return false;
     if (/police[_\s-]?station|\bthana\b|\bps\b/.test(raw)) return false;
-    return /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota|class)\b/.test(raw) || /\b(from|to)[_\s-]?station\b/.test(raw) || /\bstation\b/.test(raw) || /\b(depart|arrive|travel)[_\s-]?(date|time|city|from|to)\b/.test(raw);
+    const travelClass = /\b(travel|coach|reservation|journey)[_\s-]?class\b/.test(raw) || /\bclass\b/.test(raw) && /\b(train|flight|berth|quota|coach|sleeper)\b/.test(raw);
+    return /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota)\b/.test(raw) || travelClass || /\b(from|to)[_\s-]?station\b/.test(raw) || /\bstation\b/.test(raw) || /\b(depart|arrive|travel)[_\s-]?(date|time|city|from|to)\b/.test(raw);
   }
   var IDENTITY_PROFILE_KEYS = /* @__PURE__ */ new Set([
     "dob",
@@ -135,6 +136,48 @@
     "mobile",
     "mobile_number"
   ]);
+  var ATOM_GROUPS = {
+    dob: ["dob", "date_of_birth", "dob__day", "dob__month", "dob__year"],
+    mobile: ["mobile", "phone", "mobile_number", "phone_number", "mobile_no"],
+    email: ["email", "email_id"],
+    gender: ["gender", "sex"],
+    name: ["name", "full_name", "first_name", "last_name", "middle_name", "applicant_name"],
+    father_name: ["father_name"],
+    mother_name: ["mother_name"],
+    aadhaar: ["aadhaar", "aadhaar_number", "aadhar"]
+  };
+  function fieldAtomHint(field) {
+    if (!field) return null;
+    if (field.humanGate === "otp" || field.humanGate === "captcha") return "otp";
+    const lab = String(field.label || "").toLowerCase();
+    const idn = `${field.id || ""} ${field.name || ""}`.toLowerCase();
+    const typ = String(field.type || "").toLowerCase();
+    const ck = String(field.canonicalKey || "").toLowerCase();
+    const blob = `${lab} ${idn} ${field.placeholder || ""} ${ck} ${typ}`;
+    if (/otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return "otp";
+    if (/(mobile|phone|sampark|मोबाइल)/i.test(lab) && !/otp/i.test(lab)) return "mobile";
+    if (typ === "tel" && !/otp/i.test(blob)) return "mobile";
+    if (/e-?mail/i.test(lab)) return "email";
+    if (/\bgender\b|\bsex\b/i.test(lab) && !/transgender agency/i.test(lab)) return "gender";
+    if (/date of birth|birth date|\bdob\b|date birth/i.test(lab) && !/year of passing|education board/i.test(lab)) return "dob";
+    if (/father/i.test(lab) && /name/i.test(lab)) return "father_name";
+    if (/mother/i.test(lab) && /name/i.test(lab)) return "mother_name";
+    if (/aadhaar|aadhar/i.test(lab) && typ !== "checkbox" && typ !== "checkbox-agreement") return "aadhaar";
+    if (ck === "phone" || ck === "mobile_number") return "mobile";
+    if (ck === "date_of_birth") return "dob";
+    if (ATOM_GROUPS[ck]) return ck;
+    return null;
+  }
+  function profileKeyAgreesWithField(field, profileKey) {
+    const pk = String(profileKey || "").toLowerCase().trim();
+    if (!pk) return false;
+    const hint = fieldAtomHint(field);
+    if (!hint) return true;
+    if (hint === "otp") return false;
+    const group = ATOM_GROUPS[hint];
+    if (!group) return true;
+    return group.includes(pk);
+  }
   function normalizeIdent(s) {
     return String(s || "").toLowerCase().replace(/[-\s:*()'./\\]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
   }
@@ -213,7 +256,9 @@
     normChoice,
     aliasHitsIdent,
     optionText,
-    optionTexts
+    optionTexts,
+    fieldAtomHint,
+    profileKeyAgreesWithField
   };
 
   // ../../packages/cc-mapper/src/resolve-choice.ts
@@ -467,6 +512,8 @@
     const _isRelativeName = ident.includes("father") || ident.includes("mother") || ident.includes("husband") || ident.includes("spouse") || ident.includes("guardian");
     const isCandidateNameField = _hasName && !_isRelativeName && (ident.includes("candidate") || ident.includes("applicant") || ident.includes("student") || ident.includes("full_name") || ident.includes("your_name") || /^name/.test(ident) || ident.includes("_name_as_per"));
     const isHighestEduField = ident.includes("highest");
+    if (ident.includes("date_of_birth") || ident.includes("dateofbirth") || ident.includes("birth_date") || /(^|_)dob(_|$)/.test(ident)) return false;
+    if (_isRelativeName) return false;
     return !isCandidateNameField && !isHighestEduField && (ident.includes("matric") || ident.includes("10th") || ident.includes("12th") || ident.includes("graduation") || ident.includes("diploma") || ident.includes("board") || ident.includes("university") || ident.includes("certificate") || ident.includes("year_of") || ident.includes("percentage") || ident.includes("subject") || ident.includes("inter_roll"));
   }
   function tryMatchEducation(field, ident, matchBy, profile, mapping) {
@@ -481,7 +528,12 @@
     return true;
   }
   function tryMatch(field, ident, matchBy, profile, helpers, mapping) {
-    if (isTwinField(field, ident)) return true;
+    if (isTwinField(field, ident)) {
+      const dateTwin = /date of birth|\bdob\b|dd[\s_\-\/.]*mm/i.test(
+        `${field.label || ""} ${field.placeholder || ""} ${field.id || ""} ${field.name || ""}`
+      );
+      if (!dateTwin && field.canonicalKey !== "dob") return true;
+    }
     if (field.type === "radio" || field.type === "radio-group") {
       const condDecision = helpers.decideConditionalChoice(field, profile);
       if (condDecision) {
@@ -523,6 +575,46 @@
     if (m2) return { day: m2[3].padStart(2, "0"), month: m2[2].padStart(2, "0"), year: m2[1] };
     return null;
   }
+  var GENERATED_DD_ID_RE = /\b(?:ng-dd-|mat-select-|mat-input-|combobox-)\d+\b/gi;
+  var FULL_DATE_RE = /\bdd[\s_\-\/.]*mm[\s_\-\/.]*(?:yyyy|yyy)\b/i;
+  var NOT_DOB_RE = /\b(gender|sex|education board|matriculation|qualification|year of passing|highest level|nationality|country of nationality)\b/i;
+  var DOB_HINT_RE = /\b(date of birth|dob|birth date|birth_date|datebirth|day of birth|month of birth|year of birth)\b/i;
+  function stripGeneratedWidgetIds(s) {
+    return String(s || "").replace(GENERATED_DD_ID_RE, " ");
+  }
+  function locatorPlaceholder(field) {
+    const locs = field == null ? void 0 : field.locators;
+    if (!Array.isArray(locs)) return "";
+    for (let i = 0; i < locs.length; i++) {
+      if (locs[i] && locs[i].type === "placeholder" && locs[i].value) return String(locs[i].value);
+    }
+    return "";
+  }
+  function isFullDateWidget(field) {
+    if (!field) return false;
+    const lab = String(field.label || "").trim();
+    const ck = String(field.canonicalKey || "");
+    if ((ck === "dob" || ck === "date_of_birth") && !/^dd$|^day$|^mm$|^month$|^yyyy$|^yyy$|^year$/i.test(lab)) {
+      if (!profileKeyAgreesWithField(field, "dob")) return false;
+      return true;
+    }
+    const ph = `${field.placeholder || ""} ${locatorPlaceholder(field)}`;
+    const blob = `${lab} ${ph}`;
+    if (FULL_DATE_RE.test(blob)) return true;
+    if (/date of birth|\bbirth date\b/i.test(lab) && !/^dd$|^day$/i.test(lab)) return true;
+    if (/dateBirth|effectiveDate|jquerryEffectiveDate/i.test(`${field.id || ""} ${field.name || ""}`)) return true;
+    return false;
+  }
+  function refusesDobSplit(field) {
+    if (!field) return true;
+    const ck = String(field.canonicalKey || "");
+    if (ck && ck !== "dob" && ck !== "date_of_birth") return true;
+    const blob = stripGeneratedWidgetIds(
+      [field.label, field.name, field.id, field.placeholder, field.selector].filter(Boolean).join(" ")
+    );
+    if (NOT_DOB_RE.test(blob) && !DOB_HINT_RE.test(blob) && !FULL_DATE_RE.test(blob)) return true;
+    return false;
+  }
   function applySplitDob(formFields, profile, mapping) {
     if (!profile || profile.dob == null || profile.dob === "") return;
     const dp = parseDobParts(profile.dob);
@@ -533,11 +625,12 @@
     for (let di = 0; di < formFields.length; di++) {
       const df = formFields[di];
       if (!df || !df.selector || mapping[df.selector]) continue;
+      if (refusesDobSplit(df) || isFullDateWidget(df)) continue;
       const lbl = String(df.label || "").trim();
-      const idn = `${df.id || ""} ${df.name || ""}`.toLowerCase();
+      const idn = stripGeneratedWidgetIds(`${df.id || ""} ${df.name || ""}`).toLowerCase();
       const ph = String(df.placeholder || "").trim();
-      const combined = `${lbl} ${ph} ${idn}`.toLowerCase();
-      const isDay = /^dd$|^day$|^(\(?day\)?)$|day_of_birth|dob_day|birth_day|birthday_dd/i.test(lbl) || /^dd$|^day$/i.test(ph) || /(?:^|[^a-z])(dob_?day|birth_?day|day_of_birth|birthday_?dd|ddl_?day)(?:[^a-z]|$)/i.test(idn) || /\bdd\b/.test(combined) && !/\bdd[\s_-]*mm/.test(combined);
+      const combined = stripGeneratedWidgetIds(`${lbl} ${ph} ${idn}`).toLowerCase();
+      const isDay = /^dd$|^day$|^(\(?day\)?)$|day_of_birth|dob_day|birth_day|birthday_dd/i.test(lbl) || /^dd$|^day$/i.test(ph) || /(?:^|[^a-z])(dob_?day|birth_?day|day_of_birth|birthday_?dd|ddl_?day)(?:[^a-z]|$)/i.test(idn) || /\bdd\b/.test(combined) && !FULL_DATE_RE.test(combined) && !/\bdd[\s_\-\/.]*mm/.test(combined) && !DOB_HINT_RE.test(`${lbl} ${ph}`);
       const isMonth = /^mm$|^month$|^(\(?month\)?)$|month_of_birth|dob_month|birth_month/i.test(lbl) || /^mm$|^month$/i.test(ph) || /(?:^|[^a-z])(dob_?month|birth_?month|month_of_birth|ddl_?month)(?:[^a-z]|$)/i.test(idn) || /\bmm\b/.test(combined) && !/\bdd[\s_-]*mm[\s_-]*yyyy/.test(combined) && !isDay;
       const isYear = /^yyyy$|^yyy$|^year$|^(\(?year\)?)$|year_of_birth|dob_year|birth_year/i.test(lbl) || /^yyyy$|^year$/i.test(ph) || /(?:^|[^a-z])(dob_?year|birth_?year|year_of_birth|ddl_?year)(?:[^a-z]|$)/i.test(idn);
       if (isDay) {
@@ -636,7 +729,13 @@
     "local_body_type",
     "residence_type",
     "supporting_document_type",
-    "circle"
+    "circle",
+    "dob",
+    "board_10th",
+    "board_12th",
+    "year_of_passing",
+    "highest_education_qualification",
+    "roll_number"
   ]);
   function tryMatchNameParts(field, ident, matchBy, nameParts, mapping) {
     const isFatherMother = ident.includes("father") || ident.includes("mother") || ident.includes("pita") || ident.includes("mata");
@@ -662,6 +761,8 @@
   function tryMatchDob(field, ident, matchBy, profile, mapping) {
     if (!profile.dob) return false;
     if (isTravelJourneyField(field)) return false;
+    if (!profileKeyAgreesWithField(field, "dob")) return false;
+    if (refusesDobSplit(field)) return false;
     const dp = parseDobParts(profile.dob);
     if (!dp) return false;
     const dobDay = dp.day, dobMonth = dp.month, dobYear = dp.year;
@@ -670,6 +771,14 @@
     const monthNum = parseInt(dobMonth, 10) || 0;
     const selLower = matchBy === "dom-fallback" ? (field.selector || "").toLowerCase() : "";
     const t = (field.type || "").toLowerCase();
+    const ph = String(field.placeholder || "");
+    const lab = String(field.label || "");
+    if (isFullDateWidget(field) || /dd[-/.]mm[-/.]yyyy/i.test(ph) || /dd[-/.]mm[-/.]yyyy/i.test(lab)) {
+      const pattern = `${ph} ${lab}`;
+      const sep = /dd-mm/i.test(pattern) ? "-" : /dd\.mm/i.test(pattern) ? "." : "/";
+      mapping[field.selector] = { value: `${dobDay}${sep}${dobMonth}${sep}${dobYear}`, type: field.type || "", matchBy: "label", profileKey: "dob" };
+      return true;
+    }
     if (ident.includes("day") && (ident.includes("birth") || ident.includes("dob") || ident.includes("born") || ident.replace(/[_\s]/g, "") === "day" || selLower.includes("ddl_day") || selLower.includes("_day"))) {
       mapping[field.selector] = { value: parseInt(dobDay, 10).toString(), type: field.type || "", matchBy, profileKey: "dob" };
       return true;
@@ -716,7 +825,8 @@
       if (profileKey === "name" && (ident.includes("husband") || ident.includes("wife") || ident.includes("spouse") || ident.includes("guardian") || ident.includes("pati") || ident.includes("pita_pati"))) continue;
       if ((profileKey === "post_office" || profileKey === "village") && (ident.includes("purpose") || ident.includes("uddeshya") || ident.includes("apply") && ident.includes("office"))) continue;
       if (profileKey === "village" && (ident.includes("panchayat") || canonical === "panchayat")) continue;
-      if (canonical && LOCKED_CANONICAL.has(canonical) && profileKey !== canonical) continue;
+      if (canonical && LOCKED_CANONICAL.has(canonical) && profileKey !== canonical && profileKeyAgreesWithField(field, canonical)) continue;
+      if (!profileKeyAgreesWithField(field, profileKey)) continue;
       if (profileKey === "sub_division" && (ident === "circle" || canonical === "circle")) continue;
       if (profileKey === "post_office" && identLooksLikePoliceStation(ident)) continue;
       if (profileKey === "degree_name" && ident.includes("highest")) continue;

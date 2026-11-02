@@ -3,8 +3,8 @@
  *
  * Sorts formFields[] by true rendered position using getBoundingClientRect.
  * Fields within ROW_BAND (8px) vertically are treated as the same row and
- * sorted left-to-right within that row. Unrendered / display:none fields
- * (width=0, height=0, top=0, left=0) are sent to the end.
+ * sorted left-to-right within that row. Hidden fields (`hidden: true`) and
+ * unrendered / display:none fields (width or height 0) are sent to the end.
  *
  * Reassigns .index after sort. Requires _el references to be present.
  * _el refs are stripped by the fingerprint step after this runs.
@@ -19,15 +19,19 @@
 
   var ROW_BAND = 8; // px — fields within this vertical distance are the same row
 
-  function visualPos(el: any) {
+  function visualPos(field: any) {
+    if (field && field.hidden) {
+      return { row: 1e9, left: 1e9 };
+    }
+    var el = field && field._el;
     if (!el || typeof el.getBoundingClientRect !== 'function') {
       return { row: 1e9, left: 1e9 };
     }
     var r = el.getBoundingClientRect();
     var top = r.top + ((typeof window !== 'undefined' && window.pageYOffset) || 0);
     var left = r.left + ((typeof window !== 'undefined' && window.pageXOffset) || 0);
-    // Unrendered / display:none → send to end
-    if (r.width === 0 && r.height === 0 && top === 0 && left === 0) {
+    // Unrendered / display:none — zero-size boxes often keep a leftover x/y
+    if (!(r.width > 0) || !(r.height > 0)) {
       return { row: 1e9, left: 1e9 };
     }
     return { row: Math.round(top / ROW_BAND), left: Math.round(left) };
@@ -41,7 +45,7 @@
    * @returns {Array} formFields (same reference)
    */
   function sort(formFields: any) {
-    formFields.forEach(function (f: any) { f._pos = visualPos(f._el); });
+    formFields.forEach(function (f: any) { f._pos = visualPos(f); });
     formFields.sort(function (a, b) {
       return (a._pos.row - b._pos.row) || (a._pos.left - b._pos.left);
     });

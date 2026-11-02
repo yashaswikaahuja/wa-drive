@@ -70,6 +70,7 @@
             snapshotId: f.snapshotId || snapshotId, type: f.type || 'text',
             options: f.options || null, optionSelectors: f.optionSelectors || null, placeholder: f.placeholder || '',
             locators: f.locators || null, lastLocator: f.lastLocator || null,
+            index: f.index,
             canonicalKey: f.canonicalKey || null, catalogKey: f.catalogKey || null,
             section: f.section || null, dependsOn: f.dependsOn || null,
             fillMode: f.fillMode || null, humanGate: f.humanGate || null,
@@ -347,6 +348,57 @@
       }
       // #302: taught relations are materialized on the SW before executeScript.
       // Residual unmapped fields fall through to fuzzyMatch / skip — never raw-dump saved keys here.
+      function isFullDateish(f: any) {
+        if (!f) return false;
+        var lab = String(f.label || '').trim();
+        var ck = String(f.canonicalKey || '');
+        var ph = String(f.placeholder || '');
+        var blob = lab + ' ' + ph + ' ' + (f.id || '') + ' ' + (f.name || '');
+        if ((ck === 'dob' || ck === 'date_of_birth') && !/^dd$|^day$|^mm$|^month$|^yyyy$|^year$/i.test(lab)) return true;
+        if (/\bdd[\s_\-\/.]*mm[\s_\-\/.]*(?:yyyy|yyy)\b/i.test(lab + ' ' + ph)) return true;
+        if (/date of birth|\bbirth date\b/i.test(lab) && !/^dd$|^day$/i.test(lab)) return true;
+        if (/dateBirth|effectiveDate|jquerryEffectiveDate/i.test(blob)) return true;
+        return false;
+      }
+      if (!replanOnly) {
+        for (var si = 0; si < (fields || []).length; si++) {
+          var sf = fields[si];
+          if (!sf || !sf.selector || !mapping[sf.selector]) continue;
+          var sent = mapping[sf.selector];
+          var planned = String((sent && sent.value) || '');
+          var splitDay = sent && sent.matchBy === 'split-dob' && /^\d{1,2}$/.test(planned);
+          if (isFullDateish(sf) && (splitDay || /^\d{1,2}$/.test(planned))) {
+            delete mapping[sf.selector];
+            delete fbs[sf.selector];
+          }
+        }
+        // Live label wins over a sticky WSS/saved profileKey (BPSC Mobile Number → dob).
+        function profileKeyAgrees(f: any, pk: any) {
+          pk = String(pk || '').toLowerCase();
+          if (!pk || !f) return !pk ? false : true;
+          var lab = String(f.label || '').toLowerCase();
+          var typ = String(f.type || '').toLowerCase();
+          var blob = [f.label, f.id, f.name, f.placeholder, f.type, f.canonicalKey].filter(Boolean).join(' ').toLowerCase();
+          if (f.humanGate === 'otp' || f.humanGate === 'captcha') return false;
+          if (/otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return false;
+          if (pk === 'dob' || pk === 'date_of_birth' || pk.indexOf('dob__') === 0) {
+            if (/(mobile|phone|sampark)/i.test(lab) && !/otp/i.test(lab)) return false;
+            if (typ === 'tel') return false;
+            if (/e-?mail/i.test(lab) || /\bgender\b|\bsex\b/i.test(lab)) return false;
+          }
+          if ((pk === 'mobile' || pk === 'phone' || pk === 'mobile_number') && /otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return false;
+          return true;
+        }
+        for (var ci = 0; ci < (fields || []).length; ci++) {
+          var cf = fields[ci];
+          if (!cf || !cf.selector || !mapping[cf.selector]) continue;
+          var cpk = mapping[cf.selector].profileKey || (fbs[cf.selector] && fbs[cf.selector].profileKey);
+          if (!profileKeyAgrees(cf, cpk)) {
+            delete mapping[cf.selector];
+            delete fbs[cf.selector];
+          }
+        }
+      }
       var unmapped = replanOnly ? [] : fields.filter(function (f: any) { return !choiceCovered(f); });
       if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
         var fz = fuzzyMatch(unmapped, prof);
@@ -541,6 +593,9 @@
         var info = syncFbs[f.selector];
         var mapEntry = syncMapping[f.selector];
         var profileKey = mappingProfileKey(f);
+        if (profileKey && typeof relApi.profileKeyAgreesWithField === 'function' && !relApi.profileKeyAgreesWithField(f, profileKey)) {
+          profileKey = (f.canonicalKey && relApi.profileKeyAgreesWithField(f, f.canonicalKey)) ? f.canonicalKey : null;
+        }
         var filledRec = syncRecords.find(function (rec: any) { return rec.selector === f.selector && rec.result === 'filled'; });
         var wasFilled = !!filledRec;
         var evidence = null;
@@ -566,7 +621,7 @@
           relation: relation,
           label: f.label || f.name || f.id || sk,
           type: f.type,
-          order: i,
+          order: typeof f.index === 'number' ? f.index : i,
           options: f.optionsDynamic ? 'dynamic' : (f.optionDetails || f.options || null),
           locators: f.locators || null,
           lastLocator: f.lastLocator || null,

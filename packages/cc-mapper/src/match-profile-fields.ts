@@ -2,8 +2,8 @@
  * match-profile-fields — Name parts, DOB split, longest-alias win
  */
 import type { FormField, Mapping, MatchHelpers, NameParts, Profile } from './types.ts';
-import { parseDobParts } from './split-dob.ts';
-import { aliasHitsIdent, isTravelJourneyField, optionTexts } from './field-ident.ts';
+import { parseDobParts, refusesDobSplit, isFullDateWidget } from './split-dob.ts';
+import { aliasHitsIdent, isTravelJourneyField, optionTexts, profileKeyAgreesWithField } from './field-ident.ts';
 import { profileAtom } from './mapping-relation.ts';
 
 /** Canonical keys that must not bind a different profile atom (panchayat≠village, circle≠sub_division). */
@@ -12,6 +12,7 @@ const LOCKED_CANONICAL = new Set([
   'sub_division', 'ward', 'gender', 'name', 'father_name', 'mother_name', 'husband_name',
   'pincode', 'mobile', 'email', 'aadhaar_number', 'photo', 'purpose', 'apply_to_office',
   'local_body_type', 'residence_type', 'supporting_document_type', 'circle',
+  'dob', 'board_10th', 'board_12th', 'year_of_passing', 'highest_education_qualification', 'roll_number',
 ]);
 
 export function tryMatchNameParts(
@@ -52,6 +53,8 @@ export function tryMatchDob(
   if (!profile.dob) return false;
   // Never dump DOB into From/To/station/journey fields (#308 IRCTC).
   if (isTravelJourneyField(field)) return false;
+  if (!profileKeyAgreesWithField(field, 'dob')) return false;
+  if (refusesDobSplit(field)) return false;
   // Support DD/MM/YYYY and YYYY-MM-DD (do not blindly split on '/')
   const dp = parseDobParts(profile.dob);
   if (!dp) return false;
@@ -61,6 +64,14 @@ export function tryMatchDob(
   const monthNum = parseInt(dobMonth, 10) || 0;
   const selLower = matchBy === 'dom-fallback' ? (field.selector || '').toLowerCase() : '';
   const t = (field.type || '').toLowerCase();
+  const ph = String(field.placeholder || '');
+  const lab = String(field.label || '');
+  if (isFullDateWidget(field) || /dd[-/.]mm[-/.]yyyy/i.test(ph) || /dd[-/.]mm[-/.]yyyy/i.test(lab)) {
+    const pattern = `${ph} ${lab}`;
+    const sep = /dd-mm/i.test(pattern) ? '-' : /dd\.mm/i.test(pattern) ? '.' : '/';
+    mapping[field.selector] = { value: `${dobDay}${sep}${dobMonth}${sep}${dobYear}`, type: field.type || '', matchBy: 'label', profileKey: 'dob' };
+    return true;
+  }
   if (ident.includes('day') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || ident.replace(/[_\s]/g,'') === 'day' || selLower.includes('ddl_day') || selLower.includes('_day'))) {
     mapping[field.selector] = { value: parseInt(dobDay, 10).toString(), type: field.type || '', matchBy: matchBy, profileKey: 'dob' };
     return true;
@@ -117,7 +128,9 @@ function tryMatchAlias(
     if (profileKey === 'name' && (ident.includes('husband') || ident.includes('wife') || ident.includes('spouse') || ident.includes('guardian') || ident.includes('pati') || ident.includes('pita_pati'))) continue;
     if ((profileKey === 'post_office' || profileKey === 'village') && (ident.includes('purpose') || ident.includes('uddeshya') || (ident.includes('apply') && ident.includes('office')))) continue;
     if (profileKey === 'village' && (ident.includes('panchayat') || canonical === 'panchayat')) continue;
-    if (canonical && LOCKED_CANONICAL.has(canonical) && profileKey !== canonical) continue;
+    if (canonical && LOCKED_CANONICAL.has(canonical) && profileKey !== canonical
+      && profileKeyAgreesWithField(field, canonical)) continue;
+    if (!profileKeyAgreesWithField(field, profileKey)) continue;
     if (profileKey === 'sub_division' && (ident === 'circle' || canonical === 'circle')) continue;
     if (profileKey === 'post_office' && identLooksLikePoliceStation(ident)) continue;
     if (profileKey === 'degree_name' && ident.includes('highest')) continue;

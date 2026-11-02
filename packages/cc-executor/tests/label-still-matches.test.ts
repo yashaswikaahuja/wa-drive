@@ -40,5 +40,42 @@ assert('empty expected label allows the write', matches(elWithLabel('Mother name
 assert('unreadable live label allows the write', matches(elWithLabel(''), 'Father name'), true);
 assert('readLabel override sees the live title', matches(elWithLabel('Father name'), 'Father name', () => 'Mother name'), false);
 
+console.log('\nSection heading bleed on the same widget');
+{
+  const dateEl = {
+    id: 'dateBirth',
+    name: 'dateBirth',
+    placeholder: 'DD/MM/YYYY',
+    getAttribute: () => null,
+  };
+  assert(
+    'Country Of Nationality heading still matches retype DOB',
+    matches(dateEl, 'Re-type Date Of Birth *', () => 'Country Of Nationality'),
+    true,
+  );
+  assert(
+    'heading on a different widget does not match',
+    matches(elWithLabel('Country Of Nationality'), 'Father name'),
+    false,
+  );
+}
+
+console.log('\nRetype date labels stay the same widget');
+assert(
+  'Re-type vs Retype Date Of Birth still matches',
+  matches(elWithLabel('Retype Date Of Birth'), 'Re-type Date Of Birth'),
+  true,
+);
+assert(
+  'Candidate Date Birth still matches planned Date Of Birth',
+  matches(elWithLabel('Candidate Date Birth'), 'Re-type Date Of Birth'),
+  true,
+);
+assert(
+  'Mobile Number does not match planned Date Of Birth',
+  matches(elWithLabel('Mobile Number'), 'Re-type Date Of Birth'),
+  false,
+);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

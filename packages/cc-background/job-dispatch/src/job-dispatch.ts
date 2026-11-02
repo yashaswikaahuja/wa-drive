@@ -149,7 +149,7 @@ async function runJobDispatch(envelope, tabId) {
             const wasFilled = records.some(r => r.selector === f.selector && r.result === 'filled');
             const relation = info?.relation || mapping[f.selector]?.relation || (profileKey ? { kind: partish(f) && compound(profileKey) ? 'unknown' : 'identity' } : { kind: 'unknown' });
             updates[sk] = {
-              profileKey, relation, label: f.label, type: f.type, order: i,
+              profileKey, relation, label: f.label, type: f.type, order: typeof f.index === 'number' ? f.index : i,
               options: f.optionsDynamic ? 'dynamic' : (f.optionDetails || f.options || null),
               locators: f.locators || null, lastLocator: f.lastLocator || null,
               canonicalKey: f.canonicalKey || null, dependsOn: f.dependsOn || null,

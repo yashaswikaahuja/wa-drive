@@ -32,6 +32,7 @@ interface FieldMapping {
   options?: string[] | null;
   optionsDynamic?: boolean;
   profileKey: string | null;
+  catalogKey?: string | null;
   relation?: MappingRelation | null;
   fillMode?: FillMode | string | null;
   rules?: Rule[] | null;
@@ -40,6 +41,7 @@ interface FieldMapping {
   dependsOn?: string | null;
   constantValue?: string | null;
   fallback?: string | null;
+  hidden?: boolean;
   fills: number;
   corrections: number;
   lastSeen: string;
@@ -92,6 +94,8 @@ function toFieldMapping(raw: Record<string, unknown>): FieldMapping {
     options: optionLabels(raw.options),
     optionsDynamic: isDynamicOptions(raw),
     profileKey: asText(raw.profileKey),
+    catalogKey: asText(raw.catalogKey),
+    hidden: raw.hidden === true,
     relation: (raw.relation && typeof raw.relation === 'object' && !Array.isArray(raw.relation))
       ? raw.relation as MappingRelation
       : null,
@@ -178,6 +182,49 @@ function typeMeta(type: string) {
   if (grp === 'checkbox') return { icon: '☑', label: 'Checkbox', color: 'hsl(var(--good))' };
   if (grp === 'date') return { icon: '📅', label: 'Date', color: 'hsl(200 55% 40%)' };
   return { icon: '⎽', label: 'Text', color: 'hsl(var(--muted))' };
+}
+
+/** Applicant identity block as it appears on Indian certificate forms. */
+const IDENTITY_SEQ = [
+  'name', 'name_hindi', 'father_name', 'father_name_hindi',
+  'mother_name', 'mother_name_hindi', 'husband_name', 'husband_name_hindi',
+  'gender',
+];
+
+function identityRank(key: string, m: FieldMapping): number {
+  const raw = (m.catalogKey || m.profileKey || key).toLowerCase();
+  const stem = raw.includes('.') ? raw.slice(raw.lastIndexOf('.') + 1) : raw;
+  return IDENTITY_SEQ.indexOf(stem);
+}
+
+function gateRank(key: string, m: FieldMapping): number {
+  if (m.humanGate === 'otp') return 1;
+  if (m.humanGate === 'captcha') return 2;
+  const blob = `${m.label || ''} ${m.catalogKey || ''} ${key}`.toLowerCase();
+  if (/\botp\b/.test(blob)) return 1;
+  if (/captcha/.test(blob)) return 2;
+  return 0;
+}
+
+function compareFieldEntries(a: [string, FieldMapping], b: [string, FieldMapping]): number {
+  const ah = a[1].hidden ? 1 : 0;
+  const bh = b[1].hidden ? 1 : 0;
+  if (ah !== bh) return ah - bh;
+  const ag = gateRank(a[0], a[1]);
+  const bg = gateRank(b[0], b[1]);
+  if (ag !== bg) return ag - bg;
+  const ar = identityRank(a[0], a[1]);
+  const br = identityRank(b[0], b[1]);
+  const aId = ar >= 0 ? 0 : 1;
+  const bId = br >= 0 ? 0 : 1;
+  if (aId !== bId) return aId - bId;
+  if (ar >= 0 && br >= 0 && ar !== br) return ar - br;
+  const ao = a[1].order;
+  const bo = b[1].order;
+  if (ao !== undefined && bo !== undefined && ao !== bo) return ao - bo;
+  if (ao !== undefined && bo === undefined) return -1;
+  if (bo !== undefined && ao === undefined) return 1;
+  return a[0].localeCompare(b[0]);
 }
 
 export function MappingsPanel({ cfg }: { cfg: Config }) {
@@ -365,13 +412,7 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
 
   function renderSelectedForm() {
     if (!selected) return null;
-    const fieldEntries = Object.entries(fields).sort((a, b) => {
-      const ao = a[1].order, bo = b[1].order;
-      if (ao !== undefined && bo !== undefined) return ao - bo;
-      if (ao !== undefined) return -1;
-      if (bo !== undefined) return 1;
-      return a[0].localeCompare(b[0]);
-    });
+    const fieldEntries = Object.entries(fields).sort(compareFieldEntries);
 
     const typeCounts: Record<string, number> = { all: fieldEntries.length };
     for (const [, m] of fieldEntries) {
@@ -476,6 +517,7 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
                 style={{
                   padding: '10px 12px',
                   background: !m.profileKey && !m.fillMode ? 'hsl(45 90% 50% / 0.06)' : undefined,
+                  opacity: m.hidden ? 0.65 : undefined,
                 }}
               >
                 <div className="row between" style={{ gap: 10, flexWrap: 'wrap' }}>
@@ -497,6 +539,7 @@ export function MappingsPanel({ cfg }: { cfg: Config }) {
                           {m.optionsDynamic ? ' · options:dynamic' : ''}
                           {m.humanGate ? ` · gate:${m.humanGate}` : ''}
                           {m.dependsOn ? ` · dependsOn:${m.dependsOn}` : ''}
+                          {m.hidden ? ' · hidden' : ''}
                         </div>
                       </div>
                     </div>

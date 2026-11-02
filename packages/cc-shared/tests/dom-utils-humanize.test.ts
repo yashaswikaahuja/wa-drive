@@ -85,5 +85,26 @@ console.log('\ngetLabel humanize fallback');
   assert('humanizes id when no DOM label', getLabel(el), 'District');
 }
 
+console.log('\ngetLabel fieldset heading does not steal date widget');
+{
+  const legend = { textContent: 'Country Of Nationality' };
+  const fieldset = {
+    querySelector: (sel) => (String(sel).includes('legend') ? legend : null),
+  };
+  const el = {
+    id: 'dateBirth',
+    name: 'dateBirth',
+    placeholder: 'DD/MM/YYYY',
+    getAttribute: (k) => (k === 'placeholder' ? 'DD/MM/YYYY' : null),
+    closest: (sel) => (String(sel).includes('fieldset') ? fieldset : null),
+    parentElement: null,
+    previousElementSibling: null,
+  };
+  documentStub.querySelector = () => null;
+  const got = getLabel(el);
+  assert('not the country heading', /country of nationality/i.test(got), false);
+  assert('date widget label', /date of birth/i.test(got), true);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { mappingOptionsToStore } from '@cc/mapper';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../../db/db.js';
 import { guessProfileKey } from './label-mapper.js';
@@ -306,7 +307,9 @@ router.post('/:formKey', async ( req: any, res: any) => {
           if (label) existing.label = label;
           if (type) existing.type = type;
           if (order !== undefined) existing.order = order;
-          if (options) existing.options = options;
+          if (options !== undefined || info.optionsDynamic || info.dependsOn) {
+            existing.options = mappingOptionsToStore(info, existing);
+          }
           if (selector && !locked) existing.selector = String(selector).slice(0, 300);
           if (source === 'manual' || source === 'confirmed') existing.source = source;
           existing.lastSeen = today;
@@ -317,7 +320,7 @@ router.post('/:formKey', async ( req: any, res: any) => {
             label: label || null,
             type: type || 'text',
             order: order !== undefined ? order : null,
-            options: options || null,
+            options: mappingOptionsToStore(info, null),
             fillMode: fillMode || null,
             rules: rules || null,
             constantValue: constantValue !== undefined ? constantValue : null,

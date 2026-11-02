@@ -25,3 +25,5 @@ Before adding a candidate, checks:
 
 ## SSC/RRB/NTA workaround
 These forms reuse `id="dropsection"` for every dropdown. All ng-dropdown candidates get a unique `data-cc-id="ng-dd-N"` selector regardless of existing id.
+
+After scan, `extract-form-fields` runs `decorateField` so Gender / Education Board / Year of Passing get `canonicalKey`. Mapper split-dob ignores `ng-dd-N` ids (`\bdd\b` in those ids used to mark every Angular dropdown as a DOB day).

@@ -83,6 +83,22 @@ console.log('\nUnrendered fields');
   assert('hidden at end', fields[1].label, 'Hidden');
 }
 
+{
+  const ghost = makeField('Ghost', 40, 80);
+  ghost._el.getBoundingClientRect = () => ({ top: 40, left: 80, width: 0, height: 0 });
+  const fields = [ghost, makeField('Visible', 200, 0)];
+  sort(fields);
+  assert('zero-size leftover x/y still last', fields.map((f: any) => f.label).join(','), 'Visible,Ghost');
+}
+
+{
+  const hiddenFlag = makeField('OfficeState', 10, 10);
+  hiddenFlag.hidden = true;
+  const fields = [hiddenFlag, makeField('Name', 400, 0)];
+  sort(fields);
+  assert('hidden:true with a layout box still last', fields.map((f: any) => f.label).join(','), 'Name,OfficeState');
+}
+
 // ── null _el goes to end ──────────────────────────────────────────────────────
 {
   const fields = [makeNoElField('NoEl'), makeField('Real', 100, 0)];

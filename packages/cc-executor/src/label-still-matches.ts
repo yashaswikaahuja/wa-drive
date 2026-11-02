@@ -25,12 +25,47 @@
     return String(el.placeholder || '').trim();
   }
 
+  function isSectionHeading(s: any) {
+    return /country of nationality|^nationality$|^country$/.test(norm(s));
+  }
+
+  function widgetAgrees(el: any, expected: any) {
+    if (!el || !expected) return false;
+    var hint = [
+      el.placeholder,
+      el.id,
+      el.name,
+      el.getAttribute && el.getAttribute('placeholder'),
+      el.getAttribute && el.getAttribute('aria-label'),
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (/date of birth|\bdob\b|birth date/.test(expected)) {
+      return /date|birth|dob|dd\s*[\/\-.]\s*mm|datebirth|effectivedate/.test(hint);
+    }
+    if (/father/.test(expected)) return /father|pita/.test(hint);
+    if (/mother/.test(expected)) return /mother|mata/.test(hint);
+    return false;
+  }
+
+  function compact(s: any) {
+    return norm(s).replace(/\s+/g, '');
+  }
+
+  function isDobish(s: any) {
+    return /date of birth|birth date|\bdob\b|date birth/.test(String(s || ''));
+  }
+
   function matches(el: any, expectedLabel: any, readLabel?: any) {
     var expected = norm(expectedLabel);
     if (!expected) return true;
-    var live = norm(readVisualLabel(el, readLabel));
+    var liveRaw = readVisualLabel(el, readLabel);
+    var live = norm(liveRaw);
     if (!live) return true;
-    return live === expected;
+    if (live === expected) return true;
+    if (compact(live) === compact(expected)) return true;
+    // Fieldset heading steal: planned "Re-type Date Of Birth" vs live "Country Of Nationality".
+    if (isSectionHeading(liveRaw) && widgetAgrees(el, expected)) return true;
+    if (isDobish(expected) && isDobish(live)) return true;
+    return false;
   }
 
   root.CcLabelStillMatches = { matches: matches, norm: norm, read: readVisualLabel };

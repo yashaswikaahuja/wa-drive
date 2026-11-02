@@ -600,7 +600,7 @@ async function runJobDispatch(envelope, tabId) {
               relation,
               label: f.label,
               type: f.type,
-              order: i,
+              order: typeof f.index === "number" ? f.index : i,
               options: f.optionsDynamic ? "dynamic" : f.optionDetails || f.options || null,
               locators: f.locators || null,
               lastLocator: f.lastLocator || null,

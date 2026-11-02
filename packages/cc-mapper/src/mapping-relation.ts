@@ -9,7 +9,9 @@
  */
 
 import type { FormField, Mapping } from './types.ts';
-import { parseDobParts } from './split-dob.ts';
+import { parseDobParts, refusesDobSplit, isFullDateWidget, stripGeneratedWidgetIds } from './split-dob.ts';
+import { profileKeyAgreesWithField } from './field-ident.ts';
+export { profileKeyAgreesWithField, fieldAtomHint } from './field-ident.ts';
 
 /** Profile may hold plain atoms or `{ value }` wrappers from Hub/extraction. */
 export type RelationProfile = Record<string, unknown>;
@@ -278,17 +280,18 @@ export function induceRelation(
     return { kind: 'identity' };
   }
 
-  const blob = fieldBlob(field);
+  const blob = stripGeneratedWidgetIds(fieldBlob(field));
   const partish = looksLikePartField(field);
   const dateish =
-    partish || /\b(date|dob|birth|day|month|year|dd|mm|yyyy)\b/i.test(blob);
+    partish || (/\b(date|dob|birth|day|month|year|dd|mm|yyyy)\b/i.test(blob) && !refusesDobSplit(field));
   const nameish = partish || /\b(name|first|middle|last|surname|fname|lname)\b/i.test(blob);
   const sliceish =
     partish || /last\s*\d|first\s*\d|last\s*digit|suffix|prefix/i.test(blob);
 
   // date parts — ONLY when the field looks date-related (prevents nationality←dob day)
+  // Full DD/MM/YYYY widgets keep identity, not a day slice.
   const dp = parseDobParts(atom);
-  if (dp && dateish) {
+  if (dp && dateish && !isFullDateWidget(field)) {
     const sn = normLoose(sample);
     const dayN = String(parseInt(dp.day, 10));
     const monthN = String(parseInt(dp.month, 10));
@@ -429,6 +432,8 @@ export function materializeSavedRelations(
     if (entry.relation && entry.relation.kind === 'per_application') continue;
     // Never materialize dob/name/IDs into From/To/station (#308 IRCTC).
     if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS.has(String(entry.profileKey))) continue;
+    // Live label wins over a sticky saved key (BPSC Mobile Number stored as dob).
+    if (!profileKeyAgreesWithField(f, entry.profileKey)) continue;
     const relation = normalizeRelation(entry, f);
     const value = applyRelation(relation, profile, entry.profileKey, f);
     if (value == null) continue;
