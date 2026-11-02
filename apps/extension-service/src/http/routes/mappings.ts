@@ -270,7 +270,8 @@ router.post('/:formKey', async ( req: any, res: any) => {
       for (const [semanticKey, info] of Object.entries(updates) as any) {
         const { profileKey, delta = {}, label, type, order, options,
                 fillMode, rules, constantValue, fallback, relation, selector, source,
-                locators, lastLocator, canonicalKey, dependsOn, humanGate, needsReview } = info;
+                locators, lastLocator, canonicalKey, catalogKey, section, dependsOn,
+                humanGate, needsReview, transliterate, hidden, showWhen } = info;
         const existing = mappings[formKey][semanticKey];
         if (existing) {
           existing.fills = (existing.fills || 0) + (delta.fills || 0);
@@ -293,9 +294,14 @@ router.post('/:formKey', async ( req: any, res: any) => {
           if (locators !== undefined && !locked) existing.locators = locators;
           if (lastLocator !== undefined && !locked) existing.lastLocator = lastLocator;
           if (canonicalKey !== undefined && !locked) existing.canonicalKey = canonicalKey;
+          if (catalogKey !== undefined && !locked) existing.catalogKey = catalogKey;
+          if (section !== undefined && !locked) existing.section = section;
           if (dependsOn !== undefined && !locked) existing.dependsOn = dependsOn;
           if (humanGate !== undefined && !locked) existing.humanGate = humanGate;
           if (needsReview !== undefined && !locked) existing.needsReview = needsReview;
+          if (transliterate !== undefined && !locked) existing.transliterate = transliterate;
+          if (hidden !== undefined && !locked) existing.hidden = hidden;
+          if (showWhen !== undefined && !locked) existing.showWhen = showWhen;
           // Structural metadata (label/type/order/options) always refreshes from the live form
           if (label) existing.label = label;
           if (type) existing.type = type;
@@ -319,9 +325,14 @@ router.post('/:formKey', async ( req: any, res: any) => {
             locators: locators || null,
             lastLocator: lastLocator || null,
             canonicalKey: canonicalKey || null,
+            catalogKey: catalogKey || semanticKey,
+            section: section || null,
             dependsOn: dependsOn || null,
             humanGate: humanGate || null,
             needsReview: !!needsReview,
+            transliterate: !!transliterate,
+            hidden: !!hidden,
+            showWhen: showWhen || null,
             selector: selector ? String(selector).slice(0, 300) : null,
             fills: delta.fills || 0,
             corrections: delta.corrections || 0,

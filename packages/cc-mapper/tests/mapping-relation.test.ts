@@ -47,6 +47,16 @@ assert(
   normalizeRelation({ profileKey: 'phone', relation: { kind: 'last_n', n: 4 } }, { label: 'Last 4' }),
   { kind: 'last_n', n: 4 }
 );
+assert(
+  'purpose field → per_application',
+  normalizeRelation({ profileKey: 'purpose' }, { label: 'Purpose', canonicalKey: 'purpose' }),
+  { kind: 'per_application' }
+);
+assert(
+  'per_application apply returns null',
+  applyRelation({ kind: 'per_application' }, profile, 'purpose', { label: 'Purpose' }),
+  null
+);
 
 console.log('\napplyRelation');
 assert(
@@ -136,6 +146,25 @@ console.log('\nmaterializeSavedRelations');
   assert('name value', mapping['#name']?.value, 'Ram Kumar Sharma');
   assert('last4 value', mapping['#last4']?.value, '3210');
   assert('day skipped', mapping['#day'], undefined);
+}
+{
+  const mapping = {};
+  const fbs = {};
+  const fields = [
+    { selector: '#photo', label: 'Photo', type: 'file', humanGate: 'upload', fillMode: 'skip', canonicalKey: 'photo' },
+    { selector: '#purpose', label: 'Purpose', type: 'text', canonicalKey: 'purpose', relationHint: 'per_application' },
+    { selector: '#addr-dist', label: 'District', type: 'dropdown', canonicalKey: 'district', catalogKey: 'address.district', section: 'address' },
+  ];
+  const saved = {
+    photo: { profileKey: 'photo', relation: { kind: 'identity' } },
+    purpose: { profileKey: 'purpose', relation: { kind: 'per_application' } },
+    'address.district': { profileKey: 'district', relation: { kind: 'identity' } },
+  };
+  const n = materializeSavedRelations(fields, { district: 'Gaya' }, saved, mapping, fbs, 'test');
+  assert('skip upload and per_application, keep namespaced district', n, 1);
+  assert('photo not materialized', mapping['#photo'], undefined);
+  assert('purpose not materialized', mapping['#purpose'], undefined);
+  assert('address.district via catalogKey', mapping['#addr-dist']?.value, 'Gaya');
 }
 
 assert('looksLikePartField Day', looksLikePartField({ label: 'Day' }), true);

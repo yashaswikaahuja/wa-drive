@@ -5,7 +5,7 @@
  * Evidence from successful fills is used only to induce the relation.
  *
  * relation.kind:
- *   identity | last_n | first_n | date_part | email_local | name_part | unknown
+ *   identity | last_n | first_n | date_part | email_local | name_part | per_application | unknown
  */
 
 import type { FormField, Mapping } from './types.ts';
@@ -21,7 +21,8 @@ export type Relation =
   | { kind: 'first_n'; n: number }
   | { kind: 'date_part'; part: 'day' | 'month' | 'year'; pad?: number }
   | { kind: 'email_local' }
-  | { kind: 'name_part'; part: 'first' | 'middle' | 'last' };
+  | { kind: 'name_part'; part: 'first' | 'middle' | 'last' }
+  | { kind: 'per_application' };
 
 export type SavedMappingEntry = {
   profileKey?: string | null;
@@ -155,10 +156,18 @@ export function shapeCompatible(field: FormField | null | undefined, value: unkn
  *   - part-looking field + compound atom → unknown (do not raw-dump)
  *   - otherwise → identity (keep existing full-atom maps working)
  */
+function isPerApplicationField(field: FormField | null | undefined): boolean {
+  if (!field) return false;
+  if (field.relationHint === 'per_application') return true;
+  const ck = String(field.canonicalKey || '');
+  return ck === 'purpose' || ck === 'apply_to_office';
+}
+
 export function normalizeRelation(entry: SavedMappingEntry | null | undefined, field: FormField | null | undefined): Relation {
   if (entry && entry.relation && entry.relation.kind) {
     return { ...entry.relation };
   }
+  if (isPerApplicationField(field)) return { kind: 'per_application' };
   const pk = entry?.profileKey;
   if (!pk) return { kind: 'unknown' };
   // Legacy bare profileKey on a part-looking widget → do not raw-dump.
@@ -207,7 +216,7 @@ export function applyRelation(
   field: FormField | null | undefined,
 ): string | null {
   const kind = relation?.kind || 'unknown';
-  if (kind === 'unknown') return null;
+  if (kind === 'unknown' || kind === 'per_application') return null;
 
   const atom = profileAtom(profile, profileKey);
   if (atom == null) return null;
@@ -256,6 +265,7 @@ export function induceRelation(
   actualOrPlanned: unknown,
   field: FormField | null | undefined,
 ): Relation {
+  if (isPerApplicationField(field)) return { kind: 'per_application' };
   if (!profileKey) return { kind: 'unknown' };
   const atom = profileAtom(profile, profileKey);
   const sample = actualOrPlanned == null ? '' : String(actualOrPlanned).trim();
@@ -356,6 +366,13 @@ function lookupSavedEntry(
   field: FormField,
 ): SavedMappingEntry | null {
   if (!savedMap || !field) return null;
+  const catalog = (field as { catalogKey?: string }).catalogKey;
+  if (catalog && savedMap[catalog]) return savedMap[catalog];
+  if (field.section && field.canonicalKey) {
+    const namespaced = field.section + '.' + field.canonicalKey;
+    if (savedMap[namespaced]) return savedMap[namespaced];
+  }
+  if (field.canonicalKey && savedMap[field.canonicalKey]) return savedMap[field.canonicalKey];
   const keys = [...labelKeys(field.label), ...labelKeys(field.name)];
   for (const k of keys) {
     if (savedMap[k]?.profileKey) return savedMap[k];
@@ -402,10 +419,14 @@ export function materializeSavedRelations(
   const fbs = filledBySource || ({} as FilledBySource);
   for (const f of fields || []) {
     if (!f?.selector || map[f.selector]) continue;
+    if (f.fillMode === 'auto' || f.fillMode === 'skip') continue;
+    if (f.humanGate === 'captcha' || f.humanGate === 'otp' || f.humanGate === 'submit' || f.humanGate === 'upload') continue;
+    if (isPerApplicationField(f)) continue;
     // Choice widgets need option resolution — leave to caller.
     if (/radio|checkbox/i.test(String(f.type || ''))) continue;
     const entry = lookupSavedEntry(savedMap, f);
     if (!entry?.profileKey) continue;
+    if (entry.relation && entry.relation.kind === 'per_application') continue;
     // Never materialize dob/name/IDs into From/To/station (#308 IRCTC).
     if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS.has(String(entry.profileKey))) continue;
     const relation = normalizeRelation(entry, f);

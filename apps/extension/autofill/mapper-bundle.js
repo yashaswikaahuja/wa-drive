@@ -49,7 +49,7 @@
     village: ["village", "village_name", "gram", "gaon", "txt_village", "ddl_village"],
     post_office: ["post_office", "post", "txt_post", "post_name", "dakghar", "\u0921\u093E\u0915\u0918\u0930"],
     police_station: ["police_station", "thana", "ps", "txt_ps", "ddl_ps", "\u0925\u093E\u0928\u093E"],
-    sub_division: ["sub_division", "subdivision", "sub_div", "anumandal", "anchal", "circle", "txt_subdiv", "ddl_subdiv", "sub-division", "\u0905\u0928\u0941\u092E\u0902\u0921\u0932"],
+    sub_division: ["sub_division", "subdivision", "sub_div", "anumandal", "anchal", "txt_subdiv", "ddl_subdiv", "sub-division", "\u0905\u0928\u0941\u092E\u0902\u0921\u0932"],
     block: ["block", "block_name", "taluka", "tehsil", "prakhnd", "txt_block", "ddl_block", "\u092A\u094D\u0930\u0916\u0902\u0921"],
     panchayat: ["panchayat", "gram_panchayat", "panchayat_name", "\u0917\u094D\u0930\u093E\u092E_\u092A\u0902\u091A\u093E\u092F\u0924", "\u092A\u0902\u091A\u093E\u092F\u0924"],
     ward: ["ward", "ward_no", "ward_number", "ward_no", "\u0935\u093E\u0930\u094D\u0921"],
@@ -611,6 +611,33 @@
   }
 
   // ../../packages/cc-mapper/src/match-profile-fields.ts
+  var LOCKED_CANONICAL = /* @__PURE__ */ new Set([
+    "panchayat",
+    "police_station",
+    "post_office",
+    "village",
+    "block",
+    "district",
+    "state",
+    "sub_division",
+    "ward",
+    "gender",
+    "name",
+    "father_name",
+    "mother_name",
+    "husband_name",
+    "pincode",
+    "mobile",
+    "email",
+    "aadhaar_number",
+    "photo",
+    "purpose",
+    "apply_to_office",
+    "local_body_type",
+    "residence_type",
+    "supporting_document_type",
+    "circle"
+  ]);
   function tryMatchNameParts(field, ident, matchBy, nameParts, mapping) {
     const isFatherMother = ident.includes("father") || ident.includes("mother") || ident.includes("pita") || ident.includes("mata");
     if (isFatherMother) return false;
@@ -688,6 +715,9 @@
       if (profileKey === "mother_name" && !(ident.includes("mother") || ident.includes("mata")) && canonical !== "mother_name") continue;
       if (profileKey === "name" && (ident.includes("husband") || ident.includes("wife") || ident.includes("spouse") || ident.includes("guardian") || ident.includes("pati") || ident.includes("pita_pati"))) continue;
       if ((profileKey === "post_office" || profileKey === "village") && (ident.includes("purpose") || ident.includes("uddeshya") || ident.includes("apply") && ident.includes("office"))) continue;
+      if (profileKey === "village" && (ident.includes("panchayat") || canonical === "panchayat")) continue;
+      if (canonical && LOCKED_CANONICAL.has(canonical) && profileKey !== canonical) continue;
+      if (profileKey === "sub_division" && (ident === "circle" || canonical === "circle")) continue;
       if (profileKey === "post_office" && identLooksLikePoliceStation(ident)) continue;
       if (profileKey === "degree_name" && ident.includes("highest")) continue;
       if (field.type === "radio" || field.type === "radio-group") {
@@ -736,8 +766,9 @@
   }
   function tryMatch2(field, ident, matchBy, profile, nameParts, helpers, mapping) {
     if (isTravelJourneyField(field)) return true;
-    if (field.fillMode === "auto") return true;
-    if (field.humanGate === "captcha" || field.humanGate === "otp" || field.humanGate === "submit") return true;
+    if (field.fillMode === "auto" || field.fillMode === "skip") return true;
+    if (field.humanGate === "captcha" || field.humanGate === "otp" || field.humanGate === "submit" || field.humanGate === "upload") return true;
+    if (field.canonicalKey === "purpose" || field.canonicalKey === "apply_to_office" || field.canonicalKey === "circle") return true;
     if (ident.includes("hindi") || ident.includes("_hindi") || (field.label || "").includes("\u0939\u093F\u0902\u0926\u0940") || (field.label || "").includes("(Hindi)")) return true;
     const isChangedName = ident.includes("new_name") || ident.includes("changed_name") || ident.includes("newname") || ident.includes("changedname") || (field.label || "").toLowerCase().includes("new name") || (field.label || "").toLowerCase().includes("changed name");
     if (isChangedName && !profile.changed_name) return true;

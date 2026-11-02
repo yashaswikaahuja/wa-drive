@@ -47,7 +47,7 @@ export const FIELD_ALIASES: AliasMap = {
   village:        ['village', 'village_name', 'gram', 'gaon', 'txt_village', 'ddl_village'],
   post_office:    ['post_office', 'post', 'txt_post', 'post_name', 'dakghar', 'डाकघर'],
   police_station: ['police_station', 'thana', 'ps', 'txt_ps', 'ddl_ps', 'थाना'],
-  sub_division:   ['sub_division', 'subdivision', 'sub_div', 'anumandal', 'anchal', 'circle', 'txt_subdiv', 'ddl_subdiv', 'sub-division', 'अनुमंडल'],
+  sub_division:   ['sub_division', 'subdivision', 'sub_div', 'anumandal', 'anchal', 'txt_subdiv', 'ddl_subdiv', 'sub-division', 'अनुमंडल'],
   block:          ['block', 'block_name', 'taluka', 'tehsil', 'prakhnd', 'txt_block', 'ddl_block', 'प्रखंड'],
   panchayat:      ['panchayat', 'gram_panchayat', 'panchayat_name', 'ग्राम_पंचायत', 'पंचायत'],
   ward:           ['ward', 'ward_no', 'ward_number', 'ward_no', 'वार्ड'],

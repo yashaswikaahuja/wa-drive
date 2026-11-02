@@ -31,6 +31,8 @@ export interface FormField {
   locators?: FieldLocator[];
   lastLocator?: string;
   canonicalKey?: string | null;
+  catalogKey?: string | null;
+  section?: string | null;
   dependsOn?: string | null;
   fillMode?: string;
   humanGate?: string | null;
@@ -38,6 +40,10 @@ export interface FormField {
   needsReview?: boolean;
   optionsDynamic?: boolean;
   constantValue?: string | null;
+  transliterate?: boolean;
+  hidden?: boolean;
+  showWhen?: Record<string, string> | null;
+  relationHint?: string | null;
 }
 
 export interface MappingEntry {

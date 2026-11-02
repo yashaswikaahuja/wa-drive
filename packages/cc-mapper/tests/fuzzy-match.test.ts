@@ -94,6 +94,7 @@ console.log('\nRTPS residence mapper');
     'sub-division': 'Neemchak Bathani',
     block: 'Mohra',
     village: 'charwara',
+    panchayat: 'Tetar',
     post_office: 'Atri',
     police_station: 'Atri Thana',
     pincode: '823311',
@@ -108,7 +109,9 @@ console.log('\nRTPS residence mapper');
     { selector: '[id="po"]', label: 'Post Office', id: 'po', name: '', type: 'dropdown', canonicalKey: 'post_office' },
     { selector: '[id="65015"]', label: 'थाना / Police Station', id: '65015', name: '', type: 'dropdown', canonicalKey: 'police_station', optionsDynamic: true, options: [] },
     { selector: '[id="email"]', label: 'Email ID', id: 'email', name: '', type: 'email', canonicalKey: 'email' },
-    { selector: '[id="56886"]', label: 'Panchayat', id: '56886', name: '', type: 'dropdown', canonicalKey: 'panchayat', optionsDynamic: true, dependsOn: 'block' },
+    { selector: '[id="56886"]', label: 'Panchayat', id: '56886', name: '', type: 'dropdown', canonicalKey: 'panchayat', optionsDynamic: true, dependsOn: 'address.block' },
+    { selector: '[id="circle"]', label: 'CIRCLE', id: 'circle', name: '', type: 'dropdown', canonicalKey: 'circle', section: 'office', catalogKey: 'office.circle' },
+    { selector: '[id="purpose"]', label: 'Purpose', id: 'purpose', name: '', type: 'text', canonicalKey: 'purpose', relationHint: 'per_application' },
   ];
   const map = fuzzyMatch(rtps, sudhir);
   assert('applicant name', map['[id="78250"]']?.value, 'SUDHIR PRASAD');
@@ -119,6 +122,9 @@ console.log('\nRTPS residence mapper');
   assert('thana is police_station', map['[id="65015"]']?.profileKey, 'police_station');
   assert('thana does not steal post_office', map['[id="65015"]']?.profileKey !== 'post_office', true);
   assert('email-id flattens via profileAtom', map['[id="email"]']?.value, 'sudhir@example.com');
+  assert('panchayat is panchayat not village', map['[id="56886"]']?.profileKey, 'panchayat');
+  assert('circle not sub_division', map['[id="circle"]'], undefined);
+  assert('purpose skipped (per_application)', map['[id="purpose"]'], undefined);
 }
 
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);

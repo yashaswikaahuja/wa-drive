@@ -336,6 +336,64 @@ if (typeof module !== "undefined" && module.exports) {
     if (t.length < 2 || t.length > 80) return "";
     return t;
   }
+  var SYSTEM_NOISE_RE = /^(original code|cb code|location type|department level)$/i;
+  var OFFICE_CAPS_RE = /^(STATE|DISTRICT|BLOCK|CIRCLE|CB CODE|LOCATION TYPE|DEPARTMENT LEVEL)$/;
+  var COLLIDE_KEYS = ["state", "district", "block", "sub_division", "circle"];
+  var ADDRESS_KEYS = ["state", "district", "sub_division", "block", "village", "police_station", "panchayat", "post_office", "ward", "pincode"];
+  var PER_APP_KEYS = ["purpose", "apply_to_office"];
+  function isSystemNoise(label) {
+    return SYSTEM_NOISE_RE.test(String(label || "").trim());
+  }
+  function isNumericLabel(label) {
+    return /^[0-9]{3,}$/.test(String(label || "").trim());
+  }
+  function isOfficeCapsLabel(label) {
+    var lab = String(label || "").trim();
+    return lab.length > 0 && lab === lab.toUpperCase() && OFFICE_CAPS_RE.test(lab);
+  }
+  function localBodyShowWhen(label) {
+    var lab = String(label || "").trim();
+    var pairs = [
+      [/zilla parishad|जिला परिषद/i, "Zilla Parishad"],
+      [/municipal corporation|नगर निगम/i, "Municipal Corporation"],
+      [/municipal council/i, "Municipal Council"],
+      [/notified area/i, "Notified Area Council"],
+      [/town panchayat|नगर पंचायत/i, "Town Panchayat"],
+      [/^municipality$|नगरपालिका/i, "Municipality"],
+      [/^(gram panchayat|ग्राम पंचायत)$/i, "Gram Panchayat"]
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      if (pairs[i][0].test(lab)) return { local_body_type: pairs[i][1] };
+    }
+    return null;
+  }
+  function isTransliterateField(canonicalKey, label) {
+    if (/_hindi$/.test(String(canonicalKey || ""))) return true;
+    if (isMostlyHindi(label) && /नाम|\bname\b/i.test(String(label || "")) && !/name of applicant|applicant.?s name/i.test(String(label || ""))) return true;
+    return false;
+  }
+  function catalogKeyOf(f) {
+    var c = f && f.canonicalKey;
+    if (f && f.section && c && COLLIDE_KEYS.indexOf(c) >= 0) return f.section + "." + c;
+    return c || null;
+  }
+  function assignSections(formFields) {
+    var seenOffice = false;
+    for (var i = 0; i < formFields.length; i++) {
+      var f = formFields[i];
+      var lab = String(f.label || "").trim();
+      if (f.canonicalKey === "apply_to_office" || /apply to (the )?office/i.test(lab)) {
+        f.section = "office";
+        seenOffice = true;
+      } else if (isOfficeCapsLabel(lab) || seenOffice && COLLIDE_KEYS.indexOf(f.canonicalKey) >= 0) {
+        f.section = "office";
+        seenOffice = true;
+      } else if (ADDRESS_KEYS.indexOf(f.canonicalKey) >= 0) {
+        f.section = "address";
+      }
+      f.catalogKey = catalogKeyOf(f);
+    }
+  }
   function addLocator(locators, seen, type, value) {
     if (!value) return;
     var v = String(value).trim();
@@ -361,6 +419,7 @@ if (typeof module !== "undefined" && module.exports) {
     var fcn = attrOf(el, "formcontrolname") || attrOf(el, "ng-reflect-name");
     if (fcn) addLocator(locators, seen, "css", '[formcontrolname="' + String(fcn).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"]');
     addLocator(locators, seen, "css", selectorFallback);
+    if (el && el.id) addLocator(locators, seen, "xpath", '//*[@id="' + String(el.id).replace(/"/g, '\\"') + '"]');
     return locators;
   }
   function guessCanonicalKey(label, name, id, type, options) {
@@ -397,6 +456,7 @@ if (typeof module !== "undefined" && module.exports) {
     if (/\bvillage\b|गांव|गाँव/i.test(blob)) return "village";
     if (/\bward\b|वार्ड/i.test(blob)) return "ward";
     if (/purpose|उद्देश्य/i.test(blob)) return "purpose";
+    if (/^circle$/i.test(String(label || "").trim()) || /(^|\s)circle(\s|$)/i.test(blob) && !/sub[\s-]*division|अनुमंडल/i.test(blob)) return "circle";
     if (/residence type|type of residence|स्थायी|अस्थायी/i.test(all)) return "residence_type";
     if (/photo|photograph|पासपोर्ट साइज/i.test(blob)) return "photo";
     if (/apply to (the )?office|office to apply/i.test(blob)) return "apply_to_office";
@@ -443,15 +503,35 @@ if (typeof module !== "undefined" && module.exports) {
     return Object.keys(rules).length ? rules : null;
   }
   function decorateField(field, el, doc) {
+    if ((!field.label || isNumericLabel(field.label)) && el) {
+      var nearby = nearbyText(el);
+      if (nearby && !isNumericLabel(nearby)) field.label = nearby;
+    }
     var locators = buildLocators(el, doc, field.label, field.selector);
     field.locators = locators;
     field.lastLocator = locators.length ? locators[0].type : null;
     field.canonicalKey = guessCanonicalKey(field.label, field.name, field.id, field.type, field.options);
     field.humanGate = detectHumanGate(el, field.label, field.type);
     field.rules = readRules(el, field.label, field.type);
-    field.fillMode = isMostlyHindi(field.label) ? "auto" : "fill";
+    var transliterate = isTransliterateField(field.canonicalKey, field.label);
+    field.transliterate = transliterate;
+    var hasReadonly = !!(el && (el.readOnly === true || el.getAttribute && el.getAttribute("readonly") != null));
+    var hasDisabled = !!(el && (el.disabled === true || el.getAttribute && el.getAttribute("disabled") != null && el.getAttribute("disabled") !== "false"));
+    var readOnly = hasReadonly || hasDisabled;
+    if (field.humanGate === "captcha" || field.humanGate === "otp" || field.humanGate === "upload" || field.humanGate === "submit") {
+      field.fillMode = "skip";
+    } else if (transliterate) {
+      field.fillMode = "auto";
+    } else if (readOnly || AGREEMENT_RE.test(String(field.label || "")) && (field.type === "textarea" || field.type === "text")) {
+      field.fillMode = "skip";
+      field.readOnly = readOnly;
+    } else {
+      field.fillMode = "fill";
+    }
     field.dependsOn = null;
-    field.needsReview = !field.canonicalKey && !field.humanGate && field.type !== "search" && field.fillMode !== "auto";
+    field.showWhen = localBodyShowWhen(field.label);
+    if (PER_APP_KEYS.indexOf(field.canonicalKey) >= 0) field.relationHint = "per_application";
+    field.needsReview = !field.canonicalKey && !field.humanGate && field.type !== "search" && field.fillMode !== "auto" || PER_APP_KEYS.indexOf(field.canonicalKey) >= 0;
     if (field.canonicalKey === "residence_type" && Array.isArray(field.options)) {
       var hit = field.options.find(function(o) {
         var t = typeof o === "string" ? o : o && (o.text || o.labelEn || o.labelHi) || "";
@@ -461,41 +541,43 @@ if (typeof module !== "undefined" && module.exports) {
     }
     return field;
   }
-  var CASCADE_KEYS = ["state", "district", "sub_division", "block", "village", "police_station", "panchayat", "apply_to_office"];
+  var ADDRESS_CASCADE = ["state", "district", "sub_division", "block", "village", "police_station", "panchayat"];
+  var OFFICE_CASCADE = ["state", "district", "block", "circle"];
   function linkDependsOn(formFields) {
-    var seen = {};
+    var seenAddr = {};
+    var seenOff = {};
     for (var i = 0; i < formFields.length; i++) {
       var f = formFields[i];
       var key = f.canonicalKey;
-      if (key && CASCADE_KEYS.indexOf(key) >= 0) seen[key] = f;
       var isDrop = f.type === "dropdown" || f.type === "select" || f.type === "mat-select" || f.type === "ng-dropdown";
+      if (f.section === "office") {
+        if (key && OFFICE_CASCADE.indexOf(key) >= 0) seenOff[key] = f;
+      } else if (key && ADDRESS_CASCADE.indexOf(key) >= 0) {
+        seenAddr[key] = f;
+      }
       if (!isDrop) continue;
       if (f.optionsDynamic || f.options === "dynamic" || !f.options || Array.isArray(f.options) && f.options.length === 0) {
         f.optionsDynamic = true;
         if (!f.options || Array.isArray(f.options) && f.options.length === 0) f.options = [];
+        var chain = f.section === "office" ? OFFICE_CASCADE : ADDRESS_CASCADE;
+        var seen = f.section === "office" ? seenOff : seenAddr;
+        var parent = null;
         if (key === "panchayat") {
-          f.dependsOn = seen.local_body_type ? "local_body_type" : seen.block ? "block" : null;
+          parent = seenAddr.block || seenAddr.sub_division || seenAddr.district || null;
         } else {
-          var idx = key ? CASCADE_KEYS.indexOf(key) : -1;
-          var parent = null;
+          var idx = key ? chain.indexOf(key) : -1;
           if (idx > 0) {
             for (var p = idx - 1; p >= 0; p--) {
-              if (seen[CASCADE_KEYS[p]] && seen[CASCADE_KEYS[p]] !== f) {
-                parent = seen[CASCADE_KEYS[p]];
+              if (seen[chain[p]] && seen[chain[p]] !== f) {
+                parent = seen[chain[p]];
                 break;
               }
             }
           }
-          if (!parent) {
-            for (var j = i - 1; j >= 0; j--) {
-              var prev = formFields[j];
-              if (prev && (prev.type === "dropdown" || prev.type === "select")) {
-                parent = prev;
-                break;
-              }
-            }
-          }
-          if (parent) f.dependsOn = parent.canonicalKey || parent.selector || parent.id || null;
+        }
+        if (parent) {
+          f.dependsOn = catalogKeyOf(parent) || parent.canonicalKey || parent.selector || parent.id || null;
+          f.rules = Object.assign({}, f.rules || {}, { waitForOptions: true });
         }
       }
     }
@@ -530,11 +612,16 @@ if (typeof module !== "undefined" && module.exports) {
     var isGoodLabel = helpers.isGoodLabel;
     function blocked(el) {
       if (isInSkipContext(el) && !isPageSearch(el)) return true;
-      if (typeof helpers.isVisuallyPresent === "function" && !helpers.isVisuallyPresent(el)) {
-        var tag = String(el.tagName || "").toLowerCase();
-        var kind = String(el.type || "").toLowerCase();
-        if (tag === "select") return false;
-        if (kind === "file") return false;
+      var tag = String(el.tagName || "").toLowerCase();
+      var kind = String(el.type || "").toLowerCase();
+      var rawLabel = (getLabel(el) || nearbyText(el) || el.id || "").trim();
+      var present = typeof helpers.isVisuallyPresent !== "function" || helpers.isVisuallyPresent(el);
+      if (isSystemNoise(rawLabel) && !present) return true;
+      if (kind === "file" && isNumericLabel(rawLabel) && !present) return true;
+      if (!present) {
+        if (tag === "select" && !isSystemNoise(rawLabel)) return false;
+        if (kind === "file" && /photo|photograph|पासपोर्ट/i.test(rawLabel)) return false;
+        if (localBodyShowWhen(rawLabel)) return false;
         if (kind === "checkbox" || kind === "radio") {
           var lab = null;
           if (el.id && el.ownerDocument && el.ownerDocument.querySelector) {
@@ -642,11 +729,17 @@ if (typeof module !== "undefined" && module.exports) {
         return;
       }
       var label = getLabel(el);
+      if (!label || isNumericLabel(label)) {
+        var nearby = nearbyText(el);
+        if (nearby) label = nearby;
+      }
       if (!label && helpers.humanizeAttr) {
         label = helpers.humanizeAttr(el.name || el.id || "") || "";
       } else if (!label && typeof window !== "undefined" && window.ccDomUtils && window.ccDomUtils.humanizeAttr) {
         label = window.ccDomUtils.humanizeAttr(el.name || el.id || "") || "";
       }
+      if (isSystemNoise(label) && typeof helpers.isVisuallyPresent === "function" && !helpers.isVisuallyPresent(el)) return;
+      if (el.type === "file" && isNumericLabel(label) && typeof helpers.isVisuallyPresent === "function" && !helpers.isVisuallyPresent(el)) return;
       var selector = makeSelector(el, doc);
       if (!selector && pageSearch) selector = uniqueSearchSelector(el, doc);
       if (!selector && pageSearch) return;
@@ -741,7 +834,18 @@ if (typeof module !== "undefined" && module.exports) {
         _el: cg.firstEl
       }, cg.firstEl, doc));
     }
+    assignSections(formFields);
     linkDependsOn(formFields);
+    formFields = formFields.filter(function(f) {
+      var el = f._el;
+      var present = !el || typeof helpers.isVisuallyPresent !== "function" || helpers.isVisuallyPresent(el);
+      if (!present) f.hidden = true;
+      if (f.showWhen && f.hidden) f.fillMode = f.fillMode || "fill";
+      if (f.hidden && !f.showWhen && !f.optionsDynamic && f.fillMode !== "auto") f.fillMode = "skip";
+      if (isSystemNoise(f.label) && f.hidden) return false;
+      if (f.type === "file" && isNumericLabel(f.label) && (f.hidden || !present)) return false;
+      return true;
+    });
     return { formFields, labelList };
   }
   root2.CcScanStandardFields = { scan };

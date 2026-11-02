@@ -7,6 +7,7 @@ export type RelationKind =
   | 'date_part'
   | 'email_local'
   | 'name_part'
+  | 'per_application'
   | 'unknown';
 
 export interface MappingRelation {
@@ -141,6 +142,7 @@ export function previewRelation(
       if (rel.part === 'middle') return parts.length >= 3 ? parts.slice(1, -1).join(' ') : '';
       return null;
     }
+    case 'per_application':
     case 'unknown':
     default:
       return null;
@@ -154,5 +156,6 @@ export const RELATION_KIND_OPTIONS: { kind: RelationKind; label: string }[] = [
   { kind: 'date_part', label: 'Date part' },
   { kind: 'email_local', label: 'Email local-part' },
   { kind: 'name_part', label: 'Name part' },
+  { kind: 'per_application', label: 'Per application (do not reuse)' },
   { kind: 'unknown', label: 'Unknown (AI next fill)' },
 ];

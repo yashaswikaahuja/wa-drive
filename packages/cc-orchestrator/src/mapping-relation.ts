@@ -61,8 +61,16 @@
     return true;
   }
 
+  function isPerApplicationField(field: any) {
+    if (!field) return false;
+    if (field.relationHint === 'per_application') return true;
+    var ck = String(field.canonicalKey || '');
+    return ck === 'purpose' || ck === 'apply_to_office';
+  }
+
   function normalizeRelation(entry: any, field: any) {
     if (entry && entry.relation && entry.relation.kind) return Object.assign({}, entry.relation);
+    if (isPerApplicationField(field)) return { kind: 'per_application' };
     var pk = entry && entry.profileKey;
     if (!pk) return { kind: 'unknown' };
     if (looksLikePartField(field) && isCompoundAtom(pk)) return { kind: 'unknown' };
@@ -88,7 +96,7 @@
 
   function applyRelation(relation: any, profile: any, profileKey: any, field: any) {
     var kind = (relation && relation.kind) || 'unknown';
-    if (kind === 'unknown') return null;
+    if (kind === 'unknown' || kind === 'per_application') return null;
     var atom = profileAtom(profile, profileKey);
     if (atom == null) return null;
     var value = null;
@@ -120,6 +128,7 @@
   }
 
   function induceRelation(profile: any, profileKey: any, actualOrPlanned: any, field: any) {
+    if (isPerApplicationField(field)) return { kind: 'per_application' };
     if (!profileKey) return { kind: 'unknown' };
     var atom = profileAtom(profile, profileKey);
     var sample = actualOrPlanned == null ? '' : String(actualOrPlanned).trim();
@@ -177,6 +186,10 @@
 
   function lookupSavedEntry(savedMap: any, field: any) {
     if (!savedMap || !field) return null;
+    if (field.catalogKey && savedMap[field.catalogKey]) return savedMap[field.catalogKey];
+    if (field.section && field.canonicalKey && savedMap[field.section + '.' + field.canonicalKey]) {
+      return savedMap[field.section + '.' + field.canonicalKey];
+    }
     if (field.canonicalKey && savedMap[field.canonicalKey]) return savedMap[field.canonicalKey];
     var keys = labelKeys(field.label).concat(labelKeys(field.name));
     var i;
@@ -213,10 +226,13 @@
     for (var i = 0; i < (fields || []).length; i++) {
       var f = fields[i];
       if (!f || !f.selector || map[f.selector]) continue;
-      if (f.fillMode === 'auto' || f.humanGate === 'captcha' || f.humanGate === 'otp' || f.humanGate === 'submit') continue;
+      if (f.fillMode === 'auto' || f.fillMode === 'skip') continue;
+      if (f.humanGate === 'captcha' || f.humanGate === 'otp' || f.humanGate === 'submit' || f.humanGate === 'upload') continue;
+      if (isPerApplicationField(f)) continue;
       if (/radio|checkbox/i.test(String(f.type || ''))) continue;
       var entry = lookupSavedEntry(savedMap, f);
       if (!entry || !entry.profileKey) continue;
+      if (entry.relation && entry.relation.kind === 'per_application') continue;
       // Never materialize dob/name/IDs into From/To/station (#308).
       if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS[String(entry.profileKey)]) continue;
       var relation = normalizeRelation(entry, f);

@@ -6,6 +6,14 @@ import { parseDobParts } from './split-dob.ts';
 import { aliasHitsIdent, isTravelJourneyField, optionTexts } from './field-ident.ts';
 import { profileAtom } from './mapping-relation.ts';
 
+/** Canonical keys that must not bind a different profile atom (panchayat≠village, circle≠sub_division). */
+const LOCKED_CANONICAL = new Set([
+  'panchayat', 'police_station', 'post_office', 'village', 'block', 'district', 'state',
+  'sub_division', 'ward', 'gender', 'name', 'father_name', 'mother_name', 'husband_name',
+  'pincode', 'mobile', 'email', 'aadhaar_number', 'photo', 'purpose', 'apply_to_office',
+  'local_body_type', 'residence_type', 'supporting_document_type', 'circle',
+]);
+
 export function tryMatchNameParts(
   field: FormField,
   ident: string,
@@ -108,6 +116,9 @@ function tryMatchAlias(
     if (profileKey === 'mother_name' && !(ident.includes('mother') || ident.includes('mata')) && canonical !== 'mother_name') continue;
     if (profileKey === 'name' && (ident.includes('husband') || ident.includes('wife') || ident.includes('spouse') || ident.includes('guardian') || ident.includes('pati') || ident.includes('pita_pati'))) continue;
     if ((profileKey === 'post_office' || profileKey === 'village') && (ident.includes('purpose') || ident.includes('uddeshya') || (ident.includes('apply') && ident.includes('office')))) continue;
+    if (profileKey === 'village' && (ident.includes('panchayat') || canonical === 'panchayat')) continue;
+    if (canonical && LOCKED_CANONICAL.has(canonical) && profileKey !== canonical) continue;
+    if (profileKey === 'sub_division' && (ident === 'circle' || canonical === 'circle')) continue;
     if (profileKey === 'post_office' && identLooksLikePoliceStation(ident)) continue;
     if (profileKey === 'degree_name' && ident.includes('highest')) continue;
 
@@ -161,8 +172,9 @@ export function tryMatch(
 ): boolean {
   // Travel/journey widgets: leave blank — never bind identity atoms (#308).
   if (isTravelJourneyField(field)) return true;
-  if (field.fillMode === 'auto') return true;
-  if (field.humanGate === 'captcha' || field.humanGate === 'otp' || field.humanGate === 'submit') return true;
+  if (field.fillMode === 'auto' || field.fillMode === 'skip') return true;
+  if (field.humanGate === 'captcha' || field.humanGate === 'otp' || field.humanGate === 'submit' || field.humanGate === 'upload') return true;
+  if (field.canonicalKey === 'purpose' || field.canonicalKey === 'apply_to_office' || field.canonicalKey === 'circle') return true;
   if (ident.includes('hindi') || ident.includes('_hindi') || (field.label||'').includes('हिंदी') || (field.label||'').includes('(Hindi)')) return true;
   const isChangedName = ident.includes('new_name') || ident.includes('changed_name') || ident.includes('newname') || ident.includes('changedname') || (field.label||'').toLowerCase().includes('new name') || (field.label||'').toLowerCase().includes('changed name');
   if (isChangedName && !profile.changed_name) return true;

@@ -68,6 +68,7 @@ for (const kw of ['captcha', 'otp']) {
   const { formFields } = scan(makeDoc([makeInput({ id: kw, _label: 'Field' })]), helpers);
   assert(`id="${kw}" captured as humanGate`, formFields.length, 1);
   assert(`id="${kw}" humanGate type`, formFields[0].humanGate, kw);
+  assert(`id="${kw}" fillMode skip`, formFields[0].fillMode, 'skip');
 }
 {
   const { formFields } = scan(makeDoc([makeInput({ id: 'filter', name: 'filter', _label: 'Filter' })]), helpers);
@@ -282,9 +283,12 @@ console.log('\nLocators, cascade, Hindi auto, rules');
   const { formFields } = scan(makeDoc([name, hindi, pin]), helpers);
   const byId = {};
   formFields.forEach((f) => { byId[f.id] = f; });
+  assert('name fillMode fill', byId['78250'].fillMode, 'fill');
   assert('name locators include id', byId['78250'].locators.some((l) => l.type === 'id'), true);
+  assert('name locators include xpath', byId['78250'].locators.some((l) => l.type === 'xpath' && l.value.includes('78250')), true);
   assert('name canonicalKey', byId['78250'].canonicalKey, 'name');
   assert('hindi fillMode auto', byId['17287'].fillMode, 'auto');
+  assert('hindi transliterate', byId['17287'].transliterate, true);
   assert('hindi canonicalKey', byId['17287'].canonicalKey, 'name_hindi');
   assert('pin digits rule', byId.pin.rules && byId.pin.rules.digits, 6);
 }
@@ -316,8 +320,86 @@ console.log('\nLocators, cascade, Hindi auto, rules');
   assert('thana is police_station not post_office', byKey.police_station && byKey.police_station.id, '65015');
   assert('thana optionsDynamic', byKey.police_station.optionsDynamic, true);
   assert('panchayat present', !!byKey.panchayat, true);
-  assert('panchayat dependsOn', byKey.panchayat.dependsOn, 'block');
+  assert('panchayat dependsOn', byKey.panchayat.dependsOn, 'address.block');
+  assert('panchayat waitForOptions', byKey.panchayat.rules && byKey.panchayat.rules.waitForOptions, true);
   assert('office is dropdown', byKey.apply_to_office.type, 'dropdown');
+  assert('office relationHint', byKey.apply_to_office.relationHint, 'per_application');
+}
+
+console.log('\nReview #2 sections, fillMode, noise, human gates');
+{
+  const addrDist = Object.assign(makeInput({ tagName: 'SELECT', id: '11', type: '', _label: 'District' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const apply = Object.assign(makeInput({ tagName: 'SELECT', id: 'applLoc', type: '', _label: 'Apply to the Office' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const offState = Object.assign(makeInput({ tagName: 'SELECT', id: '40', type: '', _label: 'STATE' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const offDist = Object.assign(makeInput({ tagName: 'SELECT', id: '41', type: '', _label: 'DISTRICT' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const circle = Object.assign(makeInput({ tagName: 'SELECT', id: '42', type: '', _label: 'CIRCLE' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [addrDist, apply, offState, offDist, circle] : []; } };
+  const { formFields } = scan(doc, helpers);
+  const byCat = {};
+  formFields.forEach((f) => { byCat[f.catalogKey || f.canonicalKey] = f; });
+  assert('address.district catalogKey', !!byCat['address.district'], true);
+  assert('office.district catalogKey', !!byCat['office.district'], true);
+  assert('address and office district not the same field', byCat['address.district'].id !== byCat['office.district'].id, true);
+  assert('circle canonicalKey', byCat['office.circle'] && byCat['office.circle'].canonicalKey, 'circle');
+  assert('office.district dependsOn office.state', byCat['office.district'].dependsOn, 'office.state');
+}
+{
+  const res = Object.assign(makeInput({ tagName: 'SELECT', id: '41566', type: '', _label: 'Residence Type' }), {
+    querySelectorAll: () => [{ textContent: 'स्थायी', value: '1' }, { textContent: 'अस्थायी', value: '2' }],
+  });
+  const { formFields } = scan(makeDoc([res]), helpers);
+  assert('residence_type fillMode fill', formFields[0].fillMode, 'fill');
+  assert('residence_type canonicalKey', formFields[0].canonicalKey, 'residence_type');
+}
+{
+  const decl = makeInput({ tagName: 'TEXTAREA', id: 'decl', type: 'textarea', _label: 'Self Declaration' });
+  const { formFields } = scan(makeDoc([decl]), helpers);
+  assert('self declaration fillMode skip', formFields[0].fillMode, 'skip');
+}
+{
+  const photo = makeInput({ type: 'file', id: '90837', _label: 'Photo' });
+  const { formFields } = scan(makeDoc([photo]), helpers);
+  assert('photo humanGate upload', formFields[0].humanGate, 'upload');
+  assert('photo fillMode skip', formFields[0].fillMode, 'skip');
+}
+{
+  const purpose = makeInput({ id: 'purpose', _label: 'Purpose' });
+  const { formFields } = scan(makeDoc([purpose]), helpers);
+  assert('purpose relationHint', formFields[0].relationHint, 'per_application');
+  assert('purpose needsReview', formFields[0].needsReview, true);
+}
+{
+  const muni = Object.assign(makeInput({ tagName: 'SELECT', id: 'muni', type: '', _label: 'Municipality' }), {
+    querySelectorAll: () => [{ textContent: 'Please Select', value: '' }],
+  });
+  const helpersHidden = Object.assign({}, helpers, { isVisuallyPresent: () => false });
+  const { formFields } = scan(makeDoc([muni]), helpersHidden);
+  assert('municipality kept when hidden', formFields.length, 1);
+  assert('municipality showWhen', formFields[0].showWhen && formFields[0].showWhen.local_body_type, 'Municipality');
+}
+{
+  const noise = Object.assign(makeInput({ tagName: 'SELECT', id: 'orig', type: '', _label: 'Original Code' }), {
+    querySelectorAll: () => [{ textContent: 'A', value: '1' }],
+  });
+  const helpersHidden = Object.assign({}, helpers, { isVisuallyPresent: () => false });
+  const { formFields } = scan(makeDoc([noise]), helpersHidden);
+  assert('hidden Original Code dropped', formFields.length, 0);
+}
+{
+  const nameless = makeInput({ type: 'file', id: '90867', _label: '90867' });
+  const helpersHidden = Object.assign({}, helpers, { isVisuallyPresent: () => false });
+  const { formFields } = scan(makeDoc([nameless]), helpersHidden);
+  assert('hidden numeric file dropped', formFields.length, 0);
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────
