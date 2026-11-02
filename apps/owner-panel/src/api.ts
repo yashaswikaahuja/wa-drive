@@ -392,6 +392,9 @@ export const deleteMappingField = (cfg: Config, formKey: string, label: string) 
 export const deleteMappingForm = (cfg: Config, formKey: string) =>
   jsonSend<{ ok: boolean }>(cfg, 'DELETE', `/owner/learning/mappings/${encodeURIComponent(formKey)}`);
 
+export const deleteAllMappings = (cfg: Config) =>
+  jsonSend<{ ok: boolean }>(cfg, 'DELETE', '/owner/learning/mappings');
+
 export const fetchMappingTranslations = (cfg: Config) =>
   get<Record<string, string>>(cfg, '/owner/learning/mappings/translations');
 
