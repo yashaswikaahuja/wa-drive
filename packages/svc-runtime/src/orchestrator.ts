@@ -51,12 +51,6 @@ const PLAN_GENERATION_TIMEOUT_MS = 15_000;
 /** Maximum pages in a multi-page workflow. */
 const MAX_WORKFLOW_PAGES = 20;
 
-/** Delay between re-plan attempts after semantic mapping (ms). */
-const REMAP_RETRY_DELAY_MS = 500;
-
-/** Maximum retries for plan generation after semantic mapping. */
-const MAX_REMAP_RETRIES = 2;
-
 /** Maximum concurrent orchestrations per workspace. */
 const MAX_CONCURRENT_PER_WORKSPACE = 5;
 
@@ -170,10 +164,12 @@ function releaseConcurrency(workspaceId: any) {
  */
 function extractUnmappedFields(planResult: any, snapshot: any) {
   const diagnostics = planResult.diagnostics || {};
+  const nodes = snapshot.nodes || {};
+  if (Array.isArray(diagnostics.unmapped_node_ids) && diagnostics.unmapped_node_ids.length) {
+    return diagnostics.unmapped_node_ids.map((id: any) => nodes[id]).filter(Boolean);
+  }
   if (!diagnostics.unmapped_count || diagnostics.unmapped_count === 0) return [];
 
-  // Collect nodes that were not mapped
-  const nodes = snapshot.nodes || {};
   const mappedNodeIds = new Set();
 
   if (planResult.plan && planResult.plan.steps) {
@@ -308,16 +304,15 @@ export async function orchestrateSnapshot(params: any) {
       const remapResult = await attemptSemanticMapping(
         planResult, snapshot, workspaceId, userId, phone, personKey, profileOverrides
       );
-      if (remapResult.replanSuccess) {
+      if (remapResult.planResult) {
         planResult = remapResult.planResult;
         ctx.metrics.phases.semantic_mapping = remapResult.duration_ms;
       }
     } else if (!planResult.success && planResult.diagnostics.phase === 'mapping') {
-      // All fields unmapped — try semantic mapping from scratch
       const remapResult = await attemptSemanticMapping(
         planResult, snapshot, workspaceId, userId, phone, personKey, profileOverrides
       );
-      if (remapResult.replanSuccess) {
+      if (remapResult.planResult) {
         planResult = remapResult.planResult;
         ctx.metrics.phases.semantic_mapping = remapResult.duration_ms;
       }
@@ -337,6 +332,7 @@ export async function orchestrateSnapshot(params: any) {
         orchestrationId,
         sessionId: planResult.session_id,
         workflowId: ctx.workflowId,
+        confirmation_required: planResult.confirmation_required || [],
       });
 
       // Track in workflow if multi-page
@@ -369,6 +365,7 @@ export async function orchestrateSnapshot(params: any) {
       orchestrationId,
       reason: planResult.diagnostics.errors?.[0] || 'Could not generate fill plan',
       diagnostics: planResult.diagnostics,
+      confirmation_required: planResult.confirmation_required || [],
     });
 
     ctx.metrics.phases.total = Date.now() - startTime;
@@ -468,43 +465,32 @@ async function attemptSemanticMapping(originalPlanResult: any, snapshot: any, wo
       return { replanSuccess: false, planResult: null, duration_ms: Date.now() - startTime };
     }
 
-    // Wait briefly for knowledge store to propagate new mappings
-    await delay(REMAP_RETRY_DELAY_MS);
+    const replanResult = await generateFillPlan({
+      snapshot,
+      workspace_id: workspaceId,
+      phone,
+      person_key: personKey,
+      profile_overrides: profileOverrides,
+      candidate_mappings: mapResult.mappings,
+    });
 
-    // Re-plan with new mappings available
-    let retries = 0;
-    let replanResult = null;
-
-    while (retries < MAX_REMAP_RETRIES) {
-      replanResult = await generateFillPlan({
-        snapshot,
-        workspace_id: workspaceId,
-        phone,
-        person_key: personKey,
-        profile_overrides: profileOverrides,
-      });
-
-      if (replanResult.success && replanResult.plan) {
-        // Check if we got more steps than before
-        const originalSteps = originalPlanResult.plan?.steps?.length || 0;
-        const newSteps = replanResult.plan.steps.length;
-        if (newSteps > originalSteps) {
-          return { replanSuccess: true, planResult: replanResult, duration_ms: Date.now() - startTime };
-        }
-      }
-
-      retries++;
-      if (retries < MAX_REMAP_RETRIES) {
-        await delay(REMAP_RETRY_DELAY_MS);
+    if (replanResult.success && replanResult.plan) {
+      const originalSteps = originalPlanResult.plan?.steps?.length || 0;
+      const newSteps = replanResult.plan.steps.length;
+      if (newSteps > originalSteps || originalSteps === 0) {
+        return { replanSuccess: true, planResult: replanResult, duration_ms: Date.now() - startTime };
       }
     }
 
-    // Return the replan result even if not better (it may have succeeded where original failed)
-    if (replanResult && replanResult.success) {
-      return { replanSuccess: true, planResult: replanResult, duration_ms: Date.now() - startTime };
+    if (replanResult && (replanResult.success || (replanResult.confirmation_required && replanResult.confirmation_required.length))) {
+      return {
+        replanSuccess: !!replanResult.success,
+        planResult: replanResult,
+        duration_ms: Date.now() - startTime,
+      };
     }
 
-    return { replanSuccess: false, planResult: null, duration_ms: Date.now() - startTime };
+    return { replanSuccess: false, planResult: replanResult || null, duration_ms: Date.now() - startTime };
   } catch (err) {
     console.warn(`[orchestrator] Semantic mapping attempt failed: ${err.message}`);
     return { replanSuccess: false, planResult: null, duration_ms: Date.now() - startTime };
@@ -532,15 +518,6 @@ async function loadDerivationRules(workspaceId: any, scope: any) {
   } catch {
     return [];
   }
-}
-
-/**
- * Promise-based delay.
- * @param {number} ms
- * @returns {Promise<void>}
- */
-function delay(ms: any) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 

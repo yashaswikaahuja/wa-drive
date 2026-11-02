@@ -33,6 +33,9 @@ router.post('/fill-plan', authMiddleware, async ( req: any, res: any) => {
 
     const scope = deriveScope(snapshot);
 
+    const confirmedCandidates = Array.isArray(req.body.confirmed_candidates) ? req.body.confirmed_candidates : [];
+    const inboundCandidates = Array.isArray(req.body.candidate_mappings) ? req.body.candidate_mappings : [];
+
     // Generate the fill plan using server-side intelligence
     let planResult = await generateFillPlan({
       snapshot,
@@ -41,6 +44,8 @@ router.post('/fill-plan', authMiddleware, async ( req: any, res: any) => {
       person_key: null,
       profile_overrides: profile,
       profile_id: profileId || null,
+      candidate_mappings: inboundCandidates,
+      confirmed_candidates: confirmedCandidates,
     });
 
     // ── Cold-start semantic mapping ─────────────────────────────────
@@ -71,7 +76,8 @@ router.post('/fill-plan', authMiddleware, async ( req: any, res: any) => {
           requesterId: req.user.userId,
         });
 
-        // If AI produced mappings, retry the fill plan (new knowledge records exist)
+        // Same-request hand-off: pass every mapper candidate. Planner accepts
+        // auto_accept (policy permitting) and returns needs_confirmation items.
         if (mapResult.ok && mapResult.mappings.length > 0) {
           planResult = await generateFillPlan({
             snapshot,
@@ -80,15 +86,17 @@ router.post('/fill-plan', authMiddleware, async ( req: any, res: any) => {
             person_key: null,
             profile_overrides: profile,
             profile_id: profileId || null,
-            candidate_mappings: mapResult.mappings.filter(mapping => mapping.disposition === 'auto_accept'),
+            candidate_mappings: mapResult.mappings,
+            confirmed_candidates: confirmedCandidates,
           });
-          // Attach semantic mapping diagnostics
           planResult.diagnostics = {
             ...planResult.diagnostics,
             semantic_mapping: {
               strategy: mapResult.strategy,
               mapped: mapResult.mappings.length,
               excluded: mapResult.excluded.length,
+              auto_accept: mapResult.mappings.filter((m: any) => m.disposition === 'auto_accept').length,
+              needs_confirmation: mapResult.mappings.filter((m: any) => m.disposition === 'needs_confirmation').length,
             },
           };
         } else {
@@ -115,6 +123,7 @@ router.post('/fill-plan', authMiddleware, async ( req: any, res: any) => {
         plan: null,
         classification: null,
         session: null,
+        confirmation_required: planResult.confirmation_required || [],
         diagnostics: planResult.diagnostics,
       });
     }
@@ -205,6 +214,7 @@ router.post('/fill-plan', authMiddleware, async ( req: any, res: any) => {
       classification,
       plan_clamped: planClamped,
       session: { id: planResult.session_id },
+      confirmation_required: planResult.confirmation_required || [],
       diagnostics: planResult.diagnostics,
     });
   } catch (err) {

@@ -1,5 +1,6 @@
 export * from './fill-planner.js';
 export * from './mapping-engine.js';
+export * from './candidate-mappings.js';
 export * from './dependency-resolver.js';
 export * from './plan-builder.js';
 export * from './derivation-engine.js';
