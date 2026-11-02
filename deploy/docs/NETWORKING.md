@@ -40,9 +40,15 @@ Two trust zones:
   data                postgres             5432   tcp     tailnet only
   data                redis                6379   tcp     tailnet only   (scaled mode)
   mesh                tailscaled         41641   udp     WAN (NAT-traversal)
+  owner               backend owner      3010    http    tailnet only (do not SG-open)
 ```
 
 Rule of thumb: **only 443/80 face the internet.** Everything else is tailnet-private.
+Owner panel: bookmark `http://cybercontrol-app.taild72c71.ts.net:3010` (MagicDNS FQDN).
+The short name `cybercontrol-app` misses Windows NRPT unless the search suffix
+`taild72c71.ts.net` is set. UDP 41641 should be open on the AWS SG so the
+WireGuard path stays direct; until it is, `cc-tailscale-keepalive` pings peers
+every 20s so AWS does not idle-timeout the ephemeral NAT mapping.
 
 ---
 

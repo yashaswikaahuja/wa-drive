@@ -78,17 +78,35 @@ export interface WorkspaceDetail {
 }
 
 const STORE_KEY = 'cc-owner-cfg';
-// When the panel is served BY the owner listener (same origin), default to that origin — the API is
-// right there. When running the local dev server (vite on :5180), fall back to the tailscale IP.
-const DEFAULT_BASE =
-  typeof window !== 'undefined' && window.location.protocol.startsWith('http') && window.location.port !== '5180'
-    ? window.location.origin
-    : 'http://100.112.147.34:3010';
+// MagicDNS FQDN is in the Windows NRPT (.ts.net → 100.100.100.100). The short name
+// `cybercontrol-app` and the old CGNAT IP 100.112.147.34 are not.
+const TAILNET_OWNER_BASE = 'http://cybercontrol-app.taild72c71.ts.net:3010';
+const STALE_OWNER_BASE_RE =
+  /^https?:\/\/(100\.112\.147\.34|cybercontrol-app)(?::3010)?\/?$/i;
+
+function servedFromOwnerListener(): boolean {
+  return typeof window !== 'undefined'
+    && window.location.protocol.startsWith('http')
+    && window.location.port !== '5180';
+}
+
+const DEFAULT_BASE = servedFromOwnerListener() ? window.location.origin : TAILNET_OWNER_BASE;
+
+function normalizeBaseUrl(stored: unknown): string {
+  if (servedFromOwnerListener()) return window.location.origin;
+  if (typeof stored !== 'string' || !stored.trim()) return TAILNET_OWNER_BASE;
+  const raw = stored.trim().replace(/\/$/, '');
+  if (STALE_OWNER_BASE_RE.test(raw)) return TAILNET_OWNER_BASE;
+  return stored.trim();
+}
 
 export function loadConfig(): Config {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) { const c = JSON.parse(raw); return { baseUrl: c.baseUrl || DEFAULT_BASE, key: c.key || '' }; }
+    if (raw) {
+      const c = JSON.parse(raw);
+      return { baseUrl: normalizeBaseUrl(c.baseUrl), key: c.key || '' };
+    }
   } catch { /* ignore */ }
   return { baseUrl: DEFAULT_BASE, key: '' };
 }

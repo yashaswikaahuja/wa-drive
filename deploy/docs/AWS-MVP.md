@@ -87,15 +87,23 @@ Inside compose, prefer Docker DNS (`postgres`, `backend`, `whatsapp-service`) �
 
 ```
 DNS:  api.cybercontrol.fun  A → 44.219.62.198
-SG:   22, 80, 443 only
+SG:   TCP 22 / 80 / 443 only today. Add UDP 41641 for stable Tailscale.
 TLS:  Caddy → Let's Encrypt for api.cybercontrol.fun
 App:  Vercel still uses VITE_API_URL=https://api.cybercontrol.fun/api
 ```
 
-Do **not** open `3000`/`3300`/`3100`/`5432` on the security group.
+Do **not** open `3000`/`3300`/`3100`/`3010`/`5432` on the security group.
 Those ports may be published on the host so the `cybercontrol-app` Tailscale
 identity (host TUN) can reach them — same idea as GCP host-network listeners
 behind a firewall that only allows 80/443.
+
+**UDP 41641 is still closed on `sg-050440e326f56d557`.** Without it, `tailscaled`
+NATs out via a random high port (`44.219.62.198:<ephemeral>`). AWS idle-timeouts
+that mapping, the Windows peer falls back to DERP, and
+`http://cybercontrol-app:3010` looks intermittent. Workaround: host systemd
+`cc-tailscale-keepalive` (and compose `tailscale-app-keepalive`) ping online
+peers every 20s. Durable fix: open UDP 41641 on the SG, then pin
+`--port=41641` in `TS_EXTRA_ARGS`. AWS CLI session is needed for the SG change.
 
 ---
 

@@ -36,7 +36,7 @@ export function Setup({ initial, error, onConnect, onCancel }: Props) {
 
         <label className="label" htmlFor="baseUrl">Owner API (tailnet)</label>
         <input id="baseUrl" className="input" value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
-          placeholder="http://cybercontrol-app:3010" autoComplete="off" spellCheck={false} style={{ margin: '6px 0 16px' }} />
+          placeholder="http://cybercontrol-app.taild72c71.ts.net:3010" autoComplete="off" spellCheck={false} style={{ margin: '6px 0 16px' }} />
 
         <label className="label" htmlFor="key">Owner key</label>
         <input id="key" className="input" type="password" value={key} onChange={e => setKey(e.target.value)}
