@@ -1,8 +1,20 @@
 /**
- * Page mouse click and keyboard. Injected into the tab via executeScript.
- * Each exported function is self-contained so Chrome can serialize it.
+ * pointer-keys — page mouse click, hover, drag, and keyboard.
+ *
+ * Same kind of page capability as CcClickControl / CcFillOneMat: lives in the
+ * executor kernel, not in the WSS service worker. MCP mouse_click / hover /
+ * drag / keyboard inject executor-bundle then call these.
+ *
+ * Public API (on globalThis.CcPagePointer):
+ *   clickAt(spec) => { ok, action, tag, ... }
+ *   pressKeys(spec) => { ok, typed, key, value, ... }
+ *
+ * pressKeys does not type into password, CAPTCHA, or OTP boxes.
  */
-function pointerClickAt(spec: any) {
+(function (root: any) {
+  'use strict';
+
+  function clickAt(spec: any) {
   var g = typeof globalThis !== 'undefined' ? globalThis : this;
   var doc = g.document;
   if (!doc) return { ok: false, error: 'no_document' };
@@ -351,7 +363,7 @@ function pointerClickAt(spec: any) {
   };
 }
 
-function keyboardPress(spec: any) {
+  function pressKeys(spec: any) {
   var g = typeof globalThis !== 'undefined' ? globalThis : this;
   var doc = g.document;
   if (!doc) return { ok: false, error: 'no_document' };
@@ -634,5 +646,7 @@ function keyboardPress(spec: any) {
   };
 }
 
-const pointerRoot = typeof globalThis !== 'undefined' ? globalThis : this;
-(pointerRoot as any).CcPagePointer = { clickAt: pointerClickAt, pressKeys: keyboardPress };
+  root.CcPagePointer = { clickAt: clickAt, pressKeys: pressKeys };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+if (typeof module !== 'undefined') module.exports = (globalThis as any).CcPagePointer;

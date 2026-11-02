@@ -87,6 +87,7 @@
         id: id,
         name: el.getAttribute('formcontrolname') || el.name || '',
         value: '', placeholder: '', label: label, type: type, index: idx++, _el: el,
+        options: [], optionsDynamic: true,
       });
     });
 

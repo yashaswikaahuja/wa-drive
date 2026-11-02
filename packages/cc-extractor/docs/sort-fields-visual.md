@@ -17,8 +17,11 @@ Exported constant. Fields within 8px vertically are treated as the same row, the
 3. Sort by `(row ASC, left ASC)`
 4. Reassign `.index` 0…N, delete `._pos`
 
-## Unrendered fields
-Fields with `width=0, height=0, top=0, left=0` (display:none or not in DOM) are sent to the end with `{ row: 1e9, left: 1e9 }`.
+## Unrendered / hidden fields
+Sent to the end with `{ row: 1e9, left: 1e9 }`:
+- `field.hidden === true` (conditional office / local-body cascade still in the DOM)
+- `width` or `height` is 0 (`display:none`, collapsed, not in layout)
+- missing `_el` / no `getBoundingClientRect`
 
 ## Notes
 - `_el` references must still be present when `sort()` is called

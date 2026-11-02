@@ -92,6 +92,8 @@ Goes back, forward, or reloads the web tab.
 
 `action` is `back`, `forward`, or `reload`. After it returns, call `read_form` or `snapshot`. The page may still be loading.
 
+Page mouse, hover, drag, and keyboard run in the executor kernel (`CcPagePointer` in `packages/cc-executor/src/pointer-keys.ts`), the same place as `CcClickControl` and mat fill. The MCP tools below are the transport.
+
 ### `mouse_click`
 
 Clicks the GUI with the mouse. `x` and `y` are visible-screen CSS pixels. A snapshot JPEG can be smaller than the screen; convert with `cssX = imageX * scaleX` and `cssY = imageY * scaleY` from that snapshot. `selector` from the latest `read_form` clicks the center of that control instead. Copy `frameId` from the read when the control is inside an iframe.

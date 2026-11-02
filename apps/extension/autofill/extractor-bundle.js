@@ -324,7 +324,27 @@ if (typeof module !== "undefined" && module.exports) {
       labels.push(text);
       details.push({ value, labelHi: split.labelHi, labelEn: split.labelEn, text });
     }
-    return { labels, details, dynamic: labels.length === 0 };
+    return { labels, details, dynamic: labels.length === 0 || looksAjaxSelect(el) };
+  }
+  function looksAjaxSelect(el) {
+    if (!el) return false;
+    if (el.disabled === true || el.getAttribute && el.getAttribute("disabled") != null && el.getAttribute("disabled") !== "false") return true;
+    var blob = [
+      el.className,
+      el.id,
+      el.name,
+      attrOf(el, "data-url"),
+      attrOf(el, "data-source"),
+      attrOf(el, "data-ajax"),
+      attrOf(el, "data-parent"),
+      attrOf(el, "data-depends"),
+      attrOf(el, "data-depends-on"),
+      attrOf(el, "data-cascade-parent")
+    ].filter(Boolean).join(" ");
+    if (/ajax|dependent|cascade|select2-ajax|ng-select/i.test(blob)) return true;
+    if (attrOf(el, "data-url") || attrOf(el, "data-source") || attrOf(el, "data-ajax")) return true;
+    if (attrOf(el, "data-parent") || attrOf(el, "data-depends") || attrOf(el, "data-depends-on") || attrOf(el, "data-cascade-parent")) return true;
+    return false;
   }
   function nearbyText(el) {
     if (!el || !el.closest) return "";
@@ -335,6 +355,46 @@ if (typeof module !== "undefined" && module.exports) {
     var t = String(lbl.textContent || "").replace(/\s+/g, " ").trim();
     if (t.length < 2 || t.length > 80) return "";
     return t;
+  }
+  function stripFieldNumber(label) {
+    return String(label || "").replace(/^\s*\d+[\.\)]\s*/, "").replace(/^\s*[a-z][\.\)]\s*/i, "").replace(/\s+/g, " ").trim();
+  }
+  function widgetHintBlob(el) {
+    if (!el) return "";
+    return [
+      el.placeholder || attrOf(el, "placeholder"),
+      el.id,
+      el.name,
+      attrOf(el, "formcontrolname"),
+      nearbyText(el)
+    ].filter(Boolean).join(" ");
+  }
+  function pickCloserLabel(el, current) {
+    var cur = String(current || "").replace(/\s+/g, " ").trim();
+    var hint = widgetHintBlob(el);
+    var nearby = nearbyText(el);
+    var ph = String(el && (el.placeholder || attrOf(el, "placeholder")) || "").replace(/\s+/g, " ").trim();
+    var heading = /country of nationality|^nationality$|^country$/i.test(cur);
+    var widgetDate = /date|birth|dob|dd\s*[\/\-.]\s*mm/i.test(hint);
+    var widgetFather = /father|pita/i.test(hint);
+    var widgetMother = /mother|mata/i.test(hint);
+    var nearbyIsHeading = heading && nearby && /country of nationality|^nationality$|^country$/i.test(nearby);
+    if (heading && widgetDate) {
+      if (nearby && /date|birth|dob/i.test(nearby) && !nearbyIsHeading) return nearby;
+      if (/re[\s_-]*type|confirm|verify/i.test(hint + " " + ph)) return "Re-type Date Of Birth";
+      return "Date Of Birth";
+    }
+    if (heading && widgetFather) {
+      if (nearby && /father/i.test(nearby) && !nearbyIsHeading) return nearby;
+      if (/re[\s_-]*type|confirm|verify/i.test(hint + " " + ph)) return ph && /father/i.test(ph) ? ph : "Re-type Father's Name";
+      return ph && /father/i.test(ph) ? ph : nearbyIsHeading ? "Father's Name" : ph || nearby || cur;
+    }
+    if (heading && widgetMother) {
+      if (nearby && /mother/i.test(nearby) && !nearbyIsHeading) return nearby;
+      if (/re[\s_-]*type|confirm|verify/i.test(hint + " " + ph)) return ph && /mother/i.test(ph) ? ph : "Re-type Mother's Name";
+      return ph && /mother/i.test(ph) ? ph : nearbyIsHeading ? "Mother's Name" : ph || nearby || cur;
+    }
+    return cur;
   }
   var SYSTEM_NOISE_RE = /^(original code|cb code|location type|department level)$/i;
   var OFFICE_CAPS_RE = /^(STATE|DISTRICT|BLOCK|CIRCLE|CB CODE|LOCATION TYPE|DEPARTMENT LEVEL)$/;
@@ -422,8 +482,9 @@ if (typeof module !== "undefined" && module.exports) {
     if (el && el.id) addLocator(locators, seen, "xpath", '//*[@id="' + String(el.id).replace(/"/g, '\\"') + '"]');
     return locators;
   }
-  function guessCanonicalKey(label, name, id, type, options) {
-    var blob = [label, name, id, type].filter(Boolean).join(" ");
+  function guessCanonicalKey(label, name, id, type, options, placeholder) {
+    var lab = stripFieldNumber(label);
+    var blob = [label, name, id, type, placeholder].filter(Boolean).join(" ");
     var optBlob = "";
     if (Array.isArray(options)) {
       optBlob = options.map(function(o) {
@@ -431,6 +492,7 @@ if (typeof module !== "undefined" && module.exports) {
       }).join(" ");
     }
     var all = blob + " " + optBlob;
+    var t = String(type || "").toLowerCase();
     if (/police\s*station|\bthana\b|थाना/i.test(all)) return "police_station";
     if (/post\s*office|डाकघर/i.test(all) && !/police|thana/i.test(all)) return "post_office";
     if (/\bpanchayat\b|पंचायत/i.test(blob) && !/local body|ग्राम पंचायत.*नगर|नगर पंचायत|नगर निगम/i.test(all)) return "panchayat";
@@ -444,15 +506,35 @@ if (typeof module !== "undefined" && module.exports) {
     if (/name of husband|husband.?s name/i.test(blob)) return "husband_name";
     if (/name of father|father.?s name/i.test(blob)) return "father_name";
     if (/name of mother|mother.?s name/i.test(blob)) return "mother_name";
-    if (/name of applicant|applicant.?s name|^full name$|^candidate name$|^applicant name$/i.test(blob)) return "name";
+    if (!/father|mother|husband|wife|spouse|guardian|parent/i.test(lab + " " + blob)) {
+      if (/\b(full\s*name|candidate\s*name|applicant\s*name|student\s*name)\b/i.test(lab)) return "name";
+      if (/^name$/i.test(lab) || /name of applicant|applicant.?s name/i.test(lab)) return "name";
+    }
+    if (/name of applicant|applicant.?s name/i.test(blob) && !/father|mother|husband/i.test(blob)) return "name";
     if (/e-?mail/i.test(blob)) return "email";
     if (/(mobile|phone|sampark|मोबाइल)/i.test(blob) && !/otp/i.test(blob)) return "mobile";
-    if (/aadhaar|aadhar/i.test(blob)) return "aadhaar_number";
+    if (t === "tel" && !/otp/i.test(all)) return "mobile";
+    if (/aadhaar|aadhar/i.test(blob)) {
+      if (t === "checkbox" || t === "checkbox-agreement" || t === "radio-group" || t === "mat-checkbox") return null;
+      return "aadhaar_number";
+    }
+    if ((/date of birth|\bbirth date\b|\bdob\b|dateBirth|effectiveDate/i.test(lab + " " + blob) || /dd\s*[\/\-.]\s*mm\s*[\/\-.]\s*yyyy/i.test(String(placeholder || "") + " " + lab)) && !/year of passing|education board|qualification/i.test(lab)) return "dob";
+    if (/matriculation|10th\s*class|class\s*10|sslc/i.test(lab) && /board|education/i.test(lab) || /matriculation.*education board/i.test(lab)) return "board_10th";
+    if (/year of passing/i.test(lab)) return "year_of_passing";
+    if (/highest.+(education|qualification)/i.test(lab)) return "highest_education_qualification";
+    if (/\broll number\b|\broll no\b/i.test(lab)) return "roll_number";
     if (/pin\s*code|pincode|postal code/i.test(blob)) return "pincode";
     if (/\bstate\b|राज्य/i.test(blob) && !/statement/i.test(blob)) return "state";
     if (/\bdistrict\b|जिला/i.test(blob)) return "district";
     if (/sub[\s-]*division|अनुमंडल/i.test(blob)) return "sub_division";
     if (/\bblock\b|प्रखंड/i.test(blob)) return "block";
+    if (type === "dropdown" || type === "select" || type === "ng-dropdown" || type === "mat-select") {
+      if (/\bcountry\b|देश/i.test(blob) && !/country.?code/i.test(blob)) return "country";
+      if (/\bcity\b|शहर/i.test(blob) && !/capacity/i.test(blob)) return "city";
+      if (/\btaluka\b|तालुका/i.test(blob)) return "taluka";
+      if (/\btehsil\b|तहसील/i.test(blob)) return "tehsil";
+      if (/\bmandal\b|मंडल/i.test(blob) && !/commission/i.test(blob)) return "mandal";
+    }
     if (/\bvillage\b|गांव|गाँव/i.test(blob)) return "village";
     if (/\bward\b|वार्ड/i.test(blob)) return "ward";
     if (/purpose|उद्देश्य/i.test(blob)) return "purpose";
@@ -468,10 +550,21 @@ if (typeof module !== "undefined" && module.exports) {
     var en = (raw.match(/[A-Za-z]/g) || []).length;
     return hi >= 4 && en < 3;
   }
+  function isCarouselChrome(el, label) {
+    var blob = [
+      label,
+      el && el.id,
+      el && el.name,
+      el && el.className,
+      el && attrOf(el, "aria-label")
+    ].filter(Boolean).join(" ");
+    return /slide[-_]?dot|swiper-pagination|carousel[-_]?dot|slick-dot/i.test(blob);
+  }
   function detectHumanGate(el, label, type) {
     var blob = [el && el.id, el && el.name, el && el.className, label, type].filter(Boolean).join(" ");
+    if (isCarouselChrome(el, label)) return null;
     if (/captcha/i.test(blob)) return "captcha";
-    if (/\botp\b/i.test(blob)) return "otp";
+    if (/otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return "otp";
     if (type === "file") return "upload";
     if (type === "submit") return "submit";
     if (type === "checkbox-agreement") return "agree";
@@ -502,15 +595,25 @@ if (typeof module !== "undefined" && module.exports) {
     }
     return Object.keys(rules).length ? rules : null;
   }
+  function looksLikeDateField(field) {
+    if (!field) return false;
+    if (field.canonicalKey === "dob") return true;
+    var blob = [field.label, field.placeholder, field.id, field.name].filter(Boolean).join(" ");
+    return /date of birth|\bdob\b|birth date|dd\s*[\/\-.]\s*mm/i.test(blob);
+  }
   function decorateField(field, el, doc) {
     if ((!field.label || isNumericLabel(field.label)) && el) {
       var nearby = nearbyText(el);
       if (nearby && !isNumericLabel(nearby)) field.label = nearby;
     }
+    if (el) field.label = pickCloserLabel(el, field.label);
+    if (!field.placeholder && el) {
+      field.placeholder = String(el.placeholder || attrOf(el, "placeholder") || "");
+    }
     var locators = buildLocators(el, doc, field.label, field.selector);
     field.locators = locators;
     field.lastLocator = locators.length ? locators[0].type : null;
-    field.canonicalKey = guessCanonicalKey(field.label, field.name, field.id, field.type, field.options);
+    field.canonicalKey = guessCanonicalKey(field.label, field.name, field.id, field.type, field.options, field.placeholder);
     field.humanGate = detectHumanGate(el, field.label, field.type);
     field.rules = readRules(el, field.label, field.type);
     var transliterate = isTransliterateField(field.canonicalKey, field.label);
@@ -518,10 +621,15 @@ if (typeof module !== "undefined" && module.exports) {
     var hasReadonly = !!(el && (el.readOnly === true || el.getAttribute && el.getAttribute("readonly") != null));
     var hasDisabled = !!(el && (el.disabled === true || el.getAttribute && el.getAttribute("disabled") != null && el.getAttribute("disabled") !== "false"));
     var readOnly = hasReadonly || hasDisabled;
-    if (field.humanGate === "captcha" || field.humanGate === "otp" || field.humanGate === "upload" || field.humanGate === "submit") {
+    if (field.type === "search") {
+      field.fillMode = "skip";
+    } else if (field.humanGate === "captcha" || field.humanGate === "otp" || field.humanGate === "upload" || field.humanGate === "submit") {
       field.fillMode = "skip";
     } else if (transliterate) {
       field.fillMode = "auto";
+    } else if (readOnly && looksLikeDateField(field)) {
+      field.fillMode = "fill";
+      field.readOnly = true;
     } else if (readOnly || AGREEMENT_RE.test(String(field.label || "")) && (field.type === "textarea" || field.type === "text")) {
       field.fillMode = "skip";
       field.readOnly = readOnly;
@@ -541,60 +649,138 @@ if (typeof module !== "undefined" && module.exports) {
     }
     return field;
   }
-  var ADDRESS_CASCADE = ["state", "district", "sub_division", "block", "village", "police_station", "panchayat"];
+  var ADDRESS_CASCADE = ["country", "state", "district", "sub_division", "block", "taluka", "tehsil", "mandal", "city", "village", "police_station", "panchayat"];
   var OFFICE_CASCADE = ["state", "district", "block", "circle"];
+  function isDropdownType(f) {
+    return !!f && (f.type === "dropdown" || f.type === "select" || f.type === "mat-select" || f.type === "ng-dropdown");
+  }
+  function pickCascadeParent(seen, keys) {
+    for (var i = 0; i < keys.length; i++) {
+      var p = seen[keys[i]];
+      if (isDropdownType(p)) return p;
+    }
+    return null;
+  }
   function linkDependsOn(formFields) {
     var seenAddr = {};
     var seenOff = {};
     for (var i = 0; i < formFields.length; i++) {
       var f = formFields[i];
       var key = f.canonicalKey;
-      var isDrop = f.type === "dropdown" || f.type === "select" || f.type === "mat-select" || f.type === "ng-dropdown";
+      var isDrop = isDropdownType(f);
       if (f.section === "office") {
-        if (key && OFFICE_CASCADE.indexOf(key) >= 0) seenOff[key] = f;
-      } else if (key && ADDRESS_CASCADE.indexOf(key) >= 0) {
+        if (key && OFFICE_CASCADE.indexOf(key) >= 0 && isDrop) seenOff[key] = f;
+      } else if (key && ADDRESS_CASCADE.indexOf(key) >= 0 && isDrop) {
         seenAddr[key] = f;
       }
       if (!isDrop) continue;
-      if (f.optionsDynamic || f.options === "dynamic" || !f.options || Array.isArray(f.options) && f.options.length === 0) {
-        f.optionsDynamic = true;
-        if (!f.options || Array.isArray(f.options) && f.options.length === 0) f.options = [];
+      var addrIdx = f.section === "office" ? -1 : ADDRESS_CASCADE.indexOf(key);
+      var offIdx = f.section === "office" ? OFFICE_CASCADE.indexOf(key) : -1;
+      var cascadeChild = addrIdx > 0 || offIdx > 0;
+      var emptyOpts = f.optionsDynamic || f.options === "dynamic" || !f.options || Array.isArray(f.options) && f.options.length === 0;
+      if (!cascadeChild && !emptyOpts) continue;
+      f.optionsDynamic = true;
+      if (!f.options || Array.isArray(f.options) && f.options.length === 0) f.options = [];
+      var parent = null;
+      if (key === "panchayat") {
+        parent = pickCascadeParent(seenAddr, ["block", "sub_division", "district"]);
+      } else if (key === "police_station") {
+        parent = pickCascadeParent(seenAddr, ["district", "block", "sub_division"]);
+      } else {
         var chain = f.section === "office" ? OFFICE_CASCADE : ADDRESS_CASCADE;
         var seen = f.section === "office" ? seenOff : seenAddr;
-        var parent = null;
-        if (key === "panchayat") {
-          parent = seenAddr.block || seenAddr.sub_division || seenAddr.district || null;
-        } else {
-          var idx = key ? chain.indexOf(key) : -1;
-          if (idx > 0) {
-            for (var p = idx - 1; p >= 0; p--) {
-              if (seen[chain[p]] && seen[chain[p]] !== f) {
-                parent = seen[chain[p]];
-                break;
-              }
-            }
-          }
+        var idx = key ? chain.indexOf(key) : -1;
+        if (idx > 0) {
+          var prev = [];
+          for (var p = idx - 1; p >= 0; p--) prev.push(chain[p]);
+          parent = pickCascadeParent(seen, prev);
         }
-        if (parent) {
-          f.dependsOn = catalogKeyOf(parent) || parent.canonicalKey || parent.selector || parent.id || null;
-          f.rules = Object.assign({}, f.rules || {}, { waitForOptions: true });
-        }
+      }
+      if (parent) {
+        f.dependsOn = catalogKeyOf(parent) || parent.canonicalKey || parent.selector || parent.id || null;
+        f.rules = Object.assign({}, f.rules || {}, { waitForOptions: true });
       }
     }
   }
-  function resolveRadioGroupLabel(el, isGoodLabel) {
-    const fieldset = el.closest("fieldset");
-    const legend = fieldset && fieldset.querySelector("legend");
-    if (legend && isGoodLabel(legend.textContent.trim())) {
-      return legend.textContent.trim();
-    }
-    const container = el.closest('.form-group,.form-field,[class*="form-row"],tr,div');
-    if (container) {
-      const lbl = container.querySelector("label,.label,.field-label,td:first-child");
-      if (lbl && !lbl.querySelector("input") && isGoodLabel(lbl.textContent.trim())) {
-        return lbl.textContent.trim();
+  function findDomDependsOn(f, formFields) {
+    var el = f && f._el;
+    if (!el) return null;
+    var raw = attrOf(el, "data-parent") || attrOf(el, "data-depends") || attrOf(el, "data-depends-on") || attrOf(el, "data-cascade-parent");
+    if (raw) {
+      for (var i = 0; i < formFields.length; i++) {
+        var p = formFields[i];
+        if (p === f || !isDropdownType(p)) continue;
+        if (p.id === raw || p.name === raw || p.selector === raw || p.canonicalKey === raw || p.catalogKey === raw) return p;
       }
     }
+    var myId = el.id ? String(el.id) : "";
+    var myName = el.name ? String(el.name) : "";
+    for (var j = 0; j < formFields.length; j++) {
+      var parent = formFields[j];
+      if (parent === f || !parent._el || !isDropdownType(parent)) continue;
+      var oc = [
+        attrOf(parent._el, "onchange"),
+        attrOf(parent._el, "ng-change"),
+        attrOf(parent._el, "data-target")
+      ].join(" ");
+      if (myId && oc.indexOf(myId) >= 0) return parent;
+      if (myName && oc.indexOf(myName) >= 0) return parent;
+    }
+    return null;
+  }
+  function markAjaxDropdowns(formFields) {
+    if (!formFields || !formFields.length) return formFields;
+    for (var i = 0; i < formFields.length; i++) {
+      var f = formFields[i];
+      if (!isDropdownType(f)) continue;
+      var ajax = !!(f.optionsDynamic || f.type === "ng-dropdown" || f.type === "mat-select" || looksAjaxSelect(f._el));
+      var domParent = findDomDependsOn(f, formFields);
+      if (domParent) {
+        ajax = true;
+        if (!f.dependsOn) {
+          f.dependsOn = catalogKeyOf(domParent) || domParent.canonicalKey || domParent.selector || domParent.id || null;
+          f.rules = Object.assign({}, f.rules || {}, { waitForOptions: true });
+        }
+      }
+      if (ajax) {
+        f.optionsDynamic = true;
+        if (!f.options || Array.isArray(f.options) && f.options.length === 0) f.options = [];
+      }
+    }
+    return formFields;
+  }
+  function resolveRadioGroupLabel(el, isGoodLabel) {
+    var OPTION_ONLY = /^(yes|no|y|n|true|false|on|off)$/i;
+    function usable(raw) {
+      var t = String(raw || "").replace(/\s+/g, " ").trim();
+      if (!t || t.length > 80) return "";
+      if (OPTION_ONLY.test(t)) return "";
+      if (!isGoodLabel(t)) return "";
+      return t;
+    }
+    const fieldset = el.closest && el.closest("fieldset");
+    const legend = fieldset && fieldset.querySelector("legend");
+    var tLeg = usable(legend && legend.textContent);
+    if (tLeg && !/country of nationality|^nationality$|^country$/i.test(tLeg)) return tLeg;
+    const container = el.closest && el.closest('.form-group,.form-field,[class*="form-row"],tr,div');
+    if (container) {
+      const lbl = container.querySelector("label,.label,.field-label,td:first-child");
+      var tCont = usable(lbl && !(lbl.querySelector && lbl.querySelector("input")) && lbl.textContent);
+      if (tCont) return tCont;
+    }
+    var node = el;
+    for (var hop = 0; hop < 4 && node; hop++) {
+      var prev = node.previousElementSibling;
+      while (prev) {
+        if (!(prev.querySelector && prev.querySelector("input,select,textarea"))) {
+          var tPrev = usable(prev.textContent);
+          if (tPrev) return tPrev;
+        }
+        prev = prev.previousElementSibling;
+      }
+      node = node.parentElement;
+    }
+    if (el && el.name && /changed/i.test(String(el.name))) return "Changed Name";
     return "";
   }
   function resolveCheckboxGroupLabel(el, isGoodLabel) {
@@ -670,6 +856,7 @@ if (typeof module !== "undefined" && module.exports) {
       var meta = ((el.id || "") + " " + (el.name || "") + " " + (el.className || "")).toLowerCase();
       var pageSearch = isPageSearch(el);
       if (SKIP_META_HARD_RE.test(meta)) return;
+      if (isCarouselChrome(el, getLabel(el) || attrOf(el, "aria-label") || "")) return;
       if (SKIP_META_SOFT_RE.test(meta) && !pageSearch && !HUMAN_GATE_RE.test(meta) && !isJourneyMeta(meta, getLabel(el) || el.placeholder || "")) return;
       if (t === "radio" && el.name) {
         if (!radioGroups[el.name]) {
@@ -695,14 +882,15 @@ if (typeof module !== "undefined" && module.exports) {
         idx++;
         return;
       }
-      if (t === "checkbox" && el.name) {
+      if (t === "checkbox") {
         var lbl = getLabel(el) || el.value || "";
-        if (AGREEMENT_RE.test(lbl)) {
-          var sel = makeSelector(el) || '[name="' + el.name + '"]';
+        var agreeBlob = [lbl, el.id, el.name].filter(Boolean).join(" ");
+        if (AGREEMENT_RE.test(agreeBlob)) {
+          var sel = makeSelector(el, doc) || (el.name ? '[name="' + el.name + '"]' : null) || "form-field-" + idx;
           formFields.push(decorateField({
             selector: sel,
             id: el.id,
-            name: el.name,
+            name: el.name || "",
             value: el.value,
             placeholder: "",
             label: lbl,
@@ -714,25 +902,28 @@ if (typeof module !== "undefined" && module.exports) {
           idx++;
           return;
         }
-        if (!checkboxGroups[el.name]) {
-          checkboxGroups[el.name] = {
-            options: [],
-            selectors: [],
-            groupLabel: resolveCheckboxGroupLabel(el, isGoodLabel),
-            index: idx,
-            firstEl: el
-          };
+        if (el.name) {
+          if (!checkboxGroups[el.name]) {
+            checkboxGroups[el.name] = {
+              options: [],
+              selectors: [],
+              groupLabel: resolveCheckboxGroupLabel(el, isGoodLabel),
+              index: idx,
+              firstEl: el
+            };
+          }
+          checkboxGroups[el.name].options.push(lbl);
+          checkboxGroups[el.name].selectors.push(makeRadioSelector(el));
+          idx++;
+          return;
         }
-        checkboxGroups[el.name].options.push(lbl);
-        checkboxGroups[el.name].selectors.push(makeRadioSelector(el));
-        idx++;
-        return;
       }
       var label = getLabel(el);
       if (!label || isNumericLabel(label)) {
         var nearby = nearbyText(el);
         if (nearby) label = nearby;
       }
+      label = pickCloserLabel(el, label);
       if (!label && helpers.humanizeAttr) {
         label = helpers.humanizeAttr(el.name || el.id || "") || "";
       } else if (!label && typeof window !== "undefined" && window.ccDomUtils && window.ccDomUtils.humanizeAttr) {
@@ -799,7 +990,15 @@ if (typeof module !== "undefined" && module.exports) {
     });
     for (var rname in radioGroups) {
       var rg = radioGroups[rname];
-      var groupLabel = rg.groupLabel || rg.options.join(" / ");
+      var groupLabel = rg.groupLabel || "";
+      if (!groupLabel || /^(yes|no)(\s*\/\s*(yes|no))?$/i.test(groupLabel.trim())) {
+        var fromName = rname.replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+        if (fromName && !/^(yes|no)$/i.test(fromName)) groupLabel = fromName.replace(/\b\w/g, function(m) {
+          return String(m).toUpperCase();
+        });
+        else groupLabel = groupLabel || rg.options.join(" / ");
+      }
+      if (!groupLabel) groupLabel = rg.options.join(" / ");
       if (groupLabel) labelList.push(groupLabel.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15));
       formFields.push(decorateField({
         selector: '[name="' + rname + '"]',
@@ -836,6 +1035,7 @@ if (typeof module !== "undefined" && module.exports) {
     }
     assignSections(formFields);
     linkDependsOn(formFields);
+    markAjaxDropdowns(formFields);
     formFields = formFields.filter(function(f) {
       var el = f._el;
       var present = !el || typeof helpers.isVisuallyPresent !== "function" || helpers.isVisuallyPresent(el);
@@ -848,7 +1048,13 @@ if (typeof module !== "undefined" && module.exports) {
     });
     return { formFields, labelList };
   }
-  root2.CcScanStandardFields = { scan };
+  root2.CcScanStandardFields = {
+    scan,
+    linkDependsOn,
+    markAjaxDropdowns,
+    decorateField,
+    guessCanonicalKey
+  };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined") module.exports = root.CcScanStandardFields;
 
@@ -919,7 +1125,9 @@ if (typeof module !== "undefined") module.exports = root.CcScanStandardFields;
         label,
         type,
         index: idx++,
-        _el: el
+        _el: el,
+        options: [],
+        optionsDynamic: true
       });
     });
     doc.querySelectorAll("mat-checkbox").forEach(function(el) {
@@ -1060,7 +1268,9 @@ if (typeof module !== "undefined") module.exports = root.CcScanMatWidgets;
         label,
         type,
         index: idx++,
-        _el: el
+        _el: el,
+        options: [],
+        optionsDynamic: true
       });
     });
     var ngCandidates = /* @__PURE__ */ new Set();
@@ -1091,7 +1301,9 @@ if (typeof module !== "undefined") module.exports = root.CcScanMatWidgets;
         label,
         type: "ng-dropdown",
         index: idx++,
-        _el: el
+        _el: el,
+        options: [],
+        optionsDynamic: true
       });
     });
     return { formFields, labelList };
@@ -1210,21 +1422,25 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
 (function(root2) {
   "use strict";
   var ROW_BAND = 8;
-  function visualPos(el) {
+  function visualPos(field) {
+    if (field && field.hidden) {
+      return { row: 1e9, left: 1e9 };
+    }
+    var el = field && field._el;
     if (!el || typeof el.getBoundingClientRect !== "function") {
       return { row: 1e9, left: 1e9 };
     }
     var r = el.getBoundingClientRect();
     var top = r.top + (typeof window !== "undefined" && window.pageYOffset || 0);
     var left = r.left + (typeof window !== "undefined" && window.pageXOffset || 0);
-    if (r.width === 0 && r.height === 0 && top === 0 && left === 0) {
+    if (!(r.width > 0) || !(r.height > 0)) {
       return { row: 1e9, left: 1e9 };
     }
     return { row: Math.round(top / ROW_BAND), left: Math.round(left) };
   }
   function sort(formFields) {
     formFields.forEach(function(f) {
-      f._pos = visualPos(f._el);
+      f._pos = visualPos(f);
     });
     formFields.sort(function(a, b) {
       return a._pos.row - b._pos.row || a._pos.left - b._pos.left;
@@ -1499,6 +1715,15 @@ function extractFormFieldsWithFingerprint() {
       labelList = labelList.concat(custom.labelList);
     }
   }
+  if (_ssf.decorateField) {
+    formFields.forEach(function(f) {
+      if (!f || f.locators || !f._el) return;
+      var owner = f._el.ownerDocument || (typeof document !== "undefined" ? document : null);
+      _ssf.decorateField(f, f._el, owner);
+    });
+  }
+  if (_ssf.linkDependsOn) _ssf.linkDependsOn(formFields);
+  if (_ssf.markAjaxDropdowns) _ssf.markAjaxDropdowns(formFields);
   if (_sfv.sort) _sfv.sort(formFields);
   var snapshotId = "snap." + Date.now().toString(36);
   formFields.forEach(function(f, i) {

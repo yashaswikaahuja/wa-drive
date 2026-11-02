@@ -63,6 +63,7 @@ console.log('\nrole=combobox');
   assert('captured', formFields.length, 1);
   assert('type=mat-select (non-ng)', formFields[0].type, 'mat-select');
   assert('selector=#state', formFields[0].selector, '#state');
+  assert('combobox optionsDynamic', formFields[0].optionsDynamic, true);
 }
 
 // ── INPUT/SELECT with role=combobox skipped ───────────────────────────────────

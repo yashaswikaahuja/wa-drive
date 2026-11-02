@@ -127,5 +127,102 @@ console.log('\nRTPS residence mapper');
   assert('purpose skipped (per_application)', map['[id="purpose"]'], undefined);
 }
 
+console.log('\nSSC/RRB ng-dropdowns and confirm date');
+{
+  const ssc = [
+    { selector: '[data-cc-id="ng-dd-10018"]', label: '4. Gender', type: 'ng-dropdown', id: 'ng-dd-10018', name: '', placeholder: '', canonicalKey: 'gender', options: [], optionsDynamic: true },
+    { selector: '[data-cc-id="ng-dd-10022"]', label: '8. Matriculation (10th class) Education Board', type: 'ng-dropdown', id: 'ng-dd-10022', name: '', placeholder: '', canonicalKey: 'board_10th', optionsDynamic: true },
+    { selector: '#jquerryEffectiveDate', label: 'Date Of Birth', type: 'text', id: 'jquerryEffectiveDate', name: 'effectiveDate', placeholder: 'DD/MM/YYYY', canonicalKey: 'dob' },
+    { selector: '#dateBirth', label: 'Re-type Date Of Birth *', type: 'text', id: 'dateBirth', name: 'dateBirth', placeholder: 'DD/MM/YYYY As recorded in Matriculation' },
+    { selector: '#registration_fullname', label: 'Full Name', type: 'text', id: 'registration_fullname', name: 'registration_fullname', canonicalKey: 'name' },
+  ];
+  const map = fuzzyMatch(ssc, profile);
+  assert('gender ng-dd is gender not dob', map['[data-cc-id="ng-dd-10018"]']?.profileKey, 'gender');
+  assert('board ng-dd is board_10th not dob', map['[data-cc-id="ng-dd-10022"]']?.profileKey, 'board_10th');
+  assert('primary date is full dob', map['#jquerryEffectiveDate']?.profileKey, 'dob');
+  assert('confirm date is full dob', map['#dateBirth']?.profileKey, 'dob');
+  assert('confirm date is not day slice', map['#dateBirth']?.value, '15/08/1995');
+  assert('Full Name maps', map['#registration_fullname']?.profileKey, 'name');
+}
+
+console.log('\nRRB father placeholder is not an education row');
+{
+  const rrb = [
+    {
+      selector: '#fatherFullName',
+      label: "Father's Name *",
+      id: 'fatherFullName',
+      name: 'fatherFullName',
+      type: 'text',
+      placeholder: "Father's Name As recorded in Matriculation (10th class) Certificate/MarkSheet",
+      canonicalKey: 'father_name',
+    },
+    {
+      selector: '#registration_email_id',
+      label: 'Email Address',
+      id: 'registration_email_id',
+      name: 'registration_email_name',
+      type: 'email',
+      canonicalKey: 'email',
+    },
+  ];
+  const map = fuzzyMatch(rrb, profile);
+  assert('father maps despite matriculation placeholder', map['#fatherFullName']?.profileKey, 'father_name');
+  assert('father value', map['#fatherFullName']?.value, 'Suresh Sharma');
+  assert('email maps', map['#registration_email_id']?.value, 'rahul@example.com');
+}
+
+console.log('\nBPSC live labels keep their own profile keys');
+{
+  const bpscProfile = {
+    ...profile,
+    phone: '9876543210',
+    mobile: '9876543210',
+  };
+  const bpsc = [
+    {
+      selector: '#registrationFormControlInput1',
+      label: 'Re-type Date Of Birth',
+      id: 'registrationFormControlInput1',
+      name: '',
+      type: 'text',
+      placeholder: 'DD/MM/YYYY',
+      canonicalKey: 'dob',
+    },
+    {
+      selector: '#registrationFormControlInput2',
+      label: 'Mobile Number',
+      id: 'registrationFormControlInput2',
+      name: '',
+      type: 'tel',
+      canonicalKey: 'mobile',
+    },
+    {
+      selector: '#registrationFormControlInput4',
+      label: 'mobileotp',
+      id: 'mobileotp',
+      name: 'mobileotp',
+      type: 'text',
+      humanGate: 'otp',
+      fillMode: 'skip',
+    },
+    {
+      selector: '#registrationFormControlInput2-stale',
+      label: 'Mobile Number',
+      id: 'registrationFormControlInput2',
+      name: '',
+      type: 'text',
+      canonicalKey: 'dob',
+    },
+  ];
+  const map = fuzzyMatch(bpsc, bpscProfile);
+  assert('retype date is dob', map['#registrationFormControlInput1']?.profileKey, 'dob');
+  assert('mobile number is mobile not dob', map['#registrationFormControlInput2']?.profileKey === 'dob', false);
+  assertTruthy('mobile number maps phone', map['#registrationFormControlInput2']?.profileKey === 'mobile' || map['#registrationFormControlInput2']?.profileKey === 'phone');
+  assert('otp is not filled', map['#registrationFormControlInput4'], undefined);
+  assert('stale canonicalKey dob cannot bind mobile label', map['#registrationFormControlInput2-stale']?.profileKey === 'dob', false);
+  assertTruthy('stale canonicalKey remaps to mobile', map['#registrationFormControlInput2-stale']?.profileKey === 'mobile' || map['#registrationFormControlInput2-stale']?.profileKey === 'phone');
+}
+
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

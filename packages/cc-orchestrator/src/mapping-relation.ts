@@ -137,13 +137,26 @@
       return profileKey ? { kind: 'identity' } : { kind: 'unknown' };
     }
     if (normLoose(sample) === normLoose(atom) && shapeCompatible(field, atom)) return { kind: 'identity' };
-    var blob = fieldBlob(field);
+    var blob = fieldBlob(field).replace(/\b(?:ng-dd-|mat-select-|mat-input-|combobox-)\d+\b/gi, ' ');
     var partish = looksLikePartField(field);
-    var dateish = partish || /\b(date|dob|birth|day|month|year|dd|mm|yyyy)\b/i.test(blob);
+    var ck = String((field && field.canonicalKey) || '');
+    var notDob = ck && ck !== 'dob' && ck !== 'date_of_birth';
+    if (!notDob) {
+      notDob = /\b(gender|sex|education board|matriculation|qualification|year of passing|highest level|nationality|country of nationality)\b/i.test(blob)
+        && !/\b(date of birth|dob|birth date|datebirth)\b/i.test(blob)
+        && !/\bdd[\s_\-\/.]*mm[\s_\-\/.]*(?:yyyy|yyy)\b/i.test(blob);
+    }
+    var labFull = String((field && field.label) || '').trim();
+    var ckFull = String((field && field.canonicalKey) || '');
+    var fullDate = (ckFull === 'dob' || ckFull === 'date_of_birth') && !/^dd$|^day$|^mm$|^month$|^yyyy$|^year$/i.test(labFull)
+      || /\bdd[\s_\-\/.]*mm[\s_\-\/.]*(?:yyyy|yyy)\b/i.test(labFull + ' ' + String((field && field.placeholder) || ''))
+      || /date of birth|\bbirth date\b/i.test(labFull)
+      || /dateBirth|effectiveDate|jquerryEffectiveDate/i.test(String((field && field.id) || '') + ' ' + String((field && field.name) || ''));
+    var dateish = partish || (/\b(date|dob|birth|day|month|year|dd|mm|yyyy)\b/i.test(blob) && !notDob);
     var nameish = partish || /\b(name|first|middle|last|surname|fname|lname)\b/i.test(blob);
     var sliceish = partish || /last\s*\d|first\s*\d|last\s*digit|suffix|prefix/i.test(blob);
     var dp = parseDobParts(atom);
-    if (dp && dateish) {
+    if (dp && dateish && !fullDate) {
       var sn = normLoose(sample);
       var dayN = String(parseInt(dp.day, 10));
       var monthN = String(parseInt(dp.month, 10));
@@ -218,6 +231,23 @@
     pan: 1, pan_number: 1, gender: 1, sex: 1, email: 1, phone: 1, mobile: 1, mobile_number: 1,
   };
 
+  function profileKeyAgreesWithField(field: any, profileKey: any) {
+    var pk = String(profileKey || '').toLowerCase().trim();
+    if (!pk || !field) return !pk ? false : true;
+    var lab = String(field.label || '').toLowerCase();
+    var typ = String(field.type || '').toLowerCase();
+    var blob = [field.label, field.id, field.name, field.placeholder, field.type, field.canonicalKey].filter(Boolean).join(' ').toLowerCase();
+    if (field.humanGate === 'otp' || field.humanGate === 'captcha') return false;
+    if (/otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return false;
+    if (pk === 'dob' || pk === 'date_of_birth' || pk.indexOf('dob__') === 0) {
+      if (/(mobile|phone|sampark)/i.test(lab) && !/otp/i.test(lab)) return false;
+      if (typ === 'tel') return false;
+      if (/e-?mail/i.test(lab) || /\bgender\b|\bsex\b/i.test(lab)) return false;
+    }
+    if ((pk === 'mobile' || pk === 'phone' || pk === 'mobile_number' || pk === 'phone_number') && /otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return false;
+    return true;
+  }
+
   function materializeSavedRelations(fields: any, profile: any, savedMap: any, mapping: any, filledBySource: any, sourceTag: any) {
     if (!savedMap || typeof savedMap !== 'object') return 0;
     var added = 0;
@@ -235,6 +265,7 @@
       if (entry.relation && entry.relation.kind === 'per_application') continue;
       // Never materialize dob/name/IDs into From/To/station (#308).
       if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS[String(entry.profileKey)]) continue;
+      if (!profileKeyAgreesWithField(f, entry.profileKey)) continue;
       var relation = normalizeRelation(entry, f);
       var value = applyRelation(relation, profile, entry.profileKey, f);
       if (value == null) continue;
@@ -253,6 +284,7 @@
     looksLikePartField: looksLikePartField,
     isCompoundAtom: isCompoundAtom,
     materializeSavedRelations: materializeSavedRelations,
+    profileKeyAgreesWithField: profileKeyAgreesWithField,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 

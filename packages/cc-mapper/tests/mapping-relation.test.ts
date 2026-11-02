@@ -117,8 +117,23 @@ assert(
   { kind: 'unknown' }
 );
 assert(
+  'full date widget day sample stays unknown',
+  induceRelation(profile, 'dob', '05', { label: 'Date Of Birth', canonicalKey: 'dob', placeholder: 'DD/MM/YYYY' }),
+  { kind: 'unknown' }
+);
+assert(
   'nationality must NOT become dob day from evidence 05',
   induceRelation(profile, 'dob', '05', { label: 'Country Of Nationality', type: 'text' }),
+  { kind: 'unknown' }
+);
+assert(
+  'ng-dd gender must NOT become dob day',
+  induceRelation(profile, 'dob', '05', { label: '4. Gender', type: 'ng-dropdown', id: 'ng-dd-10018', selector: '[data-cc-id="ng-dd-10018"]' }),
+  { kind: 'unknown' }
+);
+assert(
+  'DD/MM/YYYY confirm date must NOT become dob day',
+  induceRelation(profile, 'dob', '05', { label: 'Re-type Date Of Birth', type: 'text', placeholder: 'DD/MM/YYYY', id: 'dateBirth' }),
   { kind: 'unknown' }
 );
 assert(
@@ -165,6 +180,26 @@ console.log('\nmaterializeSavedRelations');
   assert('photo not materialized', mapping['#photo'], undefined);
   assert('purpose not materialized', mapping['#purpose'], undefined);
   assert('address.district via catalogKey', mapping['#addr-dist']?.value, 'Gaya');
+}
+
+{
+  const mapping = {};
+  const fbs = {};
+  const fields = [
+    { selector: '#registrationFormControlInput2', label: 'Mobile Number', type: 'tel', canonicalKey: 'mobile' },
+    { selector: '#mobileotp', label: 'mobileotp', id: 'mobileotp', type: 'text', humanGate: 'otp', fillMode: 'skip' },
+    { selector: '#dob', label: 'Candidate Date Of Birth', type: 'text', canonicalKey: 'dob' },
+  ];
+  const saved = {
+    mobile: { profileKey: 'dob', relation: { kind: 'identity' } },
+    mobileotp: { profileKey: 'mobile', relation: { kind: 'identity' } },
+    dob: { profileKey: 'dob', relation: { kind: 'identity' } },
+  };
+  const n = materializeSavedRelations(fields, profile, saved, mapping, fbs, 'wss-saved');
+  assert('skip sticky dob on Mobile Number and skip otp', n, 1);
+  assert('mobile number not materialized as dob', mapping['#registrationFormControlInput2'], undefined);
+  assert('otp not materialized', mapping['#mobileotp'], undefined);
+  assert('real dob still materializes', mapping['#dob']?.profileKey, 'dob');
 }
 
 assert('looksLikePartField Day', looksLikePartField({ label: 'Day' }), true);

@@ -17,6 +17,8 @@ declare const CcWssSession: any;
 declare const CcFormContext: any;
 declare const CcScanStandardFields: any;
 declare const CcScanMatWidgets: any;
+declare const CcClickControl: any;
+declare const CcPagePointer: any;
 declare const CcScanNgDropdowns: any;
 declare const CcSortFieldsVisual: any;
 declare const CcFingerprintForm: any;

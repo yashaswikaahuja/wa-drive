@@ -212,13 +212,21 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
       return profileKey ? { kind: "identity" } : { kind: "unknown" };
     }
     if (normLoose(sample) === normLoose(atom) && shapeCompatible(field, atom)) return { kind: "identity" };
-    var blob = fieldBlob(field);
+    var blob = fieldBlob(field).replace(/\b(?:ng-dd-|mat-select-|mat-input-|combobox-)\d+\b/gi, " ");
     var partish = looksLikePartField(field);
-    var dateish = partish || /\b(date|dob|birth|day|month|year|dd|mm|yyyy)\b/i.test(blob);
+    var ck = String(field && field.canonicalKey || "");
+    var notDob = ck && ck !== "dob" && ck !== "date_of_birth";
+    if (!notDob) {
+      notDob = /\b(gender|sex|education board|matriculation|qualification|year of passing|highest level|nationality|country of nationality)\b/i.test(blob) && !/\b(date of birth|dob|birth date|datebirth)\b/i.test(blob) && !/\bdd[\s_\-\/.]*mm[\s_\-\/.]*(?:yyyy|yyy)\b/i.test(blob);
+    }
+    var labFull = String(field && field.label || "").trim();
+    var ckFull = String(field && field.canonicalKey || "");
+    var fullDate = (ckFull === "dob" || ckFull === "date_of_birth") && !/^dd$|^day$|^mm$|^month$|^yyyy$|^year$/i.test(labFull) || /\bdd[\s_\-\/.]*mm[\s_\-\/.]*(?:yyyy|yyy)\b/i.test(labFull + " " + String(field && field.placeholder || "")) || /date of birth|\bbirth date\b/i.test(labFull) || /dateBirth|effectiveDate|jquerryEffectiveDate/i.test(String(field && field.id || "") + " " + String(field && field.name || ""));
+    var dateish = partish || /\b(date|dob|birth|day|month|year|dd|mm|yyyy)\b/i.test(blob) && !notDob;
     var nameish = partish || /\b(name|first|middle|last|surname|fname|lname)\b/i.test(blob);
     var sliceish = partish || /last\s*\d|first\s*\d|last\s*digit|suffix|prefix/i.test(blob);
     var dp = parseDobParts(atom);
-    if (dp && dateish) {
+    if (dp && dateish && !fullDate) {
       var sn = normLoose(sample);
       var dayN = String(parseInt(dp.day, 10));
       var monthN = String(parseInt(dp.month, 10));
@@ -304,6 +312,22 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
     mobile: 1,
     mobile_number: 1
   };
+  function profileKeyAgreesWithField(field, profileKey) {
+    var pk = String(profileKey || "").toLowerCase().trim();
+    if (!pk || !field) return !pk ? false : true;
+    var lab = String(field.label || "").toLowerCase();
+    var typ = String(field.type || "").toLowerCase();
+    var blob = [field.label, field.id, field.name, field.placeholder, field.type, field.canonicalKey].filter(Boolean).join(" ").toLowerCase();
+    if (field.humanGate === "otp" || field.humanGate === "captcha") return false;
+    if (/otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return false;
+    if (pk === "dob" || pk === "date_of_birth" || pk.indexOf("dob__") === 0) {
+      if (/(mobile|phone|sampark)/i.test(lab) && !/otp/i.test(lab)) return false;
+      if (typ === "tel") return false;
+      if (/e-?mail/i.test(lab) || /\bgender\b|\bsex\b/i.test(lab)) return false;
+    }
+    if ((pk === "mobile" || pk === "phone" || pk === "mobile_number" || pk === "phone_number") && /otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return false;
+    return true;
+  }
   function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
     if (!savedMap || typeof savedMap !== "object") return 0;
     var added = 0;
@@ -320,6 +344,7 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
       if (!entry || !entry.profileKey) continue;
       if (entry.relation && entry.relation.kind === "per_application") continue;
       if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS[String(entry.profileKey)]) continue;
+      if (!profileKeyAgreesWithField(f, entry.profileKey)) continue;
       var relation = normalizeRelation(entry, f);
       var value = applyRelation(relation, profile, entry.profileKey, f);
       if (value == null) continue;
@@ -336,7 +361,8 @@ if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
     induceRelation,
     looksLikePartField,
     isCompoundAtom,
-    materializeSavedRelations
+    materializeSavedRelations,
+    profileKeyAgreesWithField
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined") module.exports = (typeof globalThis !== "undefined" ? globalThis : this).CcMappingRelation;
@@ -399,6 +425,7 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
             placeholder: f2.placeholder || "",
             locators: f2.locators || null,
             lastLocator: f2.lastLocator || null,
+            index: f2.index,
             canonicalKey: f2.canonicalKey || null,
             catalogKey: f2.catalogKey || null,
             section: f2.section || null,
@@ -693,6 +720,56 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
         }
         return false;
       }
+      function isFullDateish(f2) {
+        if (!f2) return false;
+        var lab = String(f2.label || "").trim();
+        var ck = String(f2.canonicalKey || "");
+        var ph = String(f2.placeholder || "");
+        var blob = lab + " " + ph + " " + (f2.id || "") + " " + (f2.name || "");
+        if ((ck === "dob" || ck === "date_of_birth") && !/^dd$|^day$|^mm$|^month$|^yyyy$|^year$/i.test(lab)) return true;
+        if (/\bdd[\s_\-\/.]*mm[\s_\-\/.]*(?:yyyy|yyy)\b/i.test(lab + " " + ph)) return true;
+        if (/date of birth|\bbirth date\b/i.test(lab) && !/^dd$|^day$/i.test(lab)) return true;
+        if (/dateBirth|effectiveDate|jquerryEffectiveDate/i.test(blob)) return true;
+        return false;
+      }
+      if (!replanOnly) {
+        let profileKeyAgrees = function(f2, pk2) {
+          pk2 = String(pk2 || "").toLowerCase();
+          if (!pk2 || !f2) return !pk2 ? false : true;
+          var lab = String(f2.label || "").toLowerCase();
+          var typ = String(f2.type || "").toLowerCase();
+          var blob = [f2.label, f2.id, f2.name, f2.placeholder, f2.type, f2.canonicalKey].filter(Boolean).join(" ").toLowerCase();
+          if (f2.humanGate === "otp" || f2.humanGate === "captcha") return false;
+          if (/otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return false;
+          if (pk2 === "dob" || pk2 === "date_of_birth" || pk2.indexOf("dob__") === 0) {
+            if (/(mobile|phone|sampark)/i.test(lab) && !/otp/i.test(lab)) return false;
+            if (typ === "tel") return false;
+            if (/e-?mail/i.test(lab) || /\bgender\b|\bsex\b/i.test(lab)) return false;
+          }
+          if ((pk2 === "mobile" || pk2 === "phone" || pk2 === "mobile_number") && /otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return false;
+          return true;
+        };
+        for (var si2 = 0; si2 < (fields || []).length; si2++) {
+          var sf = fields[si2];
+          if (!sf || !sf.selector || !mapping[sf.selector]) continue;
+          var sent = mapping[sf.selector];
+          var planned2 = String(sent && sent.value || "");
+          var splitDay = sent && sent.matchBy === "split-dob" && /^\d{1,2}$/.test(planned2);
+          if (isFullDateish(sf) && (splitDay || /^\d{1,2}$/.test(planned2))) {
+            delete mapping[sf.selector];
+            delete fbs[sf.selector];
+          }
+        }
+        for (var ci2 = 0; ci2 < (fields || []).length; ci2++) {
+          var cf2 = fields[ci2];
+          if (!cf2 || !cf2.selector || !mapping[cf2.selector]) continue;
+          var cpk = mapping[cf2.selector].profileKey || fbs[cf2.selector] && fbs[cf2.selector].profileKey;
+          if (!profileKeyAgrees(cf2, cpk)) {
+            delete mapping[cf2.selector];
+            delete fbs[cf2.selector];
+          }
+        }
+      }
       var unmapped = replanOnly ? [] : fields.filter(function(f2) {
         return !choiceCovered(f2);
       });
@@ -906,6 +983,9 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
         var info = syncFbs[f.selector];
         var mapEntry = syncMapping[f.selector];
         var profileKey = mappingProfileKey(f);
+        if (profileKey && typeof relApi.profileKeyAgreesWithField === "function" && !relApi.profileKeyAgreesWithField(f, profileKey)) {
+          profileKey = f.canonicalKey && relApi.profileKeyAgreesWithField(f, f.canonicalKey) ? f.canonicalKey : null;
+        }
         var filledRec = syncRecords.find(function(rec) {
           return rec.selector === f.selector && rec.result === "filled";
         });
@@ -932,7 +1012,7 @@ if (typeof module !== "undefined") module.exports = (typeof globalThis !== "unde
           relation,
           label: f.label || f.name || f.id || sk,
           type: f.type,
-          order: i,
+          order: typeof f.index === "number" ? f.index : i,
           options: f.optionsDynamic ? "dynamic" : f.optionDetails || f.options || null,
           locators: f.locators || null,
           lastLocator: f.lastLocator || null,

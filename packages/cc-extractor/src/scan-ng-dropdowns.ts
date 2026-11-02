@@ -100,6 +100,7 @@
         selector: el.id ? (el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id) : '[data-cc-id="' + id + '"]',
         id: id, name: el.getAttribute('formcontrolname') || '',
         value: '', placeholder: '', label: label, type: type, index: idx++, _el: el,
+        options: [], optionsDynamic: true,
       });
     });
 
@@ -127,6 +128,7 @@
         id: ddId,
         name: el.getAttribute('formcontrolname') || el.getAttribute('name') || '',
         value: '', placeholder: '', label: label, type: 'ng-dropdown', index: idx++, _el: el,
+        options: [], optionsDynamic: true,
       });
     });
 

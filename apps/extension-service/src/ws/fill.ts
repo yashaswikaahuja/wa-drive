@@ -4,11 +4,12 @@
  */
 import { loadDoc, KEYS } from '../db/store.js';
 import { pool } from '../db/db.js';
-import { applySplitDob } from '@cc/mapper/split-dob';
+import { applySplitDob, parseDobParts, isFullDateWidget } from '@cc/mapper/split-dob';
 import {
   normalizeRelation,
   applyRelation,
   materializeSavedRelations,
+  profileKeyAgreesWithField,
 } from '@cc/mapper/mapping-relation';
 
 function gsk( l: any) {
@@ -407,6 +408,33 @@ export async function buildFillMapping( msg: any, workspaceId: any) {
           continue;
         }
       }
+    }
+  }
+
+  // 3a) Combined DD/MM/YYYY widgets (RRB/SSC datepickers) — never a day slice.
+  const dpFull = parseDobParts(profileForApply.dob);
+  if (dpFull) {
+    for (const f of fields) {
+      if (!f || !f.selector || mapping[f.selector]) continue;
+      const lab = String(f.label || '').trim();
+      if (/^dd$|^day$|^mm$|^month$|^yyyy$|^year$/i.test(lab)) continue;
+      const ck = String(f.canonicalKey || '');
+      if (!isFullDateWidget(f) && ck !== 'dob' && ck !== 'date_of_birth') continue;
+      if (!profileKeyAgreesWithField(f, 'dob')) continue;
+      const pattern = `${f.placeholder || ''} ${lab}`;
+      const sep = /dd-mm/i.test(pattern) ? '-' : /dd\.mm/i.test(pattern) ? '.' : '/';
+      mapping[f.selector] = {
+        value: `${dpFull.day}${sep}${dpFull.month}${sep}${dpFull.year}`,
+        type: f.type || 'text',
+        label: f.label || null,
+        profileKey: 'dob',
+        matchBy: 'label',
+      };
+      filledBySource[f.selector] = {
+        label: f.label || '',
+        profileKey: 'dob',
+        source: 'wss-full-dob',
+      };
     }
   }
 

@@ -451,742 +451,6 @@ function pageShotOffsets(scrollHeight, clientHeight, maxShots) {
 const pageShotRoot = typeof globalThis !== "undefined" ? globalThis : this;
 pageShotRoot.CcPageShot = { pageShotOffsets };
 
-/* ==== pointer-keys.ts ==== */
-function pointerClickAt(spec) {
-  var g = typeof globalThis !== "undefined" ? globalThis : this;
-  var doc = g.document;
-  if (!doc) return { ok: false, error: "no_document" };
-  function isShown(el) {
-    if (!el || typeof el.getBoundingClientRect !== "function") return true;
-    var box2 = el.getBoundingClientRect();
-    if (box2.width < 1 || box2.height < 1) return false;
-    try {
-      var st = el.ownerDocument && el.ownerDocument.defaultView || g.window || g;
-      if (st && st.getComputedStyle) {
-        var cs = st.getComputedStyle(el);
-        if (cs && (cs.display === "none" || cs.visibility === "hidden")) return false;
-      }
-    } catch (e) {
-    }
-    return true;
-  }
-  function queryDeep(rootDoc, sel) {
-    if (!rootDoc || !sel) return null;
-    var nodes = [];
-    try {
-      nodes = rootDoc.querySelectorAll(sel);
-    } catch (e0) {
-      nodes = [];
-    }
-    var first = null;
-    for (var n = 0; n < nodes.length; n++) {
-      if (!first) first = nodes[n];
-      if (isShown(nodes[n])) return nodes[n];
-    }
-    if (first) return first;
-    var frames = [];
-    try {
-      frames = rootDoc.querySelectorAll("iframe,frame");
-    } catch (e1) {
-      return null;
-    }
-    for (var i = 0; i < frames.length; i++) {
-      var child = null;
-      try {
-        child = frames[i].contentDocument;
-      } catch (e2) {
-        child = null;
-      }
-      if (!child) continue;
-      var nested = queryDeep(child, sel);
-      if (nested) return nested;
-    }
-    return null;
-  }
-  function resolve(sel) {
-    if (!sel) return null;
-    try {
-      var resolver = g.CcResolveCcSelector;
-      if (resolver && typeof resolver.resolveCcSelector === "function") {
-        var byCc = resolver.resolveCcSelector(sel, doc);
-        if (byCc) return byCc;
-      }
-    } catch (e) {
-    }
-    try {
-      var clickApi = g.CcClickControl;
-      if (clickApi && typeof clickApi.elementFor === "function") {
-        var byClick = clickApi.elementFor(sel, doc);
-        if (byClick) return byClick;
-      }
-    } catch (e2) {
-    }
-    return queryDeep(doc, sel);
-  }
-  function labelOf(el) {
-    if (!el) return "";
-    var aria = el.getAttribute && el.getAttribute("aria-label");
-    var raw = aria || el.innerText || el.textContent || el.value || el.placeholder || "";
-    return String(raw).replace(/\s+/g, " ").trim().slice(0, 80);
-  }
-  function makeEvent(name, point2, button2, buttons2, detail) {
-    var view2 = doc.defaultView || g.window || g;
-    var scrollX = view2 && view2.scrollX || 0;
-    var scrollY = view2 && view2.scrollY || 0;
-    var init = {
-      bubbles: true,
-      cancelable: true,
-      view: view2,
-      clientX: point2.x,
-      clientY: point2.y,
-      pageX: point2.x + scrollX,
-      pageY: point2.y + scrollY,
-      screenX: point2.x,
-      screenY: point2.y,
-      button: button2,
-      buttons: buttons2,
-      which: button2 === 0 ? 1 : button2 === 2 ? 3 : 2,
-      detail
-    };
-    try {
-      if (name.indexOf("pointer") === 0 && view2 && typeof view2.PointerEvent === "function") {
-        return new view2.PointerEvent(name, Object.assign({ pointerId: 1, pointerType: "mouse", isPrimary: true }, init));
-      }
-      if (view2 && typeof view2.MouseEvent === "function") return new view2.MouseEvent(name, init);
-    } catch (e) {
-    }
-    return { type: name, bubbles: true, cancelable: true, clientX: point2.x, clientY: point2.y, button: button2 };
-  }
-  function fire(el, point2, button2, buttons2, names2, detail) {
-    for (var i = 0; i < names2.length; i++) {
-      var ev = makeEvent(names2[i], point2, button2, buttons2, detail);
-      if (el && typeof el.dispatchEvent === "function") el.dispatchEvent(ev);
-    }
-  }
-  function forceHover(el) {
-    var rootDoc = el && el.ownerDocument || doc;
-    try {
-      var marked = rootDoc.documentElement;
-      if (marked && marked.getAttribute && marked.getAttribute("data-cc-hover-css") !== "1") {
-        if (marked.setAttribute) marked.setAttribute("data-cc-hover-css", "1");
-        var sheets = rootDoc.styleSheets || [];
-        for (var s = 0; s < sheets.length; s++) {
-          var rules = null;
-          try {
-            rules = sheets[s].cssRules;
-          } catch (e0) {
-            continue;
-          }
-          if (!rules || !sheets[s].insertRule) continue;
-          var add = [];
-          for (var r = 0; r < rules.length; r++) {
-            var rule = rules[r];
-            if (!rule || !rule.selectorText || String(rule.selectorText).indexOf(":hover") === -1) continue;
-            add.push(String(rule.selectorText).replace(/:hover/g, ".cc-force-hover") + "{" + (rule.style && rule.style.cssText || "") + "}");
-          }
-          for (var a = 0; a < add.length; a++) {
-            try {
-              sheets[s].insertRule(add[a], sheets[s].cssRules.length);
-            } catch (e1) {
-            }
-          }
-        }
-      }
-    } catch (e2) {
-    }
-    try {
-      var prev = rootDoc.querySelectorAll && rootDoc.querySelectorAll(".cc-force-hover");
-      if (prev) {
-        for (var c = 0; c < prev.length; c++) {
-          if (prev[c] && prev[c].classList) prev[c].classList.remove("cc-force-hover");
-        }
-      }
-    } catch (e3) {
-    }
-    var node = el;
-    while (node && node.classList) {
-      try {
-        node.classList.add("cc-force-hover");
-      } catch (e4) {
-        break;
-      }
-      node = node.parentElement || node.parentNode;
-    }
-  }
-  var selector = spec && spec.selector ? String(spec.selector) : "";
-  var buttonName = spec && spec.button === "right" ? "right" : spec && spec.button === "middle" ? "middle" : "left";
-  var count = Number(spec && spec.count) === 2 ? 2 : 1;
-  var button = buttonName === "right" ? 2 : buttonName === "middle" ? 1 : 0;
-  var buttons = button === 0 ? 1 : button === 2 ? 2 : 4;
-  var target = null;
-  var point = null;
-  if (selector) {
-    target = resolve(selector);
-    if (!target) return { ok: false, error: "not_found" };
-    if (typeof target.scrollIntoView === "function") {
-      try {
-        target.scrollIntoView({ block: "center", inline: "center" });
-      } catch (e4) {
-      }
-    }
-    var box = typeof target.getBoundingClientRect === "function" ? target.getBoundingClientRect() : null;
-    if (!box || box.width < 1 || box.height < 1) return { ok: false, error: "not_visible" };
-    point = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
-  } else {
-    var x = Number(spec && spec.x);
-    var y = Number(spec && spec.y);
-    if (!isFinite(x) || !isFinite(y)) return { ok: false, error: "x and y required" };
-    point = { x, y };
-    if (typeof doc.elementFromPoint === "function") target = doc.elementFromPoint(x, y);
-    if (!target) return { ok: false, error: "nothing_there", x: Math.round(x), y: Math.round(y) };
-  }
-  var action = spec && spec.action === "hover" ? "hover" : spec && spec.action === "drag" ? "drag" : "click";
-  if (action === "hover") {
-    fire(target, point, 0, 0, ["pointerover", "pointerenter", "mouseover", "mouseenter", "pointermove", "mousemove"], 0);
-    forceHover(target);
-    return {
-      ok: true,
-      action: "hover",
-      url: String(g.location && g.location.href || "").split("?")[0].slice(0, 300),
-      title: doc.title || "",
-      x: Math.round(point.x),
-      y: Math.round(point.y),
-      tag: String(target.tagName || "").toLowerCase(),
-      hovered: labelOf(target)
-    };
-  }
-  if (action === "drag") {
-    let html5Drag2 = function(el) {
-      if (!el) return false;
-      if (el.draggable === true) return true;
-      return !!(el.getAttribute && el.getAttribute("draggable") === "true");
-    }, html5Drop2 = function(el) {
-      if (!el) return false;
-      if (typeof el.hasAttribute === "function" && el.hasAttribute("ondrop")) return true;
-      return /\bui-droppable\b|\bdroppable\b/.test(String(el.className || ""));
-    }, closestHtml52 = function(el) {
-      var n = el;
-      var hops = 0;
-      while (n && n.nodeType === 1 && hops < 8) {
-        if (html5Drag2(n) || html5Drop2(n)) return n;
-        n = n.parentElement;
-        hops += 1;
-      }
-      return el;
-    }, dragEv2 = function(name, el, pt) {
-      var ev = null;
-      try {
-        if (view && typeof view.DragEvent === "function") {
-          ev = new view.DragEvent(name, {
-            bubbles: true,
-            cancelable: true,
-            view,
-            clientX: pt.x,
-            clientY: pt.y,
-            screenX: pt.x,
-            screenY: pt.y,
-            dataTransfer: dt
-          });
-        }
-      } catch (e11) {
-        ev = null;
-      }
-      if (!ev) {
-        try {
-          ev = view && typeof view.Event === "function" ? new view.Event(name, { bubbles: true, cancelable: true }) : { type: name, bubbles: true, cancelable: true };
-        } catch (e12) {
-          ev = { type: name, bubbles: true, cancelable: true };
-        }
-      }
-      try {
-        Object.defineProperty(ev, "dataTransfer", { get: function() {
-          return dt;
-        }, configurable: true });
-      } catch (e13) {
-        try {
-          ev.dataTransfer = dt;
-        } catch (e14) {
-        }
-      }
-      try {
-        ev.clientX = pt.x;
-        ev.clientY = pt.y;
-      } catch (e15) {
-      }
-      if (typeof ev.preventDefault !== "function") ev.preventDefault = function() {
-      };
-      if (typeof ev.stopPropagation !== "function") ev.stopPropagation = function() {
-      };
-      if (el && typeof el.dispatchEvent === "function") el.dispatchEvent(ev);
-    };
-    var html5Drag = html5Drag2, html5Drop = html5Drop2, closestHtml5 = closestHtml52, dragEv = dragEv2;
-    var end = null;
-    var toSel = spec && spec.toSelector ? String(spec.toSelector) : "";
-    if (toSel) {
-      var toEl = resolve(toSel);
-      if (!toEl) return { ok: false, error: "not_found" };
-      var toBox = typeof toEl.getBoundingClientRect === "function" ? toEl.getBoundingClientRect() : null;
-      if (!toBox || toBox.width < 1 || toBox.height < 1) return { ok: false, error: "not_visible" };
-      end = { x: toBox.left + toBox.width / 2, y: toBox.top + toBox.height / 2 };
-    } else {
-      var x2 = Number(spec && spec.x2);
-      var y2 = Number(spec && spec.y2);
-      if (!isFinite(x2) || !isFinite(y2)) return { ok: false, error: "x2 and y2, or toSelector, required" };
-      end = { x: x2, y: y2 };
-    }
-    var resolvedEnd = toSel ? toEl : null;
-    var hitEnd = typeof doc.elementFromPoint === "function" ? doc.elementFromPoint(end.x, end.y) : null;
-    var endTarget = closestHtml52(resolvedEnd || hitEnd || target);
-    var view = doc.defaultView || g.window || g;
-    var store = {};
-    var dt = {
-      dropEffect: "move",
-      effectAllowed: "all",
-      files: [],
-      items: [],
-      types: [],
-      setData: function(type, val) {
-        store[String(type)] = String(val == null ? "" : val);
-        dt.types = Object.keys(store);
-      },
-      getData: function(type) {
-        var key = String(type);
-        if (store[key] != null) return store[key];
-        if (key === "text" && store["text/plain"] != null) return store["text/plain"];
-        return "";
-      },
-      clearData: function(type) {
-        if (type) delete store[String(type)];
-        else store = {};
-        dt.types = Object.keys(store);
-      },
-      setDragImage: function() {
-      }
-    };
-    try {
-      var nativeDt = view && view.DataTransfer ? new view.DataTransfer() : null;
-      if (nativeDt) {
-        var origSet = dt.setData;
-        dt.setData = function(type, val) {
-          origSet(type, val);
-          try {
-            nativeDt.setData(type, val);
-          } catch (e7) {
-          }
-        };
-      }
-    } catch (e8) {
-    }
-    try {
-      dt.setData("text/plain", labelOf(target) || target && target.id || "drag");
-    } catch (e9) {
-    }
-    try {
-      dt.setData("text/html", target && target.innerHTML || "");
-    } catch (e10) {
-    }
-    var srcHtml = target && target.innerHTML;
-    var dstHtml = endTarget && endTarget.innerHTML;
-    fire(target, point, 0, 1, ["pointerdown", "mousedown"], 1);
-    dragEv2("dragstart", target, point);
-    for (var step = 1; step <= 8; step++) {
-      var mid = {
-        x: point.x + (end.x - point.x) * step / 8,
-        y: point.y + (end.y - point.y) * step / 8
-      };
-      fire(step === 8 ? endTarget : target, mid, 0, 1, ["pointermove", "mousemove"], 0);
-      dragEv2("drag", step === 8 ? endTarget : target, mid);
-    }
-    dragEv2("dragenter", endTarget, end);
-    dragEv2("dragover", endTarget, end);
-    dragEv2("drop", endTarget, end);
-    fire(endTarget, end, 0, 0, ["pointerup", "mouseup"], 1);
-    dragEv2("dragend", target, end);
-    if (target && endTarget && target !== endTarget && html5Drag2(target) && html5Drag2(endTarget) && srcHtml !== dstHtml) {
-      if (target.innerHTML !== dstHtml || endTarget.innerHTML !== srcHtml) {
-        try {
-          target.innerHTML = dstHtml;
-          endTarget.innerHTML = srcHtml;
-        } catch (e16) {
-        }
-      }
-    }
-    return {
-      ok: true,
-      action: "drag",
-      url: String(g.location && g.location.href || "").split("?")[0].slice(0, 300),
-      title: doc.title || "",
-      x: Math.round(point.x),
-      y: Math.round(point.y),
-      x2: Math.round(end.x),
-      y2: Math.round(end.y),
-      tag: String(endTarget.tagName || "").toLowerCase(),
-      dragged: true
-    };
-  }
-  var names = buttonName === "right" ? ["pointerdown", "mousedown", "pointerup", "mouseup", "contextmenu"] : ["pointerdown", "mousedown", "pointerup", "mouseup", "click"];
-  fire(target, point, button, buttons, names, 1);
-  if (count === 2 && buttonName === "left") {
-    fire(target, point, button, buttons, names, 2);
-    var dbl = makeEvent("dblclick", point, 0, 1, 2);
-    if (typeof target.dispatchEvent === "function") target.dispatchEvent(dbl);
-  }
-  if (buttonName === "left" && count === 1 && typeof target.click === "function") {
-    try {
-      target.click();
-    } catch (e5) {
-    }
-  }
-  if (typeof target.focus === "function") {
-    try {
-      target.focus();
-    } catch (e6) {
-    }
-  }
-  return {
-    ok: true,
-    action: "click",
-    url: String(g.location && g.location.href || "").split("?")[0].slice(0, 300),
-    title: doc.title || "",
-    x: Math.round(point.x),
-    y: Math.round(point.y),
-    tag: String(target.tagName || "").toLowerCase(),
-    clicked: labelOf(target),
-    button: buttonName,
-    count
-  };
-}
-function keyboardPress(spec) {
-  var g = typeof globalThis !== "undefined" ? globalThis : this;
-  var doc = g.document;
-  if (!doc) return { ok: false, error: "no_document" };
-  var NAMED = {
-    enter: { key: "Enter", code: "Enter", keyCode: 13 },
-    tab: { key: "Tab", code: "Tab", keyCode: 9 },
-    escape: { key: "Escape", code: "Escape", keyCode: 27 },
-    esc: { key: "Escape", code: "Escape", keyCode: 27 },
-    backspace: { key: "Backspace", code: "Backspace", keyCode: 8 },
-    delete: { key: "Delete", code: "Delete", keyCode: 46 },
-    space: { key: " ", code: "Space", keyCode: 32 },
-    arrowup: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
-    arrowdown: { key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
-    arrowleft: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
-    arrowright: { key: "ArrowRight", code: "ArrowRight", keyCode: 39 },
-    home: { key: "Home", code: "Home", keyCode: 36 },
-    end: { key: "End", code: "End", keyCode: 35 },
-    pageup: { key: "PageUp", code: "PageUp", keyCode: 33 },
-    pagedown: { key: "PageDown", code: "PageDown", keyCode: 34 }
-  };
-  function isShown(el2) {
-    if (!el2 || typeof el2.getBoundingClientRect !== "function") return true;
-    var box = el2.getBoundingClientRect();
-    if (box.width < 1 || box.height < 1) return false;
-    try {
-      var st = el2.ownerDocument && el2.ownerDocument.defaultView || g.window || g;
-      if (st && st.getComputedStyle) {
-        var cs = st.getComputedStyle(el2);
-        if (cs && (cs.display === "none" || cs.visibility === "hidden")) return false;
-      }
-    } catch (e) {
-    }
-    return true;
-  }
-  function queryDeep(rootDoc, sel) {
-    if (!rootDoc || !sel) return null;
-    var nodes = [];
-    try {
-      nodes = rootDoc.querySelectorAll(sel);
-    } catch (e0) {
-      nodes = [];
-    }
-    var first = null;
-    for (var n = 0; n < nodes.length; n++) {
-      if (!first) first = nodes[n];
-      if (isShown(nodes[n])) return nodes[n];
-    }
-    if (first) return first;
-    var frames = [];
-    try {
-      frames = rootDoc.querySelectorAll("iframe,frame");
-    } catch (e1) {
-      return null;
-    }
-    for (var i2 = 0; i2 < frames.length; i2++) {
-      var child = null;
-      try {
-        child = frames[i2].contentDocument;
-      } catch (e2) {
-        child = null;
-      }
-      if (!child) continue;
-      var nested = queryDeep(child, sel);
-      if (nested) return nested;
-    }
-    return null;
-  }
-  function resolve(sel) {
-    if (!sel) return null;
-    try {
-      var resolver = g.CcResolveCcSelector;
-      if (resolver && typeof resolver.resolveCcSelector === "function") {
-        var byCc = resolver.resolveCcSelector(sel, doc);
-        if (byCc) return byCc;
-      }
-    } catch (e) {
-    }
-    try {
-      var clickApi = g.CcClickControl;
-      if (clickApi && typeof clickApi.elementFor === "function") {
-        var byClick = clickApi.elementFor(sel, doc);
-        if (byClick) return byClick;
-      }
-    } catch (e2) {
-    }
-    return queryDeep(doc, sel);
-  }
-  function tagOf(el2) {
-    return String(el2 && el2.tagName || "").toLowerCase();
-  }
-  function isEditable(el2) {
-    if (!el2) return false;
-    var tag = tagOf(el2);
-    if (tag === "input" || tag === "textarea") return !el2.disabled && !el2.readOnly;
-    return !!el2.isContentEditable;
-  }
-  function blockedText(el2) {
-    if (!el2) return false;
-    var t = String(el2.type || "").toLowerCase();
-    if (t === "password" || t === "hidden") return true;
-    var blob = ((el2.name || "") + " " + (el2.id || "") + " " + (el2.getAttribute && el2.getAttribute("aria-label") || "")).toLowerCase();
-    return /captcha|otp|\bpin\b|cvv|card number/.test(blob);
-  }
-  function emitInput(el2, data, inputType) {
-    var view = doc.defaultView || g.window || g;
-    try {
-      if (view && typeof view.InputEvent === "function") {
-        el2.dispatchEvent(new view.InputEvent("input", { bubbles: true, cancelable: true, inputType: inputType || "insertText", data: data || null }));
-        return;
-      }
-    } catch (e) {
-    }
-    try {
-      if (view && typeof view.Event === "function") el2.dispatchEvent(new view.Event("input", { bubbles: true }));
-    } catch (e2) {
-    }
-  }
-  function insertText(el2, text2) {
-    if (!el2 || !text2) return;
-    var tag = tagOf(el2);
-    if (tag === "input" || tag === "textarea") {
-      var value = String(el2.value || "");
-      var start = el2.selectionStart != null ? el2.selectionStart : value.length;
-      var end = el2.selectionEnd != null ? el2.selectionEnd : start;
-      el2.value = value.slice(0, start) + text2 + value.slice(end);
-      var pos = start + String(text2).length;
-      try {
-        el2.setSelectionRange(pos, pos);
-      } catch (e) {
-      }
-      emitInput(el2, text2, "insertText");
-      return;
-    }
-    if (el2.isContentEditable && doc.execCommand) {
-      try {
-        doc.execCommand("insertText", false, text2);
-      } catch (e2) {
-      }
-      emitInput(el2, text2, "insertText");
-    }
-  }
-  function deleteOne(el2, forward) {
-    var tag = tagOf(el2);
-    if (tag !== "input" && tag !== "textarea") return;
-    var value = String(el2.value || "");
-    var start = el2.selectionStart != null ? el2.selectionStart : value.length;
-    var end = el2.selectionEnd != null ? el2.selectionEnd : start;
-    if (start !== end) {
-      el2.value = value.slice(0, start) + value.slice(end);
-      try {
-        el2.setSelectionRange(start, start);
-      } catch (e) {
-      }
-    } else if (forward) {
-      el2.value = value.slice(0, start) + value.slice(start + 1);
-      try {
-        el2.setSelectionRange(start, start);
-      } catch (e2) {
-      }
-    } else if (start > 0) {
-      el2.value = value.slice(0, start - 1) + value.slice(start);
-      try {
-        el2.setSelectionRange(start - 1, start - 1);
-      } catch (e3) {
-      }
-    }
-    emitInput(el2, null, forward ? "deleteContentForward" : "deleteContentBackward");
-  }
-  function tabbables() {
-    var nodes = doc.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
-    var out = [];
-    for (var i2 = 0; i2 < nodes.length; i2++) {
-      var n = nodes[i2];
-      if (n.disabled) continue;
-      out.push(n);
-    }
-    return out;
-  }
-  function moveTab(el2, back) {
-    var list = tabbables();
-    if (!list.length) return el2;
-    var idx = list.indexOf(el2);
-    var next = back ? idx <= 0 ? list[list.length - 1] : list[idx - 1] : idx < 0 || idx >= list.length - 1 ? list[0] : list[idx + 1];
-    if (next && typeof next.focus === "function") {
-      try {
-        next.focus();
-      } catch (e) {
-      }
-    }
-    return next || el2;
-  }
-  function named(raw) {
-    var token = String(raw || "").trim();
-    if (!token) return null;
-    var lower = token.toLowerCase();
-    if (NAMED[lower]) return NAMED[lower];
-    if (token.length === 1) {
-      var upper = token.toUpperCase();
-      var code = /[a-z]/i.test(token) ? "Key" + upper : /[0-9]/.test(token) ? "Digit" + token : token;
-      return { key: token, code, keyCode: token.charCodeAt(0) };
-    }
-    return null;
-  }
-  function fireKey(el2, def2, mods2) {
-    var view = doc.defaultView || g.window || g;
-    var opts = {
-      key: def2.key,
-      code: def2.code,
-      keyCode: def2.keyCode,
-      which: def2.keyCode,
-      bubbles: true,
-      cancelable: true,
-      ctrlKey: !!mods2.ctrl,
-      altKey: !!mods2.alt,
-      shiftKey: !!mods2.shift,
-      metaKey: !!mods2.meta
-    };
-    function send(name) {
-      var ev = null;
-      try {
-        if (view && typeof view.KeyboardEvent === "function") ev = new view.KeyboardEvent(name, opts);
-      } catch (e) {
-        ev = null;
-      }
-      if (ev && typeof el2.dispatchEvent === "function") el2.dispatchEvent(ev);
-      else if (typeof el2.dispatchEvent === "function") el2.dispatchEvent({ type: name, key: def2.key, bubbles: true, cancelable: true });
-    }
-    send("keydown");
-    if (nudgeRange(el2, def2)) {
-    } else if (def2.key === "Backspace" && isEditable(el2) && !mods2.ctrl && !mods2.alt && !mods2.meta) deleteOne(el2, false);
-    else if (def2.key === "Delete" && isEditable(el2) && !mods2.ctrl && !mods2.alt && !mods2.meta) deleteOne(el2, true);
-    else if (def2.key === "Tab") moveTab(el2, !!mods2.shift);
-    else if (def2.key.length === 1 && !mods2.ctrl && !mods2.alt && !mods2.meta && isEditable(el2) && !blockedText(el2)) insertText(el2, def2.key);
-    send("keypress");
-    send("keyup");
-  }
-  function nudgeRange(el2, def2) {
-    if (!el2 || tagOf(el2) !== "input") return false;
-    if (String(el2.type || "").toLowerCase() !== "range") return false;
-    var min = Number(el2.min);
-    var max = Number(el2.max);
-    var step = Number(el2.step);
-    if (!isFinite(min)) min = 0;
-    if (!isFinite(max)) max = 100;
-    if (!isFinite(step) || step <= 0) step = 1;
-    var cur = Number(el2.value);
-    if (!isFinite(cur)) cur = min;
-    var next = cur;
-    if (def2.key === "ArrowRight" || def2.key === "ArrowUp") next = cur + step;
-    else if (def2.key === "ArrowLeft" || def2.key === "ArrowDown") next = cur - step;
-    else if (def2.key === "Home") next = min;
-    else if (def2.key === "End") next = max;
-    else return false;
-    if (next > max) next = max;
-    if (next < min) next = min;
-    el2.value = String(next);
-    emitInput(el2, null, "insertReplacementText");
-    var view = doc.defaultView || g.window || g;
-    try {
-      if (view && typeof view.Event === "function") el2.dispatchEvent(new view.Event("change", { bubbles: true }));
-    } catch (e) {
-    }
-    return true;
-  }
-  var selector = spec && spec.selector ? String(spec.selector) : "";
-  var mods = {
-    ctrl: !!(spec && spec.ctrl),
-    alt: !!(spec && spec.alt),
-    shift: !!(spec && spec.shift),
-    meta: !!(spec && spec.meta)
-  };
-  var el = doc.activeElement || doc.body;
-  if (selector) {
-    var target = resolve(selector);
-    if (!target) return { ok: false, error: "not_found" };
-    if (typeof target.scrollIntoView === "function") {
-      try {
-        target.scrollIntoView({ block: "center", inline: "nearest" });
-      } catch (e4) {
-      }
-    }
-    if (typeof target.focus === "function") {
-      try {
-        target.focus();
-      } catch (e5) {
-      }
-    }
-    if (typeof target.click === "function" && tagOf(target) === "input") {
-      try {
-        target.click();
-      } catch (e6) {
-      }
-    }
-    el = target;
-  }
-  if (!el) el = doc.body;
-  var typed = "";
-  var keys = [];
-  if (spec && spec.text) {
-    var text = String(spec.text).slice(0, 300);
-    if (blockedText(el)) return { ok: false, error: "blocked_field", tag: tagOf(el) };
-    if (isEditable(el)) insertText(el, text);
-    else if (el.isContentEditable) insertText(el, text);
-    typed = text;
-  }
-  if (spec && spec.key) keys.push(spec.key);
-  if (spec && Array.isArray(spec.keys)) {
-    for (var k = 0; k < spec.keys.length && keys.length < 20; k++) keys.push(spec.keys[k]);
-  }
-  for (var i = 0; i < keys.length; i++) {
-    var def = named(keys[i]);
-    if (!def) return { ok: false, error: "unknown_key", key: String(keys[i] || "").slice(0, 40) };
-    fireKey(el, def, mods);
-    el = doc.activeElement || el;
-  }
-  var focused = doc.activeElement || el;
-  return {
-    ok: true,
-    url: String(g.location && g.location.href || "").split("?")[0].slice(0, 300),
-    title: doc.title || "",
-    tag: tagOf(focused),
-    focused: String(focused && (focused.id || focused.name || focused.getAttribute && focused.getAttribute("aria-label")) || tagOf(focused)).slice(0, 80),
-    typed: typed ? typed.slice(0, 80) : "",
-    key: keys.length ? String(keys[keys.length - 1]).slice(0, 40) : "",
-    value: isEditable(focused) && !blockedText(focused) ? String(focused.value || "").slice(0, 80) : ""
-  };
-}
-const pointerRoot = typeof globalThis !== "undefined" ? globalThis : this;
-pointerRoot.CcPagePointer = { clickAt: pointerClickAt, pressKeys: keyboardPress };
-
 /* ==== scroll-page.ts ==== */
 async function scrollPage(spec) {
   var g = typeof globalThis !== "undefined" ? globalThis : this;
@@ -1633,11 +897,13 @@ scrollRoot.CcScrollPage = { scrollPage };
     }
     return fallback;
   }
-  async function injectKernel(tabId, allFrames) {
-    await chrome.scripting.executeScript({
+  async function injectKernel(tabId, allFrames, world) {
+    var opts = {
       target: allFrames ? { tabId, allFrames: true } : { tabId },
       files: kernelScripts()
-    });
+    };
+    if (world) opts.world = world;
+    await chrome.scripting.executeScript(opts);
   }
   function isFrameGone(err) {
     return /Frame with ID .* was removed|frame was removed|The tab was closed|No tab with id|moved to a different document|click_script_timeout/i.test(String(err && err.message || err || ""));
@@ -2429,21 +1695,29 @@ scrollRoot.CcScrollPage = { scrollPage };
       moved: pageUrl(after && after.url || "") !== before
     };
   }
+  function pointerClickFromJson(spec) {
+    var api = typeof globalThis !== "undefined" ? globalThis.CcPagePointer : null;
+    if (!api || typeof api.clickAt !== "function") return { ok: false, error: "pointer_not_loaded" };
+    return api.clickAt(spec);
+  }
+  function keyboardFromJson(spec) {
+    var api = typeof globalThis !== "undefined" ? globalThis.CcPagePointer : null;
+    if (!api || typeof api.pressKeys !== "function") return { ok: false, error: "pointer_not_loaded" };
+    return api.pressKeys(spec);
+  }
   async function runPointerTask(spec, fn) {
     var tab = await pickWebTab(spec && spec.tabId);
     if (!tab || !tab.id) return { ok: false, error: "no_tab" };
     if (String(tab.url || "").indexOf("http") !== 0) return { ok: false, error: "open_a_form_page", tabId: tab.id };
-    if (typeof fn !== "function") return { ok: false, error: "pointer_not_loaded" };
     var beforeUrl = tab.url || "";
+    var world = spec && spec.action === "drag" ? "MAIN" : "ISOLATED";
     try {
       await chrome.tabs.update(tab.id, { active: true });
     } catch (e) {
     }
-    if (spec && spec.selector) {
-      try {
-        await injectKernel(tab.id, true);
-      } catch (e2) {
-      }
+    try {
+      await injectKernel(tab.id, true, world);
+    } catch (e2) {
     }
     try {
       var target = { tabId: tab.id };
@@ -2453,7 +1727,7 @@ scrollRoot.CcScrollPage = { scrollPage };
         func: fn,
         args: [spec || {}],
         injectImmediately: true,
-        world: spec && spec.action === "drag" ? "MAIN" : "ISOLATED"
+        world
       }), 8e3, "pointer_script_timeout");
       var page = results && results[0] && results[0].result;
       if ((!page || page.error === "not_found") && spec && spec.selector && !target.frameIds) {
@@ -2461,7 +1735,8 @@ scrollRoot.CcScrollPage = { scrollPage };
           target: { tabId: tab.id, allFrames: true },
           func: fn,
           args: [spec || {}],
-          injectImmediately: true
+          injectImmediately: true,
+          world
         }), 8e3, "pointer_script_timeout");
         page = pickBestFrameResult(results);
       }
@@ -2479,7 +1754,6 @@ scrollRoot.CcScrollPage = { scrollPage };
     }
   }
   function runMouseClick(spec) {
-    var api = root.CcPagePointer;
     return runPointerTask({
       tabId: spec && spec.tabId || null,
       x: spec && spec.x,
@@ -2492,7 +1766,7 @@ scrollRoot.CcScrollPage = { scrollPage };
       button: spec && spec.button || "left",
       count: spec && spec.count || 1,
       action: spec && spec.action || "click"
-    }, api && api.clickAt);
+    }, pointerClickFromJson);
   }
   function runHover(spec) {
     return runMouseClick(Object.assign({}, spec, { action: "hover" }));
@@ -2501,7 +1775,6 @@ scrollRoot.CcScrollPage = { scrollPage };
     return runMouseClick(Object.assign({}, spec, { action: "drag" }));
   }
   function runKeyboard(spec) {
-    var api = root.CcPagePointer;
     return runPointerTask({
       tabId: spec && spec.tabId || null,
       selector: spec && spec.selector || "",
@@ -2513,7 +1786,7 @@ scrollRoot.CcScrollPage = { scrollPage };
       alt: !!(spec && spec.alt),
       shift: !!(spec && spec.shift),
       meta: !!(spec && spec.meta)
-    }, api && api.pressKeys);
+    }, keyboardFromJson);
   }
   function runBrowserTask(msg) {
     if (!msg || !msg.task) {

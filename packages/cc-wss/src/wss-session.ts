@@ -205,11 +205,13 @@
     return fallback;
   }
 
-  async function injectKernel(tabId, allFrames) {
-    await chrome.scripting.executeScript({
+  async function injectKernel(tabId, allFrames, world) {
+    var opts: any = {
       target: allFrames ? { tabId: tabId, allFrames: true } : { tabId: tabId },
       files: kernelScripts(),
-    });
+    };
+    if (world) opts.world = world;
+    await chrome.scripting.executeScript(opts);
   }
 
   function isFrameGone(err) {
@@ -954,18 +956,28 @@
     };
   }
 
+  function pointerClickFromJson(spec) {
+    var api = (typeof globalThis !== 'undefined') ? (globalThis as any).CcPagePointer : null;
+    if (!api || typeof api.clickAt !== 'function') return { ok: false, error: 'pointer_not_loaded' };
+    return api.clickAt(spec);
+  }
+
+  function keyboardFromJson(spec) {
+    var api = (typeof globalThis !== 'undefined') ? (globalThis as any).CcPagePointer : null;
+    if (!api || typeof api.pressKeys !== 'function') return { ok: false, error: 'pointer_not_loaded' };
+    return api.pressKeys(spec);
+  }
+
   async function runPointerTask(spec, fn) {
     var tab = await pickWebTab(spec && spec.tabId);
     if (!tab || !tab.id) return { ok: false, error: 'no_tab' };
     if (String(tab.url || '').indexOf('http') !== 0) return { ok: false, error: 'open_a_form_page', tabId: tab.id };
-    if (typeof fn !== 'function') return { ok: false, error: 'pointer_not_loaded' };
     var beforeUrl = tab.url || '';
+    var world = spec && spec.action === 'drag' ? 'MAIN' : 'ISOLATED';
     try { await chrome.tabs.update(tab.id, { active: true }); } catch (e) { /* stay */ }
-    if (spec && spec.selector) {
-      try {
-        await injectKernel(tab.id, true);
-      } catch (e2) { /* selector falls back to querySelector */ }
-    }
+    try {
+      await injectKernel(tab.id, true, world);
+    } catch (e2) { /* page still tries CcPagePointer */ }
     try {
       var target: any = { tabId: tab.id };
       if (Number.isFinite(Number(spec && spec.frameId))) target.frameIds = [Number(spec.frameId)];
@@ -974,7 +986,7 @@
         func: fn,
         args: [spec || {}],
         injectImmediately: true,
-        world: spec && spec.action === 'drag' ? 'MAIN' : 'ISOLATED',
+        world: world,
       }), 8000, 'pointer_script_timeout');
       var page = results && results[0] && results[0].result;
       if ((!page || page.error === 'not_found') && spec && spec.selector && !target.frameIds) {
@@ -983,6 +995,7 @@
           func: fn,
           args: [spec || {}],
           injectImmediately: true,
+          world: world,
         }), 8000, 'pointer_script_timeout');
         page = pickBestFrameResult(results);
       }
@@ -998,7 +1011,6 @@
   }
 
   function runMouseClick(spec) {
-    var api = root.CcPagePointer;
     return runPointerTask({
       tabId: spec && spec.tabId || null,
       x: spec && spec.x,
@@ -1011,7 +1023,7 @@
       button: spec && spec.button || 'left',
       count: spec && spec.count || 1,
       action: spec && spec.action || 'click',
-    }, api && api.clickAt);
+    }, pointerClickFromJson);
   }
 
   function runHover(spec) {
@@ -1023,7 +1035,6 @@
   }
 
   function runKeyboard(spec) {
-    var api = root.CcPagePointer;
     return runPointerTask({
       tabId: spec && spec.tabId || null,
       selector: spec && spec.selector || '',
@@ -1035,7 +1046,7 @@
       alt: !!(spec && spec.alt),
       shift: !!(spec && spec.shift),
       meta: !!(spec && spec.meta),
-    }, api && api.pressKeys);
+    }, keyboardFromJson);
   }
 
   function runBrowserTask(msg) {

@@ -77,6 +77,10 @@ export function isEducationRow(ident: string): boolean {
   const _isRelativeName = ident.includes('father') || ident.includes('mother') || ident.includes('husband') || ident.includes('spouse') || ident.includes('guardian');
   const isCandidateNameField = _hasName && !_isRelativeName && (ident.includes('candidate') || ident.includes('applicant') || ident.includes('student') || ident.includes('full_name') || ident.includes('your_name') || /^name/.test(ident) || ident.includes('_name_as_per'));
   const isHighestEduField = ident.includes('highest');
+  // "Date of Birth as recorded in Matriculation Certificate" is DOB, not an education row.
+  if (ident.includes('date_of_birth') || ident.includes('dateofbirth') || ident.includes('birth_date') || /(^|_)dob(_|$)/.test(ident)) return false;
+  // "Father's Name as recorded in Matriculation" is a name field, not an education row.
+  if (_isRelativeName) return false;
   return !isCandidateNameField && !isHighestEduField && (ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll'));
 }
 
@@ -101,7 +105,12 @@ export function tryMatch(
   helpers: MatchHelpers,
   mapping: Mapping,
 ): boolean {
-  if (isTwinField(field, ident)) return true;
+  if (isTwinField(field, ident)) {
+    const dateTwin = /date of birth|\bdob\b|dd[\s_\-\/.]*mm/i.test(
+      `${field.label || ''} ${field.placeholder || ''} ${field.id || ''} ${field.name || ''}`,
+    );
+    if (!dateTwin && field.canonicalKey !== 'dob') return true;
+  }
 
   if (field.type === 'radio' || field.type === 'radio-group') {
     const condDecision = helpers.decideConditionalChoice(field, profile);

@@ -11,7 +11,7 @@ const srcTs = readFileSync(path.join(__dirname, '../src/scan-standard-fields.ts'
 const { code: src } = await esbuild.transform(srcTs, { loader: 'ts', target: 'es2018' });
 const root = {};
 new Function('globalThis', src)(root);
-const { scan } = root.CcScanStandardFields;
+const { scan, guessCanonicalKey } = root.CcScanStandardFields;
 
 let passed = 0, failed = 0;
 function assert(desc, actual, expected) {
@@ -69,6 +69,12 @@ for (const kw of ['captcha', 'otp']) {
   assert(`id="${kw}" captured as humanGate`, formFields.length, 1);
   assert(`id="${kw}" humanGate type`, formFields[0].humanGate, kw);
   assert(`id="${kw}" fillMode skip`, formFields[0].fillMode, 'skip');
+}
+{
+  const { formFields } = scan(makeDoc([makeInput({ id: 'mobileotp', type: 'text', _label: 'mobileotp' })]), helpers);
+  assert('id=mobileotp captured', formFields.length, 1);
+  assert('id=mobileotp humanGate otp', formFields[0].humanGate, 'otp');
+  assert('id=mobileotp fillMode skip', formFields[0].fillMode, 'skip');
 }
 {
   const { formFields } = scan(makeDoc([makeInput({ id: 'filter', name: 'filter', _label: 'Filter' })]), helpers);
@@ -158,6 +164,7 @@ console.log('\nPage search');
   assert('type=search captured', formFields.length, 1);
   assert('type=search selector=#site-search', formFields[0].selector, '#site-search');
   assert('type=search reported as search', formFields[0].type, 'search');
+  assert('type=search fillMode skip', formFields[0].fillMode, 'skip');
 }
 {
   const poisoned = makeInput({ type: 'search', id: 'captcha', _label: 'Search' });
@@ -175,6 +182,7 @@ console.log('\nPage search');
   };
   const { formFields } = scan(doc, helpers);
   assert('unnamed search uses type selector', formFields[0].selector, 'input[type="search"]');
+  assert('search fillMode skip', formFields[0].fillMode, 'skip');
 }
 
 // ── Select ────────────────────────────────────────────────────────────────────
@@ -325,6 +333,50 @@ console.log('\nLocators, cascade, Hindi auto, rules');
   assert('office is dropdown', byKey.apply_to_office.type, 'dropdown');
   assert('office relationHint', byKey.apply_to_office.relationHint, 'per_application');
 }
+{
+  const district = Object.assign(makeInput({ tagName: 'SELECT', id: '17297', type: '', _label: 'जिला / District *' }), {
+    querySelectorAll: () => [{ textContent: 'GAYA/गया', value: '196' }],
+  });
+  const subDiv = Object.assign(makeInput({ tagName: 'SELECT', id: '17296', type: '', _label: 'अनुमंडल / Sub-Division *' }), {
+    querySelectorAll: () => [{ textContent: 'GAYA SADAR/गया सदर', value: '17416' }, { textContent: 'TEKARI/टेकारी', value: '17419' }],
+  });
+  const thanaLoaded = Object.assign(makeInput({ tagName: 'SELECT', id: '65015', type: '', _label: 'थाना / Police Station *' }), {
+    querySelectorAll: () => [{ textContent: 'Kotwali/कोतवाली', value: '1257021' }, { textContent: 'Civil lines/सिविल लाईन', value: '1257025' }],
+  });
+  const village = makeInput({ id: '17299', _label: 'ग्राम (Village) / मोहल्ला (Town) *' });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [district, subDiv, village, thanaLoaded] : []; } };
+  const { formFields } = scan(doc, helpers);
+  const byKey = {};
+  formFields.forEach((f) => { byKey[f.canonicalKey] = f; });
+  assert('loaded sub_division is still dynamic', byKey.sub_division.optionsDynamic, true);
+  assert('sub_division dependsOn district', byKey.sub_division.dependsOn, 'address.district');
+  assert('sub_division waitForOptions', byKey.sub_division.rules && byKey.sub_division.rules.waitForOptions, true);
+  assert('loaded police_station is still dynamic', byKey.police_station.optionsDynamic, true);
+  assert('police_station dependsOn district not village', byKey.police_station.dependsOn, 'address.district');
+}
+{
+  const child = Object.assign(makeInput({ tagName: 'SELECT', id: 'board', type: '', _label: 'Exam Board' }), {
+    querySelectorAll: () => [{ textContent: 'CBSE', value: '1' }, { textContent: 'BSEB', value: '2' }],
+  });
+  child['data-url'] = '/api/boards';
+  const { formFields } = scan(makeDoc([child]), helpers);
+  assert('data-url select is dynamic even with loaded options', formFields[0].optionsDynamic, true);
+}
+{
+  const parent = Object.assign(makeInput({ tagName: 'SELECT', id: 'cat', type: '', _label: 'Category' }), {
+    querySelectorAll: () => [{ textContent: 'A', value: 'a' }],
+    getAttribute(k) { return k === 'onchange' ? 'loadSub("subcat")' : (this[k] != null && this[k] !== '' ? String(this[k]) : null); },
+  });
+  const child = Object.assign(makeInput({ tagName: 'SELECT', id: 'subcat', type: '', _label: 'Subcategory' }), {
+    querySelectorAll: () => [{ textContent: 'A1', value: 'a1' }, { textContent: 'A2', value: 'a2' }],
+  });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [parent, child] : []; } };
+  const { formFields } = scan(doc, helpers);
+  const byId = {};
+  formFields.forEach((f) => { byId[f.id] = f; });
+  assert('onchange-wired child is dynamic', byId.subcat.optionsDynamic, true);
+  assert('onchange-wired child dependsOn parent', byId.subcat.dependsOn, '#cat');
+}
 
 console.log('\nReview #2 sections, fillMode, noise, human gates');
 {
@@ -400,6 +452,88 @@ console.log('\nReview #2 sections, fillMode, noise, human gates');
   const helpersHidden = Object.assign({}, helpers, { isVisuallyPresent: () => false });
   const { formFields } = scan(makeDoc([nameless]), helpersHidden);
   assert('hidden numeric file dropped', formFields.length, 0);
+}
+
+console.log('\nSSC/RRB canonical keys and label bleed');
+assert('Full Name → name', guessCanonicalKey('Full Name', 'registration_fullname', 'registration_fullname', 'text', null), 'name');
+assert('Re-type Full Name → name', guessCanonicalKey('Re-type Full Name', 'registration_retypefullname', 'registration_retypefullname', 'text', null), 'name');
+assert('Candidate Name numbered → name', guessCanonicalKey('2. Candidate Name (As per Matriculation Certificate)', '', '', 'text', null), 'name');
+assert('Father’s Name stays father', guessCanonicalKey('Father’s Name *', 'fatherFullName', 'fatherFullName', 'text', null), 'father_name');
+assert('Gender ng-dropdown', guessCanonicalKey('4. Gender', '', 'ng-dd-10018', 'ng-dropdown', []), 'gender');
+assert('Education board', guessCanonicalKey('8. Matriculation (10th class) Education Board', '', 'ng-dd-10022', 'ng-dropdown', []), 'board_10th');
+assert('Year of Passing', guessCanonicalKey('10. Year of Passing', '', 'ng-dd-10024', 'ng-dropdown', []), 'year_of_passing');
+assert('Highest qualification', guessCanonicalKey('11. Highest Level of Education Qualification', '', 'ng-dd-10026', 'ng-dropdown', []), 'highest_education_qualification');
+assert('Date Of Birth → dob', guessCanonicalKey('Date Of Birth', 'effectiveDate', 'jquerryEffectiveDate', 'text', null, 'DD/MM/YYYY'), 'dob');
+assert('dateBirth id → dob', guessCanonicalKey('Re-type Date Of Birth *', 'dateBirth', 'dateBirth', 'text', null, 'DD/MM/YYYY'), 'dob');
+assert('Mobile Number → mobile', guessCanonicalKey('Mobile Number', '', 'registrationFormControlInput2', 'tel', null), 'mobile');
+assert('type=tel with selector label → mobile', guessCanonicalKey('#registrationFormControlInput2', '', 'registrationFormControlInput2', 'tel', null), 'mobile');
+assert('mobileotp is not mobile', guessCanonicalKey('mobileotp', 'mobileotp', 'mobileotp', 'text', null), null);
+assert('aadhaar checkbox is not aadhaar_number', guessCanonicalKey('1.1. Enter Your Aadhaar Details (UID / VID)', 'agree', 'agree', 'checkbox', null), null);
+{
+  const dob = makeInput({
+    id: 'dateBirth', name: 'dateBirth', _label: 'Country Of Nationality',
+    placeholder: 'DD/MM/YYYY As recorded in Matriculation (10th class)  Certificate/MarkSheet',
+  });
+  const { formFields } = scan(makeDoc([dob]), helpers);
+  assert('country heading on date widget relabeled', /date of birth/i.test(formFields[0].label), true);
+  assert('country heading on date widget canonical dob', formFields[0].canonicalKey, 'dob');
+}
+{
+  const father = makeInput({
+    id: 'registration_confirmfathername', name: 'registration_confirmfathername',
+    _label: 'Country Of Nationality',
+    placeholder: "Re-type Father's Name As recorded in Matriculation (10th class)  Certificate/MarkSheet",
+  });
+  const { formFields } = scan(makeDoc([father]), helpers);
+  assert('country heading on father retype uses placeholder', /father/i.test(formFields[0].label), true);
+  assert('father retype canonical', formFields[0].canonicalKey, 'father_name');
+}
+{
+  const full = makeInput({ id: 'registration_fullname', name: 'registration_fullname', _label: 'Full Name' });
+  const { formFields } = scan(makeDoc([full]), helpers);
+  assert('Full Name canonicalKey name', formFields[0].canonicalKey, 'name');
+  assert('Full Name needsReview false', formFields[0].needsReview, false);
+}
+{
+  const agree = makeInput({ type: 'checkbox', id: 'agree', name: '', _label: '1.1. Enter Your Aadhaar Details (UID / VID)' });
+  const doc = { querySelectorAll(s) { return s.includes('input') ? [agree] : []; } };
+  const { formFields } = scan(doc, helpers);
+  assert('nameless #agree is agreement', formFields[0].type, 'checkbox-agreement');
+  assert('nameless #agree not aadhaar', formFields[0].canonicalKey, null);
+}
+{
+  const picker = makeInput({
+    id: 'jquerryEffectiveDate', name: 'effectiveDate', _label: 'Date Of Birth',
+    placeholder: 'DD/MM/YYYY', readOnly: true,
+  });
+  const { formFields } = scan(makeDoc([picker]), helpers);
+  assert('readonly datepicker still fill', formFields[0].fillMode, 'fill');
+  assert('readonly datepicker canonical dob', formFields[0].canonicalKey, 'dob');
+}
+{
+  const legend = { textContent: 'Country Of Nationality' };
+  const dob = makeInput({
+    id: 'dateBirth', name: 'dateBirth', _label: 'Country Of Nationality',
+    placeholder: 'DD/MM/YYYY As recorded in Matriculation (10th class)  Certificate/MarkSheet',
+    closest: () => ({ querySelector: () => legend }),
+  });
+  const { formFields } = scan(makeDoc([dob]), helpers);
+  assert('legend nearby is not kept as DOB label', /country of nationality/i.test(formFields[0].label), false);
+  assert('retype date id becomes Date Of Birth', /date of birth/i.test(formFields[0].label), true);
+}
+{
+  const yes = makeInput({ type: 'radio', id: 'changedName_yes', name: 'changedName', value: 'on', _label: 'Yes' });
+  const no = makeInput({ type: 'radio', id: 'changedName_no', name: 'changedName', value: 'on', _label: 'No' });
+  const { formFields } = scan(makeDoc([yes, no]), helpers);
+  assert('changed-name radios captured', formFields.length, 1);
+  assert('changed-name group not labeled Yes', /changed/i.test(formFields[0].label), true);
+}
+{
+  const dot = makeInput({
+    type: 'tel', id: 'otp_0_z75zljhfnrmvz9qqsk', _label: 'slide-dot-1',
+  });
+  const { formFields } = scan(makeDoc([dot]), helpers);
+  assert('carousel slide-dot skipped', formFields.length, 0);
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────

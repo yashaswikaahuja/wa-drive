@@ -84,6 +84,52 @@
     return s.replace(/\b([a-z])/g, function (m) { return m.toUpperCase(); });
   }
 
+  var SECTION_HEADING_RE = /country of nationality|^nationality$|^country$/i;
+
+  function widgetHintBlob(el: any) {
+    if (!el) return '';
+    return [
+      el.placeholder,
+      el.id,
+      el.name,
+      el.getAttribute && el.getAttribute('placeholder'),
+      el.getAttribute && el.getAttribute('aria-label'),
+      el.getAttribute && el.getAttribute('name'),
+    ].filter(Boolean).join(' ');
+  }
+
+  function legendMismatchesWidget(el: any, legend: any) {
+    if (!SECTION_HEADING_RE.test(String(legend || ''))) return false;
+    var hint = widgetHintBlob(el);
+    return /date|birth|dob|dd\s*[\/\-.]\s*mm|father|pita|mother|mata|email|mobile|phone|fullname|full.?name/i.test(hint);
+  }
+
+  function preferWidgetLabel(el: any, current: any) {
+    var cur = cleanLabelText(current);
+    if (!el) return cur;
+    var hint = widgetHintBlob(el);
+    var ph = cleanLabelText(el.placeholder || (el.getAttribute && el.getAttribute('placeholder')) || '');
+    var blob = hint + ' ' + ph + ' ' + cur;
+    var heading = !cur || SECTION_HEADING_RE.test(cur);
+    var weakHumanized = /^date birth$/i.test(cur);
+    if (/date|birth|dob|dd\s*[\/\-.]\s*mm/i.test(blob)) {
+      if (!heading && !weakHumanized && /date of birth|birth date|\bdob\b/i.test(cur)) return cur;
+      if (/re[\s_-]*type|confirm|verify|^datebirth$/i.test(blob) || /^dateBirth$/i.test(String(el.id || ''))) {
+        return 'Re-type Date Of Birth';
+      }
+      if (heading || weakHumanized) return 'Date Of Birth';
+    }
+    if (heading && /father|pita/i.test(hint + ' ' + ph)) {
+      if (/re[\s_-]*type|confirm|verify/i.test(hint + ' ' + ph)) return "Re-type Father's Name";
+      return "Father's Name";
+    }
+    if (heading && /mother|mata/i.test(hint + ' ' + ph)) {
+      if (/re[\s_-]*type|confirm|verify/i.test(hint + ' ' + ph)) return "Re-type Mother's Name";
+      return "Mother's Name";
+    }
+    return cur;
+  }
+
   function textFromLabelEl(lbl: any) {
     if (!lbl) return '';
     // Prefer clone-without-controls so checkbox/radio wrapper labels work
@@ -145,12 +191,13 @@
       if (isGoodLabel(tWrap)) return tWrap;
     }
 
-    // 4. Fieldset legend (applies to inputs inside fieldsets, not only radios)
+    // 4. Fieldset legend (applies to inputs inside fieldsets, not only radios).
+    // Skip section headings that do not describe this widget (RRB Country Of Nationality).
     var fieldset = el.closest && el.closest('fieldset');
     if (fieldset) {
       var legend = fieldset.querySelector(':scope > legend, legend');
       var tLeg = cleanLabelText(legend && legend.textContent);
-      if (isGoodLabel(tLeg) && tLeg.length < 120) return tLeg;
+      if (isGoodLabel(tLeg) && tLeg.length < 120 && !legendMismatchesWidget(el, tLeg)) return tLeg;
     }
 
     // 5. Preceding <th>/<td> in a table row
@@ -183,7 +230,7 @@
       ].join(','));
       var tCont = textFromLabelEl(cLbl);
       // Avoid grabbing the whole option list from a label-like class inside dropdowns
-      if (isGoodLabel(tCont) && tCont.length < 120) return tCont;
+      if (isGoodLabel(tCont) && tCont.length < 120 && !legendMismatchesWidget(el, tCont)) return preferWidgetLabel(el, tCont);
     }
 
     // 7. Parent hierarchy label (up to 5 hops)
@@ -204,7 +251,7 @@
       ].join(', '));
       if (pLbl && pLbl !== el) {
         var tHop = textFromLabelEl(pLbl);
-        if (isGoodLabel(tHop) && tHop.length < 120) return tHop;
+        if (isGoodLabel(tHop) && tHop.length < 120 && !legendMismatchesWidget(el, tHop)) return preferWidgetLabel(el, tHop);
       }
       p = p.parentElement;
       hop++;
@@ -214,8 +261,8 @@
     var prev = el.previousElementSibling;
     if (prev && ['LABEL', 'SPAN', 'DIV', 'P', 'STRONG', 'B', 'LEGEND'].includes(prev.tagName)) {
       var pt = cleanLabelText(prev.textContent);
-      if (isGoodLabel(pt) && pt.length < 80 && !(prev.querySelector && prev.querySelector('input,select,textarea'))) {
-        return pt;
+      if (isGoodLabel(pt) && pt.length < 80 && !legendMismatchesWidget(el, pt) && !(prev.querySelector && prev.querySelector('input,select,textarea'))) {
+        return preferWidgetLabel(el, pt);
       }
     }
 
@@ -235,18 +282,18 @@
 
     // 10. Placeholder as soft fallback
     if (el.placeholder && isGoodLabel(el.placeholder) && el.placeholder.length < 60) {
-      return cleanLabelText(el.placeholder);
+      return preferWidgetLabel(el, cleanLabelText(el.placeholder));
     }
 
     // 11. Humanize name / id — last resort so sessions never show blank / raw node ids
     var fromName = humanizeAttr(el.getAttribute('name') || el.name || '');
-    if (isGoodLabel(fromName)) return fromName;
+    if (isGoodLabel(fromName)) return preferWidgetLabel(el, fromName);
     var fromId = humanizeAttr(el.id || '');
-    if (isGoodLabel(fromId)) return fromId;
+    if (isGoodLabel(fromId)) return preferWidgetLabel(el, fromId);
     var fromFcn = humanizeAttr(el.getAttribute('formcontrolname') || '');
-    if (isGoodLabel(fromFcn)) return fromFcn;
+    if (isGoodLabel(fromFcn)) return preferWidgetLabel(el, fromFcn);
 
-    return '';
+    return preferWidgetLabel(el, '');
   }
 
   // Expose globally

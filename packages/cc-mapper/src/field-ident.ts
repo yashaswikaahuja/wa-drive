@@ -21,7 +21,11 @@ export function isTravelJourneyField(field: {
     .toLowerCase();
   if (!raw.trim()) return false;
   if (/police[_\s-]?station|\bthana\b|\bps\b/.test(raw)) return false;
-  return /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota|class)\b/.test(raw)
+  // "10th class" / education board is not travel class.
+  const travelClass = /\b(travel|coach|reservation|journey)[_\s-]?class\b/.test(raw)
+    || (/\bclass\b/.test(raw) && /\b(train|flight|berth|quota|coach|sleeper)\b/.test(raw));
+  return /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota)\b/.test(raw)
+    || travelClass
     || /\b(from|to)[_\s-]?station\b/.test(raw)
     || /\bstation\b/.test(raw)
     || /\b(depart|arrive|travel)[_\s-]?(date|time|city|from|to)\b/.test(raw);
@@ -36,6 +40,77 @@ export const IDENTITY_PROFILE_KEYS = new Set([
   'voter_id', 'passport', 'driving_licence', 'dl_number',
   'gender', 'sex', 'email', 'email_id', 'phone', 'mobile', 'mobile_number',
 ]);
+
+/** Compatible profileKey groups for a live field identity. */
+const ATOM_GROUPS: Record<string, readonly string[]> = {
+  dob: ['dob', 'date_of_birth', 'dob__day', 'dob__month', 'dob__year'],
+  mobile: ['mobile', 'phone', 'mobile_number', 'phone_number', 'mobile_no'],
+  email: ['email', 'email_id'],
+  gender: ['gender', 'sex'],
+  name: ['name', 'full_name', 'first_name', 'last_name', 'middle_name', 'applicant_name'],
+  father_name: ['father_name'],
+  mother_name: ['mother_name'],
+  aadhaar: ['aadhaar', 'aadhaar_number', 'aadhar'],
+};
+
+/**
+ * Live-label identity for a widget. Prefer the title the operator can see
+ * over a stale canonicalKey — BPSC labeled Mobile Number then filled dob
+ * because a saved map still said dob.
+ */
+export function fieldAtomHint(field: {
+  label?: string | null;
+  name?: string | null;
+  id?: string | null;
+  placeholder?: string | null;
+  type?: string | null;
+  canonicalKey?: string | null;
+  humanGate?: string | null;
+} | null | undefined): string | null {
+  if (!field) return null;
+  if (field.humanGate === 'otp' || field.humanGate === 'captcha') return 'otp';
+  const lab = String(field.label || '').toLowerCase();
+  const idn = `${field.id || ''} ${field.name || ''}`.toLowerCase();
+  const typ = String(field.type || '').toLowerCase();
+  const ck = String(field.canonicalKey || '').toLowerCase();
+  const blob = `${lab} ${idn} ${field.placeholder || ''} ${ck} ${typ}`;
+  if (/otp/i.test(blob) && !/slide[-_]?dot/i.test(blob)) return 'otp';
+  if (/(mobile|phone|sampark|मोबाइल)/i.test(lab) && !/otp/i.test(lab)) return 'mobile';
+  if (typ === 'tel' && !/otp/i.test(blob)) return 'mobile';
+  if (/e-?mail/i.test(lab)) return 'email';
+  if (/\bgender\b|\bsex\b/i.test(lab) && !/transgender agency/i.test(lab)) return 'gender';
+  if (/date of birth|birth date|\bdob\b|date birth/i.test(lab) && !/year of passing|education board/i.test(lab)) return 'dob';
+  if (/father/i.test(lab) && /name/i.test(lab)) return 'father_name';
+  if (/mother/i.test(lab) && /name/i.test(lab)) return 'mother_name';
+  if (/aadhaar|aadhar/i.test(lab) && typ !== 'checkbox' && typ !== 'checkbox-agreement') return 'aadhaar';
+  if (ck === 'phone' || ck === 'mobile_number') return 'mobile';
+  if (ck === 'date_of_birth') return 'dob';
+  if (ATOM_GROUPS[ck]) return ck;
+  return null;
+}
+
+/** True when the planned profileKey can belong to this live field. */
+export function profileKeyAgreesWithField(
+  field: {
+    label?: string | null;
+    name?: string | null;
+    id?: string | null;
+    placeholder?: string | null;
+    type?: string | null;
+    canonicalKey?: string | null;
+    humanGate?: string | null;
+  } | null | undefined,
+  profileKey: string | null | undefined,
+): boolean {
+  const pk = String(profileKey || '').toLowerCase().trim();
+  if (!pk) return false;
+  const hint = fieldAtomHint(field);
+  if (!hint) return true;
+  if (hint === 'otp') return false;
+  const group = ATOM_GROUPS[hint];
+  if (!group) return true;
+  return group.includes(pk);
+}
 
 /** Lowercase and collapse separators to `_`. */
 export function normalizeIdent(s: string): string {
@@ -138,4 +213,6 @@ export const CcFieldIdent = {
   aliasHitsIdent,
   optionText,
   optionTexts,
+  fieldAtomHint,
+  profileKeyAgreesWithField,
 };

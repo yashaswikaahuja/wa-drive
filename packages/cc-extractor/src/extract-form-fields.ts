@@ -77,6 +77,20 @@ function extractFormFieldsWithFingerprint() {
     }
   }
 
+  // ng-select / mat-select skip the standard decorate pass — attach canonicalKey,
+  // locators, fillMode before cascade wiring.
+  if (_ssf.decorateField) {
+    formFields.forEach(function (f: any) {
+      if (!f || f.locators || !f._el) return;
+      var owner = (f._el.ownerDocument) || (typeof document !== 'undefined' ? document : null);
+      _ssf.decorateField(f, f._el, owner);
+    });
+  }
+
+  // Cascade / AJAX after every scanner so ng-select and mat-select get dependsOn too
+  if (_ssf.linkDependsOn) _ssf.linkDependsOn(formFields);
+  if (_ssf.markAjaxDropdowns) _ssf.markAjaxDropdowns(formFields);
+
   // Sort by visual position (_el refs still present here)
   if (_sfv.sort) _sfv.sort(formFields);
 
