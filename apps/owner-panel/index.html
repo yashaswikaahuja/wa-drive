@@ -1,6 +1,26 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- cc-owner-base-migrate -->
+    <script>
+    (function () {
+      try {
+        var k = "cc-owner-cfg";
+        var raw = localStorage.getItem(k);
+        var c = raw ? JSON.parse(raw) : {};
+        var origin = location.origin;
+        var fqdn = "http://cybercontrol-app.taild72c71.ts.net:3010";
+        var stale = /^(https?:\/\/)(100\.112\.147\.34|cybercontrol-app)(:3010)?\/?$/i;
+        var next = c.baseUrl || "";
+        if (location.port !== "5180" && location.protocol.indexOf("http") === 0) next = origin;
+        else if (!next || stale.test(String(next).replace(/\/$/, ""))) next = fqdn;
+        if (next && next !== c.baseUrl) {
+          c.baseUrl = next;
+          localStorage.setItem(k, JSON.stringify(c));
+        }
+      } catch (e) {}
+    })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />

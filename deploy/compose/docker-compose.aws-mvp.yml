@@ -91,7 +91,8 @@ services:
       REMOVE_BG_API_KEY: ${REMOVE_BG_API_KEY:-}
       OWNER_KEY: ${OWNER_KEY:-}
       # Tailnet owner panel (baked into backend image). Bind 0.0.0.0 inside Docker;
-      # reach it as http://cybercontrol-app:3010 over Tailscale. SG must NOT open 3010.
+      # reach it as http://cybercontrol-app.taild72c71.ts.net:3010 over Tailscale.
+      # SG must NOT open 3010. SG MUST allow UDP 41641 so the path stays direct.
       OWNER_PORT: ${OWNER_PORT:-3010}
       OWNER_BIND: ${OWNER_BIND:-0.0.0.0}
       OWNER_ALERT_PHONE: ${OWNER_ALERT_PHONE:-}
@@ -232,6 +233,8 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "false"
       TS_AUTH_ONCE: "true"
+      # Add --port=41641 once sg-050440e326f56d557 allows UDP 41641. Pinning
+      # that port while the SG is closed advertises a black-holed endpoint.
       TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:---advertise-tags=tag:cybercontrol --accept-dns=true}
       TS_ACCEPT_DNS: "true"
     volumes:
@@ -242,6 +245,28 @@ services:
       - SYS_MODULE
     devices:
       - /dev/net/tun:/dev/net/tun
+
+  # Keeps magicsock/NAT mappings warm. Without UDP 41641 on the SG, tailscaled
+  # NATs out via an ephemeral port that AWS idle-timeouts; Windows then only
+  # reaches :3010 via DERP and the first request after idle often fails.
+  # Host also runs /etc/systemd/system/cc-tailscale-keepalive.service.
+  tailscale-app-keepalive:
+    image: docker:27-cli
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "[ts-keepalive] starting"
+        while true; do
+          hosts=$$(docker exec cybercontrol-docker-tailscale-app-1 tailscale status 2>/dev/null | awk 'NR>1 && $$0 !~ /offline/ {print $$2}')
+          for h in $$hosts; do
+            [ -n "$$h" ] || continue
+            docker exec cybercontrol-docker-tailscale-app-1 tailscale ping -c 1 --timeout 3s "$$h" >/dev/null 2>&1 || true
+          done
+          sleep 20
+        done
 
   # MagicDNS: cybercontrol-db — shares postgres netns so :5432 answers on this Tailscale IP.
   # Note: Docker forbids `hostname:` with network_mode: service:* — use TS_HOSTNAME only.

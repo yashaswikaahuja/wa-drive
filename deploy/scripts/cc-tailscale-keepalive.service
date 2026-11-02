@@ -1,0 +1,13 @@
+[Unit]
+Description=Keep Tailscale peer paths warm for cybercontrol-app:3010
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=/usr/local/sbin/cc-tailscale-keepalive.sh
+
+[Install]
+WantedBy=multi-user.target
