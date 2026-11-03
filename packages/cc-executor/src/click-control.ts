@@ -61,7 +61,7 @@
     return true;
   }
 
-  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable, .ui-droppable, .droppable, [ondrop]';
+  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], [role="combobox"], mat-select, mat-checkbox, mat-radio-button, td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable, .ui-droppable, .droppable, [ondrop]';
   var CLASS_WORD = /\b(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)\b/i;
   var CLASS_ONLY = /^(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)$/i;
   var AVAIL_WORD = /\b(AVAILABLE|GNWL|RAC|REGRET|CURR)\b/i;
@@ -85,9 +85,13 @@
   function isChoice(el: any) {
     if (!el || !el.tagName || inChrome(el)) return false;
     var role = el.getAttribute && el.getAttribute('role');
-    if (role === 'checkbox' || role === 'radio' || role === 'option') return true;
+    var tagName = String(el.tagName || '').toLowerCase();
+    if (role === 'checkbox' || role === 'radio' || role === 'option' || role === 'combobox') return true;
+    if (tagName === 'mat-select' || tagName === 'mat-checkbox' || tagName === 'mat-radio-button') return true;
+    var componentClass = String(el.className || '');
+    if (/\\bv-select\\b|\\bv-autocomplete\\b|\\bv-combobox\\b/.test(componentClass)) return true;
     if (/\b\S*auto-complete__option\b/.test(String(el.className || ''))) return true;
-    var tag = String(el.tagName).toLowerCase();
+    var tag = tagName;
     var cls = String(el.className || '');
     if (tag === 'a') {
       var href = el.getAttribute && el.getAttribute('href');
@@ -95,6 +99,8 @@
       return !!(href && text && text.length >= 2 && text.length <= 60);
     }
     if (tag === 'label') {
+      // Material's internal label is part of the component; expose the host once.
+      if (el.closest && el.closest('mat-checkbox, mat-radio-button')) return false;
       if (/custom-control-label|form-check-label|rct-text/.test(cls)) return true;
       if (el.getAttribute && el.getAttribute('for')) return true;
       if (el.querySelector && el.querySelector('input[type="radio"], input[type="checkbox"], .rct-checkbox')) return true;
