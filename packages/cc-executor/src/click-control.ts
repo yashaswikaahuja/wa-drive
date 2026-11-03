@@ -89,7 +89,7 @@
     if (role === 'checkbox' || role === 'radio' || role === 'option' || role === 'combobox') return true;
     if (tagName === 'mat-select' || tagName === 'mat-checkbox' || tagName === 'mat-radio-button') return true;
     var componentClass = String(el.className || '');
-    if (/\\bv-select\\b|\\bv-autocomplete\\b|\\bv-combobox\\b/.test(componentClass)) return true;
+    if (/\bv-select\b|\bv-autocomplete\b|\bv-combobox\b/.test(componentClass)) return true;
     if (/\b\S*auto-complete__option\b/.test(String(el.className || ''))) return true;
     var tag = tagName;
     var cls = String(el.className || '');
