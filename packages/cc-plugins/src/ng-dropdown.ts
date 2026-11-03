@@ -150,10 +150,10 @@ var NgDropdownPlugin = {
           setTimeout(() => {
             var displayed = el.querySelector('.value-area,.ng-value-label,.select-type,.mat-mdc-select-min-line,.mat-select-value-text,.v-select__selection-text,.v-select__selection,.v-chip__content');
             var input = el.querySelector('input');
-            var displayedText = displayed ? String(displayed.textContent || '').replace(/\\s+/g, ' ').trim()
+            var displayedText = displayed ? String(displayed.textContent || '').replace(/\s+/g, ' ').trim()
               : (input && String(input.value || '').trim()) || '';
-            var selectedText = String(match.textContent || '').replace(/\\s+/g, ' ').trim();
-            var normText = function (s: any) { return String(s || '').toLowerCase().replace(/\\s+/g, ' ').trim(); };
+            var selectedText = String(match.textContent || '').replace(/\s+/g, ' ').trim();
+            var normText = function (s: any) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); };
             var actual = normText(displayedText);
             var expected = normText(selectedText);
             var ok = !!actual && (actual === expected || actual.indexOf(expected) !== -1 || expected.indexOf(actual) !== -1);
