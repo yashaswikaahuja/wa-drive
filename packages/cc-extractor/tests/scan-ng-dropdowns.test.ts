@@ -134,5 +134,30 @@ console.log('\nng-select containers');
   assert('react-select type=ng-dropdown', formFields[0].type, 'ng-dropdown');
 }
 
+// ── Vuetify and jQuery UI framework classification ─────────────────────────
+{
+  const el = makeEl({ id: 'input-v-158', _label: 'User', className: 'v-select', role: 'combobox' });
+  const { formFields } = scan(makeDoc([el]), [], helpers, 10000);
+  assert('Vuetify combobox uses custom dropdown handler', formFields[0].type, 'ng-dropdown');
+}
+{
+  const el = makeEl({ id: 'speed-button', _label: 'Select a speed', className: 'ui-selectmenu-button', role: 'combobox' });
+  const { formFields } = scan(makeDoc([el]), [], helpers, 10000);
+  assert('jQuery UI Selectmenu uses custom dropdown handler', formFields[0].type, 'ng-dropdown');
+}
+{
+  const el = makeEl({ id: 'mat-select-9', _label: 'Toppings', tagName: 'MAT-SELECT', role: 'combobox' });
+  const existing = [{ selector: '#mat-select-9', _el: el, type: 'mat-select' }];
+  const { formFields } = scan(makeDoc([el]), existing, helpers, 10000);
+  assert('already-captured Angular Material combobox skipped', formFields.length, 0);
+}
+{
+  const el = makeEl({ id: 'v-select-user', _label: 'User', className: 'v-select' });
+  const existing = [{ selector: '#input-v-158', _el: makeEl({ tagName: 'INPUT', id: 'input-v-158' }), type: 'text' }];
+  const { formFields } = scan(makeDoc([], [el]), existing, helpers, 10000);
+  assert('Vuetify wrapper retained beside its internal input', formFields.length, 1);
+  assert('Vuetify wrapper classified as custom dropdown', formFields[0].type, 'ng-dropdown');
+}
+
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
