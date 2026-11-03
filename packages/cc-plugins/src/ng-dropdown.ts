@@ -9,9 +9,9 @@
  * 5. Verify selection
  */
 
-var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '[tabindex]'];
-var OPTION_SELECTORS = ['li', '.ng-option', 'mat-option', '.dropdown-item', '.option', '[role="option"]'];
-var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', 'ul', 'cdk-overlay-container'];
+var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '.v-field__input', '.v-select__selection', '.v-field', '[tabindex]'];
+var OPTION_SELECTORS = ['li', '.ng-option', 'mat-option', '.v-list-item', '.dropdown-item', '.option', '[role="option"]'];
+var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', '.v-overlay__content', '.v-menu > .v-overlay__content', 'ul', 'cdk-overlay-container'];
 
 // Search for option items using multiple selectors (fallback when no adapter)
 function findOptionsInContainer(container: any, optSel: any, isVisible: any) {
@@ -34,8 +34,8 @@ var NgDropdownPlugin = {
     if (!el) return false;
     if (fieldContext.type === 'ng-dropdown') return true;
     if (fieldContext.type === 'mat-select') return true;  // Custom comboboxes are typed mat-select by extractor
-    if (el.classList && (el.classList.contains('ng-dropdown') || el.classList.contains('ng-select'))) return true;
-    if (el.tagName === 'NG-SELECT' || (el.closest && el.closest('ng-select'))) return true;
+    if (el.classList && (el.classList.contains('ng-dropdown') || el.classList.contains('ng-select') || el.classList.contains('v-select') || el.classList.contains('v-autocomplete') || el.classList.contains('v-combobox'))) return true;
+    if (el.tagName === 'NG-SELECT' || (el.closest && el.closest('ng-select, .v-select, .v-autocomplete, .v-combobox'))) return true;
     // Any non-native element with role=combobox/listbox
     const _tag = el.tagName.toLowerCase();
     if (_tag !== 'select' && _tag !== 'input' && (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox')) return true;
@@ -141,9 +141,11 @@ var NgDropdownPlugin = {
 
         if (match) {
           clearInterval(poll);
-          ['pointerdown','mousedown','mouseup','click'].forEach((ev: any) =>
+          ['pointerdown','mousedown','mouseup'].forEach((ev: any) =>
             match.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true }))
           );
+          if (typeof match.click === 'function') match.click();
+          else match.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
           // Verify after click
           setTimeout(() => {
             var displayed = el.querySelector('.value-area,.ng-value-label,.select-type');
