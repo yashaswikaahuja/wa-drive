@@ -287,11 +287,22 @@
     var want = (spec && spec.text) || '';
     try {
       try { await chrome.tabs.update(tab.id, { active: true }); } catch (e0) { /* stay */ }
-      await injectKernel(tab.id, false);
+      // read_form returns iframe controls with a frameId. Preserve that frame
+      // when clicking; executing in the top document makes every iframe
+      // selector look like a false not_found.
+      var requestedFrameId = spec && spec.frameId != null
+        ? Number(spec.frameId)
+        : (spec && spec.control && spec.control.frameId != null
+          ? Number(spec.control.frameId)
+          : null);
+      var hasFrameTarget = requestedFrameId !== null && Number.isFinite(requestedFrameId);
+      await injectKernel(tab.id, hasFrameTarget);
+      var clickTarget: any = { tabId: tab.id };
+      if (hasFrameTarget) clickTarget.frameIds = [requestedFrameId];
       var results = null;
       try {
         results = await withTimeout(chrome.scripting.executeScript({
-          target: { tabId: tab.id },
+          target: clickTarget,
           func: clickFromJson,
           args: [spec || {}],
         }), 3500, 'click_script_timeout');
