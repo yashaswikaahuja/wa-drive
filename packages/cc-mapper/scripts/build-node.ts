@@ -18,6 +18,7 @@ await esbuild.build({
   entryPoints: {
     'split-dob': 'src/split-dob.ts',
     'mapping-relation': 'src/mapping-relation.ts',
+    'persist-options': 'src/persist-options.ts',
   },
   outdir: distRoot,
   bundle: true,
