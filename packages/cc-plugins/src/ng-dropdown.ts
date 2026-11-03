@@ -52,9 +52,9 @@ var NgDropdownPlugin = {
         }
         if (!opts.length) opts = findOptionsInContainer(el, optSel, isVisible);
         if (!opts.length && attempts < 15) return;
-        var texts = opts.map(function (o: any) { return String(o.textContent || '').replace(/\\s+/g, ' ').trim(); });
+        var texts = opts.map(function (o: any) { return String(o.textContent || '').replace(/\s+/g, ' ').trim(); });
         var matched = window.ccMatchOption(value, texts);
-        var match = matched ? opts.find(function (o: any) { return String(o.textContent || '').replace(/\\s+/g, ' ').trim() === matched; }) : null;
+        var match = matched ? opts.find(function (o: any) { return String(o.textContent || '').replace(/\s+/g, ' ').trim() === matched; }) : null;
         if (!match) { if (attempts >= 15) { clearInterval(poll); resolve({ success: false, settled: true, reason: 'no-matching-option', optionCount: opts.length }); } return; }
         clearInterval(poll);
         ['pointerdown','mousedown','pointerup','mouseup'].forEach(function (eventName: any) { match.dispatchEvent(new MouseEvent(eventName, { bubbles: true, cancelable: true })); });
@@ -64,9 +64,9 @@ var NgDropdownPlugin = {
           var displaySelector = '.value-area,.ng-value-label,.select-type,.mat-mdc-select-min-line,.mat-select-value-text,.v-select__selection-text,.v-select__selection,.v-chip__content,.ui-selectmenu-text';
           var displayed = owner.querySelector && owner.querySelector(displaySelector);
           var input = owner.querySelector && owner.querySelector('input');
-          var displayedText = displayed ? String(displayed.textContent || '').replace(/\\s+/g, ' ').trim() : (input && String(input.value || '').trim()) || '';
-          var selectedText = String(match.textContent || '').replace(/\\s+/g, ' ').trim();
-          var norm = function (s: any) { return String(s || '').toLowerCase().replace(/\\s+/g, ' ').trim(); };
+          var displayedText = displayed ? String(displayed.textContent || '').replace(/\s+/g, ' ').trim() : (input && String(input.value || '').trim()) || '';
+          var selectedText = String(match.textContent || '').replace(/\s+/g, ' ').trim();
+          var norm = function (s: any) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); };
           var actual = norm(displayedText), expected = norm(selectedText);
           var ok = !!actual && (actual === expected || actual.indexOf(expected) !== -1 || expected.indexOf(actual) !== -1);
           resolve({ success: ok, verified: ok, settled: true, reason: ok ? '' : 'selection-not-confirmed', waitMs: Date.now() - startTime, matchedText: selectedText, displayedText: displayedText });
