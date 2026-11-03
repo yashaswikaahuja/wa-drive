@@ -52,7 +52,9 @@
     const cls = (el.className && typeof el.className === 'string') ? el.className.toLowerCase() : '';
     // Semantic kind — what the LLM agent should pick the tool for.
     let kind = 'unknown';
-    if (tag === 'select' || tag === 'ng-select' || tag === 'mat-select' || cls.includes('ng-select') || cls.includes('mat-select')) {
+    if (tag === 'select' || tag === 'ng-select' || tag === 'mat-select' ||
+        cls.includes('ng-select') || cls.includes('mat-select') ||
+        cls.includes('v-select') || cls.includes('v-autocomplete') || cls.includes('v-combobox')) {
       kind = 'dropdown';
     } else if (tag === 'textarea') {
       kind = 'text';
@@ -124,7 +126,7 @@
         if (args.kind === 'button') sel = 'button, input[type="submit"], input[type="button"], [role="button"]';
         else if (args.kind === 'link') sel = 'a[href]';
         else if (args.kind === 'input') sel = 'input:not([type="hidden"]), textarea';
-        else if (args.kind === 'select') sel = 'select, mat-select, .ng-select';
+        else if (args.kind === 'select') sel = 'select, mat-select, .ng-select, .v-select, .v-autocomplete, .v-combobox';
         else if (args.kind === 'textarea') sel = 'textarea';
         else if (args.kind === 'checkbox') sel = 'input[type="checkbox"], mat-checkbox';
         else if (args.kind === 'radio') sel = 'input[type="radio"], mat-radio-button';
@@ -190,7 +192,7 @@
         //   <ng-select> from @ng-select/ng-select
         //   <div class="ng-select">  some sites use plain divs styled as ng-select
         //   <div class="value-area">  custom dropdowns (SSC OTR pattern)
-        sels.push('select', 'mat-select', 'ng-select', '.ng-select', '.mat-select-trigger', 'div.value-area', '.ng-select-container');
+        sels.push('select', 'mat-select', 'ng-select', '.ng-select', '.mat-select-trigger', 'div.value-area', '.ng-select-container', '.v-select', '.v-autocomplete', '.v-combobox');
       }
       if (kinds.includes('checkbox')) sels.push('input[type="checkbox"]', 'mat-checkbox');
       if (kinds.includes('radio')) sels.push('input[type="radio"]', 'mat-radio-button');
