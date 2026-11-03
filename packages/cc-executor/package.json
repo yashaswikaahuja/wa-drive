@@ -28,6 +28,7 @@
     "./select-option-state": "./src/select-option-state.ts",
     "./confirm-field-pattern": "./src/confirm-field-pattern.ts",
     "./parse-date-value": "./src/parse-date-value.ts",
+    "./jquery-ui-adapter": "./src/jquery-ui-adapter.ts",
     "./post-fill-corrections": "./src/post-fill-corrections.ts"
   },
   "scripts": {
@@ -41,7 +42,5 @@
   },
   "license": "UNLICENSED",
   "private": true,
-  "engines": {
-    "node": ">=20"
-  }
+  "engines": { "node": ">=20" }
 }
