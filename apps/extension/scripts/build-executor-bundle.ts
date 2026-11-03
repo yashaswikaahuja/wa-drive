@@ -11,6 +11,7 @@ await writeConcatBundle({
   srcDir: packageSrc('@cc/executor'),
   order: [
     'parse-date-value.ts',
+    'jquery-ui-adapter.ts',
     'cascade-field-level.ts',
     'select-option-state.ts',
     'confirm-field-pattern.ts',
