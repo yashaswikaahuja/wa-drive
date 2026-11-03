@@ -775,6 +775,11 @@
       if (isCarouselChrome(el, getLabel(el) || attrOf(el, 'aria-label') || '')) return;
       if (SKIP_META_SOFT_RE.test(meta) && !pageSearch && !HUMAN_GATE_RE.test(meta) && !isJourneyMeta(meta, getLabel(el) || el.placeholder || '')) return;
 
+      // Angular Material's wrapper scanner owns these controls; do not emit
+      // the nested native input as a second independent field.
+      if (t === 'radio' && el.closest && el.closest('mat-radio-button')) return;
+      if (t === 'checkbox' && el.closest && el.closest('mat-checkbox')) return;
+
       // ── Radio ──
       if (t === 'radio' && el.name) {
         if (!radioGroups[el.name]) {
