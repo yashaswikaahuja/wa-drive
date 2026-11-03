@@ -37,7 +37,7 @@
         if (dl) label = (dl as any).textContent.trim();
       }
     }
-    return (label || '').replace(/\\s+/g, ' ').trim();
+    return (label || '').replace(/\s+/g, ' ').trim();
   }
 
   function scan(doc: any, existingFields: any, helpers: any, startIdx: any) {
@@ -52,7 +52,7 @@
     var idx = typeof startIdx === 'number' ? startIdx : 10000;
     var formFields = [];
     var labelList = [];
-    var JOURNEY_RE = /\\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|city|date)\\b/i;
+    var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|city|date)\b/i;
 
     // Non-input ARIA controls. Classify by the actual framework instead of
     // assuming every custom combobox is Angular Material.
@@ -74,7 +74,7 @@
       if (!el.id) el.setAttribute('data-cc-id', id);
       labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
       formFields.push({
-        selector: el.id ? (el.id.match(/^\\d/) ? '[id="' + el.id + '"]' : '#' + el.id) : '[data-cc-id="' + id + '"]',
+        selector: el.id ? (el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id) : '[data-cc-id="' + id + '"]',
         id: id, name: el.getAttribute('formcontrolname') || el.getAttribute('name') || '',
         value: '', placeholder: '', label: label, type: type, index: idx++, _el: el,
         options: [], optionsDynamic: true,
