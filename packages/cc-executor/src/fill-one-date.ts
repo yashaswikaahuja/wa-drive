@@ -41,21 +41,12 @@
       return el.value ? 1 : 0;
     }
 
-    // ── jQuery UI datepicker ──────────────────────────────────────────────────
-    if (el.classList.contains('hasDatepicker') ||
-        (typeof $ !== 'undefined' && typeof $.fn !== 'undefined' &&
-         typeof $.fn.datepicker !== 'undefined' && $(el).data('datepicker'))) {
-      var parsed2 = parseDateValue(value);
-      var dateObj2 = parsed2.dateObj;
-      if (!isNaN(dateObj2)) {
-        $(el).datepicker('setDate', dateObj2);
-      } else {
-        var niv2 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-        el.focus();
-        if (niv2) niv2.set.call(el, value); else el.value = value;
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      return el.value ? 1 : 0;
+    // ── jQuery UI datepicker (dedicated adapter) ─────────────────────────────
+    var _jqueryUi = root.CcJQueryUiAdapter || {};
+    if (_jqueryUi.isDatepickerInput && _jqueryUi.isDatepickerInput(el)) {
+      return _jqueryUi.fillDatepicker
+        ? _jqueryUi.fillDatepicker(el, value, parseDateValue)
+        : 0;
     }
 
     // ── Angular Material mat-datepicker ───────────────────────────────────────
