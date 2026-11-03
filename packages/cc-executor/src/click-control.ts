@@ -61,7 +61,7 @@
     return true;
   }
 
-  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable, .ui-droppable, .droppable, [ondrop]';
+  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], [role="combobox"], mat-select, mat-checkbox, mat-radio-button, td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable, .ui-droppable, .droppable, [ondrop]';
   var CLASS_WORD = /\b(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)\b/i;
   var CLASS_ONLY = /^(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)$/i;
   var AVAIL_WORD = /\b(AVAILABLE|GNWL|RAC|REGRET|CURR)\b/i;
@@ -85,9 +85,13 @@
   function isChoice(el: any) {
     if (!el || !el.tagName || inChrome(el)) return false;
     var role = el.getAttribute && el.getAttribute('role');
-    if (role === 'checkbox' || role === 'radio' || role === 'option') return true;
+    var tagName = String(el.tagName || '').toLowerCase();
+    if (role === 'checkbox' || role === 'radio' || role === 'option' || role === 'combobox') return true;
+    if (tagName === 'mat-select' || tagName === 'mat-checkbox' || tagName === 'mat-radio-button') return true;
+    var componentClass = String(el.className || '');
+    if (/\bv-select\b|\bv-autocomplete\b|\bv-combobox\b/.test(componentClass)) return true;
     if (/\b\S*auto-complete__option\b/.test(String(el.className || ''))) return true;
-    var tag = String(el.tagName).toLowerCase();
+    var tag = tagName;
     var cls = String(el.className || '');
     if (tag === 'a') {
       var href = el.getAttribute && el.getAttribute('href');
@@ -95,6 +99,8 @@
       return !!(href && text && text.length >= 2 && text.length <= 60);
     }
     if (tag === 'label') {
+      // Material's internal label is part of the component; expose the host once.
+      if (el.closest && el.closest('mat-checkbox, mat-radio-button')) return false;
       if (/custom-control-label|form-check-label|rct-text/.test(cls)) return true;
       if (el.getAttribute && el.getAttribute('for')) return true;
       if (el.querySelector && el.querySelector('input[type="radio"], input[type="checkbox"], .rct-checkbox')) return true;
@@ -324,7 +330,10 @@
       if (hit && (hit === el || (typeof el.contains === 'function' && el.contains(hit)))) target = hit;
     }
     var view = (el.ownerDocument && el.ownerDocument.defaultView) || (typeof window !== 'undefined' ? window : null);
-    var names = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+    // Send the pointer lifecycle, then perform exactly one native activation.
+    // Dispatching a synthetic click and calling el.click() both activates many
+    // framework controls twice (Angular Material checkboxes are one example).
+    var names = ['pointerdown', 'mousedown', 'pointerup', 'mouseup'];
     for (var i = 0; i < names.length; i++) {
       var ev = null;
       var init = {
@@ -346,12 +355,16 @@
       if (ev && typeof target.dispatchEvent === 'function') target.dispatchEvent(ev);
       else if (typeof target.dispatchEvent === 'function') target.dispatchEvent({ type: names[i], bubbles: true, cancelable: true });
     }
-    if (typeof target.click === 'function') target.click();
-    else if (typeof el.click === 'function') el.click();
-    var type = String((el.getAttribute && el.getAttribute('type')) || el.type || '').toLowerCase();
-    var form = el.form || (typeof el.closest === 'function' ? el.closest('form') : null);
-    if (form && type === 'submit' && typeof form.requestSubmit === 'function') {
-      try { form.requestSubmit(el); } catch (e) { /* the click already submitted */ }
+    if (typeof target.click === 'function') {
+      target.click();
+    } else if (typeof el.click === 'function') {
+      el.click();
+    } else if (typeof target.dispatchEvent === 'function') {
+      var clickView = (target.ownerDocument && target.ownerDocument.defaultView) || (typeof window !== 'undefined' ? window : null);
+      var clickEvent = clickView && typeof clickView.MouseEvent === 'function'
+        ? new clickView.MouseEvent('click', { bubbles: true, cancelable: true, view: clickView })
+        : { type: 'click', bubbles: true, cancelable: true };
+      target.dispatchEvent(clickEvent);
     }
   }
 

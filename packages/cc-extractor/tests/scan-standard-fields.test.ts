@@ -203,6 +203,26 @@ console.log('\nSelect');
   assert('optionDetails has value+labels', formFields[0].optionDetails[0].labelEn, 'Delhi');
 }
 
+// ── Vuetify select ──────────────────────────────────────────────────────────
+console.log('\\nVuetify select');
+{
+  const widget = {
+    tagName: 'DIV', id: '', name: '', className: 'v-input v-select',
+    _label: 'Favorite Fruits', setAttribute(k, v) { this[k] = v; },
+    getAttribute(k) { return this[k] != null ? String(this[k]) : null; },
+    querySelectorAll: () => [],
+    closest: () => null,
+  };
+  const input = makeInput({ id: 'input-v-149', _label: 'Favorite Fruits', value: 'Apple' });
+  input.closest = (selector) => String(selector).includes('.v-select') ? widget : null;
+  const { formFields } = scan(makeDoc([input]), helpers);
+  assert('Vuetify input promoted to one dropdown', formFields.length, 1);
+  assert('Vuetify dropdown type', formFields[0].type, 'ng-dropdown');
+  assert('Vuetify selector targets component root', formFields[0].selector, '[data-cc-id="vuetify-select-0"]');
+  assert('Vuetify options are dynamic', formFields[0].optionsDynamic, true);
+  assert('Vuetify field points at component root', formFields[0]._el, widget);
+}
+
 console.log('\nNumber input');
 {
   const n = makeInput({ type: 'number', id: 'age', _label: 'Age' });
@@ -246,6 +266,22 @@ console.log('\nRadio grouping');
 }
 
 // ── Agreement checkbox ────────────────────────────────────────────────────────
+console.log('\\nAngular Material native input deduplication');
+{
+  const matCheckbox = { tagName: 'MAT-CHECKBOX' };
+  const checkbox = makeInput({ type: 'checkbox', id: 'mat-cb-input', _label: 'Check me!' });
+  checkbox.closest = (selector) => String(selector).includes('mat-checkbox') ? matCheckbox : null;
+  const { formFields } = scan(makeDoc([checkbox]), helpers);
+  assert('nested Material checkbox input is left to wrapper scanner', formFields.length, 0);
+}
+{
+  const matRadio = { tagName: 'MAT-RADIO-BUTTON' };
+  const radio = makeInput({ type: 'radio', id: 'mat-radio-input', name: 'material-radio', _label: 'Male' });
+  radio.closest = (selector) => String(selector).includes('mat-radio-button') ? matRadio : null;
+  const { formFields } = scan(makeDoc([radio]), helpers);
+  assert('nested Material radio input is left to wrapper scanner', formFields.length, 0);
+}
+
 console.log('\nAgreement checkbox');
 {
   const cb = makeInput({ type: 'checkbox', name: 'terms', value: '1', _label: 'I agree to terms' });

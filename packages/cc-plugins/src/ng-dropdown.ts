@@ -9,9 +9,9 @@
  * 5. Verify selection
  */
 
-var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '[tabindex]'];
-var OPTION_SELECTORS = ['li', '.ng-option', 'mat-option', '.dropdown-item', '.option', '[role="option"]'];
-var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', 'ul', 'cdk-overlay-container'];
+var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '.v-field__input', '.v-select__selection', '.v-field', '[tabindex]'];
+var OPTION_SELECTORS = ['li', '.ng-option', 'mat-option', '.v-list-item', '.dropdown-item', '.option', '[role="option"]'];
+var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', '.v-overlay__content', '.v-menu > .v-overlay__content', 'ul', 'cdk-overlay-container'];
 
 // Search for option items using multiple selectors (fallback when no adapter)
 function findOptionsInContainer(container: any, optSel: any, isVisible: any) {
@@ -34,8 +34,8 @@ var NgDropdownPlugin = {
     if (!el) return false;
     if (fieldContext.type === 'ng-dropdown') return true;
     if (fieldContext.type === 'mat-select') return true;  // Custom comboboxes are typed mat-select by extractor
-    if (el.classList && (el.classList.contains('ng-dropdown') || el.classList.contains('ng-select'))) return true;
-    if (el.tagName === 'NG-SELECT' || (el.closest && el.closest('ng-select'))) return true;
+    if (el.classList && (el.classList.contains('ng-dropdown') || el.classList.contains('ng-select') || el.classList.contains('v-select') || el.classList.contains('v-autocomplete') || el.classList.contains('v-combobox'))) return true;
+    if (el.tagName === 'NG-SELECT' || (el.closest && el.closest('ng-select, .v-select, .v-autocomplete, .v-combobox'))) return true;
     // Any non-native element with role=combobox/listbox
     const _tag = el.tagName.toLowerCase();
     if (_tag !== 'select' && _tag !== 'input' && (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox')) return true;
@@ -141,14 +141,31 @@ var NgDropdownPlugin = {
 
         if (match) {
           clearInterval(poll);
-          ['pointerdown','mousedown','mouseup','click'].forEach((ev: any) =>
+          ['pointerdown','mousedown','mouseup'].forEach((ev: any) =>
             match.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true }))
           );
+          if (typeof match.click === 'function') match.click();
+          else match.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
           // Verify after click
           setTimeout(() => {
-            var displayed = el.querySelector('.value-area,.ng-value-label,.select-type');
-            var ok = displayed && !(/select|choose/i.test(displayed.textContent.trim()));
-            resolve({ success: ok !== false, settled: true, waitMs: Date.now() - startTime, matchedText: match.textContent.trim() });
+            var displayed = el.querySelector('.value-area,.ng-value-label,.select-type,.mat-mdc-select-min-line,.mat-select-value-text,.v-select__selection-text,.v-select__selection,.v-chip__content');
+            var input = el.querySelector('input');
+            var displayedText = displayed ? String(displayed.textContent || '').replace(/\s+/g, ' ').trim()
+              : (input && String(input.value || '').trim()) || '';
+            var selectedText = String(match.textContent || '').replace(/\s+/g, ' ').trim();
+            var normText = function (s: any) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); };
+            var actual = normText(displayedText);
+            var expected = normText(selectedText);
+            var ok = !!actual && (actual === expected || actual.indexOf(expected) !== -1 || expected.indexOf(actual) !== -1);
+            resolve({
+              success: ok,
+              verified: ok,
+              settled: true,
+              reason: ok ? '' : 'selection-not-confirmed',
+              waitMs: Date.now() - startTime,
+              matchedText: selectedText,
+              displayedText: displayedText,
+            });
           }, 500);
         } else if (attempts >= 15) {
           clearInterval(poll);

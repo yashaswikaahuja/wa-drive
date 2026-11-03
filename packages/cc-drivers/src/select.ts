@@ -52,7 +52,8 @@
       const cls = (el.className || '').toLowerCase();
       const isNg = tag === 'ng-select' || cls.includes('ng-select') || el.closest('.ng-select');
       const isMat = tag === 'mat-select' || cls.includes('mat-select') || el.closest('mat-select');
-      const isCustom = isNg || isMat;
+      const isVuetify = cls.includes('v-select') || cls.includes('v-autocomplete') || cls.includes('v-combobox') || !!el.closest('.v-select, .v-autocomplete, .v-combobox');
+      const isCustom = isNg || isMat || isVuetify;
 
       if (tag === 'select' && !isCustom) {
         const r = fillNativeSelect(el, args.value);
@@ -74,7 +75,7 @@
       try { el.click(); } catch (e) {}
       await new Promise(r => setTimeout(r, 300));
       const v = String(args.value).toLowerCase();
-      const opts = Array.from(document.querySelectorAll('.ng-option, .mat-option, [role="option"]'))
+      const opts = Array.from(document.querySelectorAll('.ng-option, .mat-option, .v-list-item, [role="option"]'))
         .filter((o: any) => (o.textContent || '').trim().toLowerCase().includes(v));
       if (opts[0]) {
         opts[0].click();

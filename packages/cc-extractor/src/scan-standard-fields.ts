@@ -775,6 +775,11 @@
       if (isCarouselChrome(el, getLabel(el) || attrOf(el, 'aria-label') || '')) return;
       if (SKIP_META_SOFT_RE.test(meta) && !pageSearch && !HUMAN_GATE_RE.test(meta) && !isJourneyMeta(meta, getLabel(el) || el.placeholder || '')) return;
 
+      // Angular Material's wrapper scanner owns these controls; do not emit
+      // the nested native input as a second independent field.
+      if (t === 'radio' && el.closest && el.closest('mat-radio-button')) return;
+      if (t === 'checkbox' && el.closest && el.closest('mat-checkbox')) return;
+
       // ── Radio ──
       if (t === 'radio' && el.name) {
         if (!radioGroups[el.name]) {
@@ -870,6 +875,34 @@
           placeholder: '', label: label || el.value || 'Submit', type: 'submit', index: idx,
           options: null, _el: el,
         }, el, doc));
+        idx++;
+        return;
+      }
+
+      // ── Vue / Vuetify select-like controls ──
+      // Vuetify renders an ordinary text input inside a v-select root. Promote
+      // that input to one framework dropdown field so it is not exposed as text.
+      var vueSelect = !pageSearch && el.closest
+        ? el.closest('.v-select, .v-autocomplete, .v-combobox')
+        : null;
+      if (vueSelect) {
+        var vueId = vueSelect.id || attrOf(vueSelect, 'data-cc-id');
+        if (!vueId) {
+          vueId = 'vuetify-select-' + idx;
+          if (vueSelect.setAttribute) vueSelect.setAttribute('data-cc-id', vueId);
+        }
+        var vueSelector = vueSelect.id
+          ? (String(vueSelect.id).match(/^\d/) ? '[id="' + vueSelect.id + '"]' : '#' + vueSelect.id)
+          : '[data-cc-id="' + vueId + '"]';
+        var vueLabel = getLabel(vueSelect) || label || nearbyText(vueSelect) || '';
+        if (!isGoodLabel(vueLabel)) vueLabel = label || 'Select';
+        if (vueLabel) labelList.push(vueLabel.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+        formFields.push(decorateField({
+          selector: vueSelector, id: vueId, name: el.name || '',
+          value: el.value || '', placeholder: el.placeholder || '',
+          label: vueLabel, type: 'ng-dropdown', index: idx,
+          options: [], optionsDynamic: true, _el: vueSelect,
+        }, vueSelect, doc));
         idx++;
         return;
       }

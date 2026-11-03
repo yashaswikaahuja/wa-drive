@@ -40,7 +40,7 @@ function button(label, extra: any = {}) {
       return null;
     },
     dispatchEvent(ev) { events.push(ev.type); return true; },
-    click() { events.push('native-click'); },
+    click() { events.push('click'); events.push('native-click'); },
     closest() { return extra.form || null; },
   };
   return el;
@@ -74,8 +74,8 @@ assert('type is button', fields[0].type, 'button');
 console.log('\nPress uses the JSON field');
 const pressed = api.press(fields[0], doc);
 assert('pressed', pressed.pressed, true);
-assert('click event fired', search.events.indexOf('click') !== -1, true);
-assert('native click ran', search.events.indexOf('native-click') !== -1, true);
+assert('one click event fired', search.events.filter((name) => name === 'click').length, 1);
+assert('native click ran once', search.events.filter((name) => name === 'native-click').length, 1);
 assert('pointerdown fired', search.events[0], 'pointerdown');
 assert('book was not pressed', book.events.length, 0);
 assert('clicked label', pressed.clicked, 'Search Trains');
@@ -181,6 +181,19 @@ const malePress = api.press(choiceFields[0], choiceDoc);
 assert('male pressed', malePress.pressed, true);
 assert('male native click', male.events.indexOf('native-click') !== -1, true);
 assert('yes idle', yes.events.length, 0);
+
+console.log('\\nAngular Material and Vuetify controls are semantic choices');
+const matSelect = choice('MAT-SELECT', 'Favorite animal', { className: 'mat-select' });
+const vueSelect = choice('DIV', 'Favorite Fruits', { className: 'v-select', role: 'combobox' });
+const frameworkDoc = docWith([matSelect, vueSelect]);
+const frameworkFields = api.list(frameworkDoc);
+assert('Angular Material select is listed', frameworkFields.length, 2);
+assert('Angular Material select label', frameworkFields[0].visualLabel, 'Favorite animal');
+assert('Vuetify select is listed', frameworkFields[1].visualLabel, 'Favorite Fruits');
+assert('framework selects use pressable controls', frameworkFields.every((f) => f.type === 'button'), true);
+const matPressed = api.press(frameworkFields[0], frameworkDoc);
+assert('Angular Material select pressed', matPressed.pressed, true);
+assert('Angular Material select activated once', matSelect.events.filter((name) => name === 'native-click').length, 1);
 
 console.log('\nAutocomplete option rows are clickable');
 const red = choice('DIV', 'Red', { role: 'option', className: 'auto-complete__option' });

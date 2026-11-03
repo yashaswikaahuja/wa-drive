@@ -22,7 +22,7 @@ const hit: any = {
   innerText: 'Search',
   getBoundingClientRect: () => ({ left: 10, top: 20, width: 40, height: 10 }),
   dispatchEvent: (ev: any) => { events.push(ev.type); return true; },
-  click: () => { events.push('el.click'); },
+  click: () => { events.push('click'); events.push('el.click'); },
   focus: () => { events.push('focus'); },
   getAttribute: () => '',
 };
@@ -78,7 +78,13 @@ const atPoint = clickAt({ x: 30, y: 25 });
 assert.equal(atPoint.ok, true);
 assert.equal(atPoint.tag, 'button');
 assert.equal(atPoint.clicked, 'Search');
-assert.equal(events.includes('click'), true);
+assert.equal(events.filter((name) => name === 'click').length, 1);
+assert.equal(events.filter((name) => name === 'el.click').length, 1);
+events.length = 0;
+const doubleClicked = clickAt({ x: 30, y: 25, count: 2 });
+assert.equal(doubleClicked.ok, true);
+assert.equal(events.filter((name) => name === 'click').length, 2);
+assert.equal(events.filter((name) => name === 'el.click').length, 2);
 
 const hoverEvents: string[] = [];
 hit.dispatchEvent = (ev: any) => { hoverEvents.push(ev.type); return true; };

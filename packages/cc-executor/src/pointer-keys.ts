@@ -336,15 +336,32 @@
   }
   var names = buttonName === 'right'
     ? ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'contextmenu']
-    : ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+    : ['pointerdown', 'mousedown', 'pointerup', 'mouseup'];
   fire(target, point, button, buttons, names, 1);
   if (count === 2 && buttonName === 'left') {
     fire(target, point, button, buttons, names, 2);
-    var dbl = makeEvent('dblclick', point, 0, 1, 2);
-    if (typeof target.dispatchEvent === 'function') target.dispatchEvent(dbl);
   }
-  if (buttonName === 'left' && count === 1 && typeof target.click === 'function') {
-    try { target.click(); } catch (e5) { /* the dispatched click already ran */ }
+  if (buttonName === 'left') {
+    // A dispatched synthetic click plus HTMLElement.click() produces two
+    // activations. Keep the pointer lifecycle above and activate exactly once.
+    var activations = count === 2 ? 2 : 1;
+    if (typeof target.click === 'function') {
+      for (var activation = 0; activation < activations; activation++) {
+        try { target.click(); } catch (e5) { break; }
+      }
+    } else if (typeof target.dispatchEvent === 'function') {
+      var clickView = (target.ownerDocument && target.ownerDocument.defaultView) || g.window || g;
+      for (var fallbackActivation = 0; fallbackActivation < activations; fallbackActivation++) {
+        var clickEvent = clickView && typeof clickView.MouseEvent === 'function'
+          ? new clickView.MouseEvent('click', { bubbles: true, cancelable: true, view: clickView, clientX: point.x, clientY: point.y, button: 0, detail: fallbackActivation + 1 })
+          : { type: 'click', bubbles: true, cancelable: true };
+        target.dispatchEvent(clickEvent);
+      }
+    }
+    if (count === 2 && typeof target.dispatchEvent === 'function') {
+      var dbl = makeEvent('dblclick', point, 0, 1, 2);
+      target.dispatchEvent(dbl);
+    }
   }
   if (typeof target.focus === 'function') {
     try { target.focus(); } catch (e6) { /* not focusable */ }
