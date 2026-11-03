@@ -148,9 +148,24 @@ var NgDropdownPlugin = {
           else match.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
           // Verify after click
           setTimeout(() => {
-            var displayed = el.querySelector('.value-area,.ng-value-label,.select-type');
-            var ok = displayed && !(/select|choose/i.test(displayed.textContent.trim()));
-            resolve({ success: ok !== false, settled: true, waitMs: Date.now() - startTime, matchedText: match.textContent.trim() });
+            var displayed = el.querySelector('.value-area,.ng-value-label,.select-type,.mat-mdc-select-min-line,.mat-select-value-text,.v-select__selection-text,.v-select__selection,.v-chip__content');
+            var input = el.querySelector('input');
+            var displayedText = displayed ? String(displayed.textContent || '').replace(/\\s+/g, ' ').trim()
+              : (input && String(input.value || '').trim()) || '';
+            var selectedText = String(match.textContent || '').replace(/\\s+/g, ' ').trim();
+            var normText = function (s: any) { return String(s || '').toLowerCase().replace(/\\s+/g, ' ').trim(); };
+            var actual = normText(displayedText);
+            var expected = normText(selectedText);
+            var ok = !!actual && (actual === expected || actual.indexOf(expected) !== -1 || expected.indexOf(actual) !== -1);
+            resolve({
+              success: ok,
+              verified: ok,
+              settled: true,
+              reason: ok ? '' : 'selection-not-confirmed',
+              waitMs: Date.now() - startTime,
+              matchedText: selectedText,
+              displayedText: displayedText,
+            });
           }, 500);
         } else if (attempts >= 15) {
           clearInterval(poll);
