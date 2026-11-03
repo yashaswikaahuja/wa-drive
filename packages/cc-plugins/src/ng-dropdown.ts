@@ -1,11 +1,10 @@
 /**
- * ng-dropdown plugin — handles Angular, Vuetify and jQuery UI custom selects.
- * Opens the owning trigger, locates the visible overlay, selects an option,
- * and verifies the value rendered by the control.
+ * ng-dropdown plugin — handles Angular and Vuetify custom selects.
+ * jQuery UI Selectmenu is delegated to the dedicated executor adapter.
  */
-var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '.v-field__input', '.v-select__selection', '.v-field', '.ui-selectmenu-button', '[tabindex]'];
-var OPTION_SELECTORS = ['.ng-option', 'mat-option', '.v-list-item', '.ui-menu-item-wrapper', '.dropdown-item', '.option', '[role="option"]', 'li'];
-var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', '.v-overlay__content', '.v-menu > .v-overlay__content', '.ui-selectmenu-menu', '.ui-menu', 'ul', 'cdk-overlay-container'];
+var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '.v-field__input', '.v-select__selection', '.v-field', '[tabindex]'];
+var OPTION_SELECTORS = ['.ng-option', 'mat-option', '.v-list-item', '.dropdown-item', '.option', '[role="option"]', 'li'];
+var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', '.v-overlay__content', '.v-menu > .v-overlay__content', '.ui-menu', 'ul', 'cdk-overlay-container'];
 function findOptionsInContainer(container: any, optSel: any, isVisible: any) {
   if (optSel) return Array.from(container.querySelectorAll(optSel)).filter(isVisible);
   for (var sel of OPTION_SELECTORS) { var items = Array.from(container.querySelectorAll(sel)).filter(isVisible); if (items.length) return items; }
@@ -13,12 +12,12 @@ function findOptionsInContainer(container: any, optSel: any, isVisible: any) {
 }
 var NgDropdownPlugin = {
   id: 'ng-dropdown',
-  description: 'Angular, Vuetify and jQuery UI custom select: open, choose and verify',
+  description: 'Angular and Vuetify custom select: open, choose and verify',
   supports(el, fieldContext) {
     if (!el) return false;
     if (fieldContext.type === 'ng-dropdown' || fieldContext.type === 'mat-select') return true;
-    if (el.classList && ['ng-dropdown','ng-select','v-select','v-autocomplete','v-combobox','ui-selectmenu-button'].some(function (c) { return el.classList.contains(c); })) return true;
-    if (el.tagName === 'NG-SELECT' || (el.closest && el.closest('ng-select, .v-select, .v-autocomplete, .v-combobox, .ui-selectmenu-button'))) return true;
+    if (el.classList && ['ng-dropdown','ng-select','v-select','v-autocomplete','v-combobox'].some(function (c) { return el.classList.contains(c); })) return true;
+    if (el.tagName === 'NG-SELECT' || (el.closest && el.closest('ng-select, .v-select, .v-autocomplete, .v-combobox'))) return true;
     var tag = String(el.tagName || '').toLowerCase();
     return tag !== 'select' && tag !== 'input' && (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox');
   },
@@ -28,7 +27,6 @@ var NgDropdownPlugin = {
     var trigger = null;
     if (adapter.triggerSelector) trigger = el.querySelector(adapter.triggerSelector);
     if (!trigger) for (var i = 0; i < TRIGGER_SELECTORS.length; i++) { trigger = el.querySelector(TRIGGER_SELECTORS[i]); if (trigger && isVisible(trigger)) break; trigger = null; }
-    if (!trigger && el.matches && el.matches('.ui-selectmenu-button, [role="combobox"]')) trigger = el;
     if (!trigger) trigger = el;
     trigger.click();
     var startTime = Date.now(), optSel = adapter.optionSelector || null;
@@ -61,7 +59,7 @@ var NgDropdownPlugin = {
         if (typeof match.click === 'function') match.click();
         setTimeout(function () {
           var owner = (el.closest && el.closest('.v-select, .v-autocomplete, .v-combobox')) || el;
-          var displaySelector = '.value-area,.ng-value-label,.select-type,.mat-mdc-select-min-line,.mat-select-value-text,.v-select__selection-text,.v-select__selection,.v-chip__content,.ui-selectmenu-text';
+          var displaySelector = '.value-area,.ng-value-label,.select-type,.mat-mdc-select-min-line,.mat-select-value-text,.v-select__selection-text,.v-select__selection,.v-chip__content';
           var displayed = owner.querySelector && owner.querySelector(displaySelector);
           var input = owner.querySelector && owner.querySelector('input');
           var displayedText = displayed ? String(displayed.textContent || '').replace(/\s+/g, ' ').trim() : (input && String(input.value || '').trim()) || '';
