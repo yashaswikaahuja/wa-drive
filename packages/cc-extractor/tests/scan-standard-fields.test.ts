@@ -203,6 +203,26 @@ console.log('\nSelect');
   assert('optionDetails has value+labels', formFields[0].optionDetails[0].labelEn, 'Delhi');
 }
 
+// ── Vuetify select ──────────────────────────────────────────────────────────
+console.log('\\nVuetify select');
+{
+  const widget = {
+    tagName: 'DIV', id: '', name: '', className: 'v-input v-select',
+    _label: 'Favorite Fruits', setAttribute(k, v) { this[k] = v; },
+    getAttribute(k) { return this[k] != null ? String(this[k]) : null; },
+    querySelectorAll: () => [],
+    closest: () => null,
+  };
+  const input = makeInput({ id: 'input-v-149', _label: 'Favorite Fruits', value: 'Apple' });
+  input.closest = (selector) => String(selector).includes('.v-select') ? widget : null;
+  const { formFields } = scan(makeDoc([input]), helpers);
+  assert('Vuetify input promoted to one dropdown', formFields.length, 1);
+  assert('Vuetify dropdown type', formFields[0].type, 'ng-dropdown');
+  assert('Vuetify selector targets component root', formFields[0].selector, '[data-cc-id="vuetify-select-0"]');
+  assert('Vuetify options are dynamic', formFields[0].optionsDynamic, true);
+  assert('Vuetify field points at component root', formFields[0]._el, widget);
+}
+
 console.log('\nNumber input');
 {
   const n = makeInput({ type: 'number', id: 'age', _label: 'Age' });
