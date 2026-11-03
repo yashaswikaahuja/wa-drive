@@ -40,7 +40,7 @@ function button(label, extra: any = {}) {
       return null;
     },
     dispatchEvent(ev) { events.push(ev.type); return true; },
-    click() { events.push('native-click'); },
+    click() { events.push('click'); events.push('native-click'); },
     closest() { return extra.form || null; },
   };
   return el;
@@ -74,8 +74,8 @@ assert('type is button', fields[0].type, 'button');
 console.log('\nPress uses the JSON field');
 const pressed = api.press(fields[0], doc);
 assert('pressed', pressed.pressed, true);
-assert('click event fired', search.events.indexOf('click') !== -1, true);
-assert('native click ran', search.events.indexOf('native-click') !== -1, true);
+assert('one click event fired', search.events.filter((name) => name === 'click').length, 1);
+assert('native click ran once', search.events.filter((name) => name === 'native-click').length, 1);
 assert('pointerdown fired', search.events[0], 'pointerdown');
 assert('book was not pressed', book.events.length, 0);
 assert('clicked label', pressed.clicked, 'Search Trains');
