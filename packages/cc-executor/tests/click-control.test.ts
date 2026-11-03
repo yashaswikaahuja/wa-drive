@@ -182,6 +182,19 @@ assert('male pressed', malePress.pressed, true);
 assert('male native click', male.events.indexOf('native-click') !== -1, true);
 assert('yes idle', yes.events.length, 0);
 
+console.log('\\nAngular Material and Vuetify controls are semantic choices');
+const matSelect = choice('MAT-SELECT', 'Favorite animal', { className: 'mat-select' });
+const vueSelect = choice('DIV', 'Favorite Fruits', { className: 'v-select', role: 'combobox' });
+const frameworkDoc = docWith([matSelect, vueSelect]);
+const frameworkFields = api.list(frameworkDoc);
+assert('Angular Material select is listed', frameworkFields.length, 2);
+assert('Angular Material select label', frameworkFields[0].visualLabel, 'Favorite animal');
+assert('Vuetify select is listed', frameworkFields[1].visualLabel, 'Favorite Fruits');
+assert('framework selects use pressable controls', frameworkFields.every((f) => f.type === 'button'), true);
+const matPressed = api.press(frameworkFields[0], frameworkDoc);
+assert('Angular Material select pressed', matPressed.pressed, true);
+assert('Angular Material select activated once', matSelect.events.filter((name) => name === 'native-click').length, 1);
+
 console.log('\nAutocomplete option rows are clickable');
 const red = choice('DIV', 'Red', { role: 'option', className: 'auto-complete__option' });
 const optDoc = docWith([red]);
