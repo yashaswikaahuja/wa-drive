@@ -887,7 +887,7 @@
           if (vueSelect.setAttribute) vueSelect.setAttribute('data-cc-id', vueId);
         }
         var vueSelector = vueSelect.id
-          ? (String(vueSelect.id).match(/^\\d/) ? '[id="' + vueSelect.id + '"]' : '#' + vueSelect.id)
+          ? (String(vueSelect.id).match(/^\d/) ? '[id="' + vueSelect.id + '"]' : '#' + vueSelect.id)
           : '[data-cc-id="' + vueId + '"]';
         var vueLabel = getLabel(vueSelect) || label || nearbyText(vueSelect) || '';
         if (!isGoodLabel(vueLabel)) vueLabel = label || 'Select';
