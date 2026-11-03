@@ -2,9 +2,9 @@
  * ng-dropdown plugin — handles Angular and Vuetify custom selects.
  * jQuery UI Selectmenu is delegated to the dedicated executor adapter.
  */
-var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '.v-field__input', '.v-select__selection', '.v-field', '[tabindex]'];
-var OPTION_SELECTORS = ['.ng-option', 'mat-option', '.v-list-item', '.dropdown-item', '.option', '[role="option"]', 'li'];
-var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', '.v-overlay__content', '.v-menu > .v-overlay__content', '.ui-menu', 'ul', 'cdk-overlay-container'];
+var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '.v-field__input', '.v-select__selection', '.v-field', '.ui-selectmenu-button', '[tabindex]'];
+var OPTION_SELECTORS = ['.ng-option', 'mat-option', '.v-list-item', '.ui-menu-item-wrapper', '.dropdown-item', '.option', '[role="option"]', 'li'];
+var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', '.v-overlay__content', '.v-menu > .v-overlay__content', '.ui-selectmenu-menu', '.ui-menu', 'ul', 'cdk-overlay-container'];
 function findOptionsInContainer(container: any, optSel: any, isVisible: any) {
   if (optSel) return Array.from(container.querySelectorAll(optSel)).filter(isVisible);
   for (var sel of OPTION_SELECTORS) { var items = Array.from(container.querySelectorAll(sel)).filter(isVisible); if (items.length) return items; }
@@ -23,6 +23,15 @@ var NgDropdownPlugin = {
   },
   fill(el, value, context) {
     var adapter = context.portalAdapters || {};
+    // jQuery UI Selectmenu owns a generated menu and native <select> source.
+    // Keep it out of the generic Angular/Vuetify overlay interaction path.
+    var jqueryUi = window.CcJQueryUiAdapter;
+    if (jqueryUi && jqueryUi.isSelectmenuButton && jqueryUi.isSelectmenuButton(el)) {
+      return jqueryUi.selectmenu(el, value) || {
+        success: false, verified: false, settled: true,
+        reason: 'jquery-ui-adapter-unavailable',
+      };
+    }
     function isVisible(node: any) { return window.ccDomUtils.isVisible(node); }
     var trigger = null;
     if (adapter.triggerSelector) trigger = el.querySelector(adapter.triggerSelector);
