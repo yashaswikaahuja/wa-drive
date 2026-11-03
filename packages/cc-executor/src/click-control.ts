@@ -324,7 +324,10 @@
       if (hit && (hit === el || (typeof el.contains === 'function' && el.contains(hit)))) target = hit;
     }
     var view = (el.ownerDocument && el.ownerDocument.defaultView) || (typeof window !== 'undefined' ? window : null);
-    var names = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+    // Send the pointer lifecycle, then perform exactly one native activation.
+    // Dispatching a synthetic click and calling el.click() both activates many
+    // framework controls twice (Angular Material checkboxes are one example).
+    var names = ['pointerdown', 'mousedown', 'pointerup', 'mouseup'];
     for (var i = 0; i < names.length; i++) {
       var ev = null;
       var init = {
@@ -346,12 +349,16 @@
       if (ev && typeof target.dispatchEvent === 'function') target.dispatchEvent(ev);
       else if (typeof target.dispatchEvent === 'function') target.dispatchEvent({ type: names[i], bubbles: true, cancelable: true });
     }
-    if (typeof target.click === 'function') target.click();
-    else if (typeof el.click === 'function') el.click();
-    var type = String((el.getAttribute && el.getAttribute('type')) || el.type || '').toLowerCase();
-    var form = el.form || (typeof el.closest === 'function' ? el.closest('form') : null);
-    if (form && type === 'submit' && typeof form.requestSubmit === 'function') {
-      try { form.requestSubmit(el); } catch (e) { /* the click already submitted */ }
+    if (typeof target.click === 'function') {
+      target.click();
+    } else if (typeof el.click === 'function') {
+      el.click();
+    } else if (typeof target.dispatchEvent === 'function') {
+      var clickView = (target.ownerDocument && target.ownerDocument.defaultView) || (typeof window !== 'undefined' ? window : null);
+      var clickEvent = clickView && typeof clickView.MouseEvent === 'function'
+        ? new clickView.MouseEvent('click', { bubbles: true, cancelable: true, view: clickView })
+        : { type: 'click', bubbles: true, cancelable: true };
+      target.dispatchEvent(clickEvent);
     }
   }
 
