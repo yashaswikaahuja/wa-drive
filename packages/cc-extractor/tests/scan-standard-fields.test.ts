@@ -266,6 +266,22 @@ console.log('\nRadio grouping');
 }
 
 // ── Agreement checkbox ────────────────────────────────────────────────────────
+console.log('\\nAngular Material native input deduplication');
+{
+  const matCheckbox = { tagName: 'MAT-CHECKBOX' };
+  const checkbox = makeInput({ type: 'checkbox', id: 'mat-cb-input', _label: 'Check me!' });
+  checkbox.closest = (selector) => String(selector).includes('mat-checkbox') ? matCheckbox : null;
+  const { formFields } = scan(makeDoc([checkbox]), helpers);
+  assert('nested Material checkbox input is left to wrapper scanner', formFields.length, 0);
+}
+{
+  const matRadio = { tagName: 'MAT-RADIO-BUTTON' };
+  const radio = makeInput({ type: 'radio', id: 'mat-radio-input', name: 'material-radio', _label: 'Male' });
+  radio.closest = (selector) => String(selector).includes('mat-radio-button') ? matRadio : null;
+  const { formFields } = scan(makeDoc([radio]), helpers);
+  assert('nested Material radio input is left to wrapper scanner', formFields.length, 0);
+}
+
 console.log('\nAgreement checkbox');
 {
   const cb = makeInput({ type: 'checkbox', name: 'terms', value: '1', _label: 'I agree to terms' });
