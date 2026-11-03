@@ -143,8 +143,14 @@
     var parsed = typeof parseDateValue === 'function' ? parseDateValue(value) : { dateObj: new Date(value) };
     var date = parsed && parsed.dateObj;
     if (date && !isNaN(date.getTime())) {
-      // Page-world jQuery is not guaranteed to be visible in an extension's
-      // isolated world. Use the native input contract as the safe fallback.
+      // Prefer the documented widget API when page-world jQuery is exposed.
+      // Content-script isolated worlds often cannot see it, so retain a native
+      // value/event fallback rather than assuming the $ global exists.
+      var jq = root.jQuery || root.$;
+      if (jq && jq.fn && typeof jq.fn.datepicker === 'function') {
+        jq(el).datepicker('setDate', date);
+        return el.value ? 1 : 0;
+      }
       var descriptor = Object.getOwnPropertyDescriptor(el.ownerDocument.defaultView.HTMLInputElement.prototype, 'value');
       if (descriptor && descriptor.set) descriptor.set.call(el, value);
       else el.value = value;
