@@ -13,6 +13,9 @@
       "@cc/mapper/split-dob": [
         "./src/shims/cc__mapper__split_dob.ts"
       ],
+      "@cc/mapper/persist-options": [
+        "./src/shims/cc__mapper__persist_options.ts"
+      ],
       "@cybercontrol/svc-ai-mapper": [
         "./src/shims/cybercontrol__svc_ai_mapper.ts"
       ],

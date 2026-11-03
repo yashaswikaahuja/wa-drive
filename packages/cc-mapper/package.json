@@ -25,6 +25,11 @@
       "node": "./dist/mapping-relation.js",
       "default": "./src/mapping-relation.ts"
     },
+    "./persist-options": {
+      "types": "./src/persist-options.ts",
+      "node": "./dist/persist-options.js",
+      "default": "./src/persist-options.ts"
+    },
     "./inject": "./src/inject.ts"
   },
   "scripts": {

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { mappingOptionsToStore } from '@cc/mapper';
+import { mappingOptionsToStore } from '@cc/mapper/persist-options';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../../db/db.js';
 import { guessProfileKey } from './label-mapper.js';

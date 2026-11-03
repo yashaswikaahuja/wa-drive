@@ -139,11 +139,12 @@ for (const packageName of ccPackageNames) {
   if (!fs.existsSync(source)) {
     throw new Error(`missing workspace package: ${source}`);
   }
-  // @cc/mapper split-dob / mapping-relation ship Node ESM under dist/ for Docker Node 20.
+  // @cc/mapper Node ESM under dist/ for Docker Node 20 (plain node, no strip-types).
   if (packageName === 'cc-mapper') {
-    const nodeEntry = path.join(source, 'dist', 'split-dob.js');
-    if (!fs.existsSync(nodeEntry)) {
-      console.log('Building @cc/mapper Node ESM (split-dob / mapping-relation)…');
+    const requiredNodeEntries = ['split-dob.js', 'mapping-relation.js', 'persist-options.js'];
+    const missing = requiredNodeEntries.filter((name) => !fs.existsSync(path.join(source, 'dist', name)));
+    if (missing.length) {
+      console.log('Building @cc/mapper Node ESM (split-dob / mapping-relation / persist-options)…');
       const result = spawnSync('pnpm', ['--filter', '@cc/mapper', 'build:node'], {
         cwd: repositoryRoot,
         stdio: 'inherit',
@@ -153,8 +154,10 @@ for (const packageName of ccPackageNames) {
         throw new Error('failed to build @cc/mapper Node ESM');
       }
     }
-    if (!fs.existsSync(nodeEntry)) {
-      throw new Error('package cc-mapper is missing dist/split-dob.js after build:node');
+    for (const name of requiredNodeEntries) {
+      if (!fs.existsSync(path.join(source, 'dist', name))) {
+        throw new Error(`package cc-mapper is missing dist/${name} after build:node`);
+      }
     }
   }
   fs.cpSync(source, destination, { recursive: true, filter: copyFilter });
