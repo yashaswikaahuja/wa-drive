@@ -40,5 +40,22 @@ const clicked = api.click(input);
 check('click calls native element.click', clicked.success && input.events.some(e => e.type === 'click-method'));
 const handler = api.triggerHandler(input, 'change');
 check('triggerHandler reports isolated-world limitation', !handler.success && handler.reason === 'jquery-triggerHandler-unavailable');
+// Simulate a page context where jQuery is visible in the current execution world.
+const jqueryCalls = [];
+function mockJQuery(el) {
+  return {
+    val(value) { el.value = value; return this; },
+    trigger(name, args) { jqueryCalls.push({ method: 'trigger', name, args }); return this; },
+    triggerHandler(name, args) { jqueryCalls.push({ method: 'triggerHandler', name, args }); return 'handled'; }
+  };
+}
+mockJQuery.fn = { trigger() {} };
+scope.jQuery = mockJQuery;
+check('detects jQuery when exposed in current world', api.isJQueryAvailable());
+const jquerySet = api.setValue(input, 'Patna', { events: ['change'] });
+check('uses jQuery val when available', jquerySet.strategy === 'jquery-val' && input.value === 'Patna');
+check('uses jQuery trigger when available', jqueryCalls.some(call => call.method === 'trigger' && call.name === 'change'));
+const jqueryHandler = api.triggerHandler(input, 'custom');
+check('uses jQuery triggerHandler when available', jqueryHandler.success && jqueryCalls.some(call => call.method === 'triggerHandler'));
 console.log('\n' + (passed + failed) + ' tests: ' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
