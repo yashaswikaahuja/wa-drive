@@ -136,7 +136,8 @@
                   k.filled += _r;
                   _ccRecords.push(_buildFillRecord({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : _pResult.reason, strategy: 'plugin:' + _ngPlugin.id, plugin: _ngPlugin.id, durationMs: Date.now()-_t0 }, { rv: RUNTIME_VERSION })); _flushRecords();
                 } catch(e) {
-                  fillOne(selector, value, type);
+                  // Preserve async adapter results on the fallback route.
+                  await fillOne(selector, value, type);
                 }
               } else {
                 fillOne(selector, value, type);
