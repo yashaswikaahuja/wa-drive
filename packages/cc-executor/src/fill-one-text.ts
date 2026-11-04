@@ -92,10 +92,16 @@
 
     // LEGACY FALLBACK: value-set + event dispatch
     el.focus();
-    if (niv) niv.set.call(el, value);
-    else el.value = value;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+    var jqueryInteraction = root.CcJQueryInteractionAdapter || {};
+    if (jqueryInteraction.setValue) {
+      var jquerySetResult = jqueryInteraction.setValue(el, value, { events: ['input', 'change'] });
+      if (!jquerySetResult || !jquerySetResult.verified) return 0;
+    } else {
+      if (niv) niv.set.call(el, value);
+      else el.value = value;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
     el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
     el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
