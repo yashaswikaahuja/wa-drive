@@ -57,8 +57,15 @@
       return menu.getClientRects().length > 0 && (!style || (style.display !== 'none' && style.visibility !== 'hidden'));
     });
     if (!visible.length) return null;
-    // jQuery UI normally has one open menu; prefer the menu explicitly marked open.
-    return visible.find(function (menu: any) { return menu.classList.contains('ui-selectmenu-open'); }) || visible[0];
+    // Each Selectmenu gets a generated menu id: <select-id>-menu.
+    // Prefer the menu belonging to this button; never pick another widget's menu.
+    var buttonId = String(button && button.id || '');
+    var expectedId = buttonId.endsWith('-button') ? buttonId.slice(0, -7) + '-menu' : '';
+    if (expectedId) {
+      var owned = visible.find(function (menu: any) { return menu.id === expectedId; });
+      if (owned) return owned;
+    }
+    return visible.find(function (menu: any) { return menu.classList.contains('ui-selectmenu-open'); }) || null;
   }
 
   function selectmenu(el: any, requestedValue: any) {
@@ -71,9 +78,7 @@
     button.click();
     return new Promise(function (resolve: any) {
       var started = Date.now();
-      var attempts = 0;
       var poll = setInterval(function () {
-        attempts++;
         var menu = findVisibleMenu(select.ownerDocument, button);
         var items = menu ? Array.from(menu.querySelectorAll('.ui-menu-item-wrapper')) : [];
         if (!menu || !items.length) {
