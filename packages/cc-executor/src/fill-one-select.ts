@@ -44,11 +44,15 @@
       var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value');
       if (nativeSetter) nativeSetter.set.call(el, opt.value);
       else el.value = opt.value;
-      ['mousedown','mouseup','click','input','change'].forEach(function (ev: any) {
+      ['mousedown','mouseup','click','input'].forEach(function (ev: any) {
         el.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }));
       });
-      if (typeof el.onchange === 'function') { try { el.onchange.call(el, new Event('change')); } catch (e) {} }
-      if (typeof $ !== 'undefined') { try { $(el).trigger('change'); } catch (e) {} }
+      // Use one jQuery-aware change dispatch. In an isolated content-script
+      // world the adapter falls back to a bubbling native event, which still
+      // reaches page jQuery handlers registered through .on()/change().
+      var jqueryInteraction = root.CcJQueryInteractionAdapter || {};
+      if (jqueryInteraction.trigger) jqueryInteraction.trigger(el, 'change');
+      else el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
       try { el.dispatchEvent(new Event('propertychange', { bubbles: true })); } catch (e) {}
       el.dispatchEvent(new Event('blur', { bubbles: true }));
       // Re-apply after framework reset (300ms)

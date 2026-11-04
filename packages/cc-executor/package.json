@@ -29,6 +29,7 @@
     "./confirm-field-pattern": "./src/confirm-field-pattern.ts",
     "./parse-date-value": "./src/parse-date-value.ts",
     "./jquery-ui-adapter": "./src/jquery-ui-adapter.ts",
+    "./jquery-interaction-adapter": "./src/jquery-interaction-adapter.ts",
     "./post-fill-corrections": "./src/post-fill-corrections.ts"
   },
   "scripts": {
