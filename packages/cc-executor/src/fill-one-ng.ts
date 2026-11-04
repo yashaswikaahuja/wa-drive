@@ -37,6 +37,32 @@
     var _nsm = root.CcNgSessionManager || {};
     var _bfr = root.CcBuildFillRecord || {};
 
+    // jQuery UI Selectmenu is a custom dropdown, but its source of truth is
+    // the original native <select>. Route it through the dedicated adapter
+    // before the generic Angular/Vuetify overlay session is started.
+    var startedAtForJqueryUi = Date.now();
+    var jqueryUi = root.CcJQueryUiAdapter || {};
+    if (jqueryUi.isSelectmenuButton && jqueryUi.isSelectmenuButton(el)) {
+      if (!jqueryUi.selectmenu) return 0;
+      return Promise.resolve(jqueryUi.selectmenu(el, value)).then(function (result: any) {
+        var ok = !!(result && result.success && result.verified);
+        var reason = ok ? null : (result && result.reason) || 'jquery-ui-selection-not-confirmed';
+        _replayResults[(filledBySource[selector] && filledBySource[selector].label) || selector] = ok ? 'ok' : reason;
+        var rec = _bfr.buildFillRecord
+          ? _bfr.buildFillRecord({ selector: selector, value: value, type: 'ng-dropdown',
+              result: ok ? 'filled' : 'skipped', failReason: reason,
+              strategy: 'jquery-ui-selectmenu', durationMs: Date.now() - startedAtForJqueryUi },
+              { rv: RUNTIME_VERSION })
+          : { selector: selector, value: value, type: 'ng-dropdown',
+              result: ok ? 'filled' : 'skipped', failReason: reason,
+              strategy: 'jquery-ui-selectmenu', durationMs: Date.now() - startedAtForJqueryUi,
+              ts: Date.now(), rv: RUNTIME_VERSION, fillMode: 'sequential' };
+        _ccRecords.push(rec);
+        _flushRecords();
+        return ok ? 1 : 0;
+      }).catch(function () { return 0; });
+    }
+
     var rootClass = el.className ? el.className.trim().split(/\s+/)[0] : 'ng-dropdown';
     var adapter = portalAdapters[rootClass] || portalAdapters['ng-dropdown'];
 

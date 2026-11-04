@@ -57,8 +57,15 @@
       return menu.getClientRects().length > 0 && (!style || (style.display !== 'none' && style.visibility !== 'hidden'));
     });
     if (!visible.length) return null;
-    // jQuery UI normally has one open menu; prefer the menu explicitly marked open.
-    return visible.find(function (menu: any) { return menu.classList.contains('ui-selectmenu-open'); }) || visible[0];
+    // Each Selectmenu gets a generated menu id: <select-id>-menu.
+    // Prefer the menu belonging to this button; never pick another widget's menu.
+    var buttonId = String(button && button.id || '');
+    var expectedId = buttonId.endsWith('-button') ? buttonId.slice(0, -7) + '-menu' : '';
+    if (expectedId) {
+      var owned = visible.find(function (menu: any) { return menu.id === expectedId; });
+      if (owned) return owned;
+    }
+    return visible.find(function (menu: any) { return menu.classList.contains('ui-selectmenu-open'); }) || null;
   }
 
   function selectmenu(el: any, requestedValue: any) {
@@ -71,9 +78,7 @@
     button.click();
     return new Promise(function (resolve: any) {
       var started = Date.now();
-      var attempts = 0;
       var poll = setInterval(function () {
-        attempts++;
         var menu = findVisibleMenu(select.ownerDocument, button);
         var items = menu ? Array.from(menu.querySelectorAll('.ui-menu-item-wrapper')) : [];
         if (!menu || !items.length) {
@@ -140,25 +145,40 @@
 
   function fillDatepicker(el: any, value: any, parseDateValue: any) {
     if (!isDatepickerInput(el)) return null;
-    var parsed = typeof parseDateValue === 'function' ? parseDateValue(value) : { dateObj: new Date(value) };
-    var date = parsed && parsed.dateObj;
-    if (date && !isNaN(date.getTime())) {
-      // Prefer the documented widget API when page-world jQuery is exposed.
-      // Content-script isolated worlds often cannot see it, so retain a native
-      // value/event fallback rather than assuming the $ global exists.
-      var jq = root.jQuery || root.$;
-      if (jq && jq.fn && typeof jq.fn.datepicker === 'function') {
-        jq(el).datepicker('setDate', date);
-        return el.value ? 1 : 0;
+    var rawValue = String(value == null ? '' : value).trim();
+    if (!rawValue) return 0;
+
+    // jQuery UI's dateFormat is widget-specific (the default is mm/dd/yy).
+    // Pass the original string to setDate so the widget parses it using its
+    // configured dateFormat; the generic profile parser is day-first and can
+    // silently reinterpret US-formatted dates such as 11/03/2026.
+    var jq = root.jQuery || root.$;
+    if (jq && jq.fn && typeof jq.fn.datepicker === 'function') {
+      try {
+        jq(el).datepicker('setDate', rawValue);
+        return String(el.value || '').trim() === rawValue ? 1 : 0;
+      } catch (e) {
+        return 0;
       }
-      var descriptor = Object.getOwnPropertyDescriptor(el.ownerDocument.defaultView.HTMLInputElement.prototype, 'value');
-      if (descriptor && descriptor.set) descriptor.set.call(el, value);
-      else el.value = value;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      return el.value ? 1 : 0;
     }
-    return 0;
+
+    // Isolated-world fallback: update the input using its native setter and
+    // emit the events datepicker and application listeners observe. Do not
+    // claim success unless the requested value actually landed.
+    var doc = el.ownerDocument;
+    var view = doc && doc.defaultView;
+    var descriptor = view && view.HTMLInputElement
+      ? Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, 'value')
+      : null;
+    if (typeof el.focus === 'function') el.focus();
+    if (descriptor && descriptor.set) descriptor.set.call(el, rawValue);
+    else el.value = rawValue;
+    var EventCtor = view && view.Event ? view.Event : Event;
+    ['input', 'change', 'keyup'].forEach(function (eventName: any) {
+      el.dispatchEvent(new EventCtor(eventName, { bubbles: true }));
+    });
+    if (typeof el.blur === 'function') el.blur();
+    return String(el.value || '').trim() === rawValue ? 1 : 0;
   }
 
   root.CcJQueryUiAdapter = {

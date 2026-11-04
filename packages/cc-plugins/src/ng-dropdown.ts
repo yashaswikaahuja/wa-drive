@@ -25,12 +25,22 @@ var NgDropdownPlugin = {
     var adapter = context.portalAdapters || {};
     // jQuery UI Selectmenu owns a generated menu and native <select> source.
     // Keep it out of the generic Angular/Vuetify overlay interaction path.
-    var jqueryUi = window.CcJQueryUiAdapter;
-    if (jqueryUi && jqueryUi.isSelectmenuButton && jqueryUi.isSelectmenuButton(el)) {
-      return jqueryUi.selectmenu(el, value) || {
-        success: false, verified: false, settled: true,
-        reason: 'jquery-ui-adapter-unavailable',
-      };
+    var jqueryUi = (typeof globalThis !== 'undefined' && (globalThis as any).CcJQueryUiAdapter) || window.CcJQueryUiAdapter;
+    var isJqueryUiSelectmenu = !!(el.classList && el.classList.contains('ui-selectmenu-button'));
+    if (isJqueryUiSelectmenu) {
+      if (!jqueryUi || !jqueryUi.isSelectmenuButton || !jqueryUi.selectmenu) {
+        return Promise.resolve({
+          success: false, verified: false, settled: true,
+          reason: 'jquery-ui-adapter-unavailable',
+        });
+      }
+      return Promise.resolve(jqueryUi.selectmenu(el, value)).then(function (result: any) {
+        return result && result.success && result.verified
+          ? result
+          : Object.assign({ success: false, verified: false, settled: true }, result || {}, {
+              reason: (result && result.reason) || 'jquery-ui-selection-not-confirmed',
+            });
+      });
     }
     function isVisible(node: any) { return window.ccDomUtils.isVisible(node); }
     var trigger = null;
