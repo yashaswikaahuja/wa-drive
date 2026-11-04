@@ -195,6 +195,28 @@
               let strategy = 'native-select';
               let attempt = 1;
               async function tryApply(attemptNo: any) {
+                // jQuery UI Selectmenu hides its native <select> and maintains
+                // a separate rendered button/menu. A native value setter can
+                // change the source element without updating that widget.
+                // Prefer the widget's real menu interaction when this select
+                // has a matching jQuery UI Selectmenu button.
+                const _jqueryUi = root.CcJQueryUiAdapter;
+                const _uiButton = liveEl && liveEl.id
+                  ? document.getElementById(liveEl.id + '-button')
+                  : null;
+                if (_jqueryUi &&
+                    typeof _jqueryUi.isSelectmenuButton === 'function' &&
+                    typeof _jqueryUi.selectmenu === 'function' &&
+                    _uiButton && _jqueryUi.isSelectmenuButton(_uiButton)) {
+                  const _uiResult = await _jqueryUi.selectmenu(_uiButton, value);
+                  strategy = 'jquery-ui-selectmenu';
+                  if (_uiResult && _uiResult.success) return { ok: true, reason: null };
+                  return {
+                    ok: false,
+                    reason: (_uiResult && _uiResult.reason) || 'jquery_ui_selection_failed',
+                  };
+                }
+
                 const _plugin =
                   _CC_USE_PLUGINS && typeof findPlugin === 'function' ? findPlugin(liveEl, _fieldCtx) : null;
                 if (_plugin) {
