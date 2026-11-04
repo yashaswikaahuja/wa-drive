@@ -10,11 +10,11 @@
   'use strict';
 
   function normalize(value: any) {
-    return String(value == null ? '' : value).replace(/\\s+/g, ' ').trim().toLowerCase();
+    return String(value == null ? '' : value).replace(/\s+/g, ' ').trim().toLowerCase();
   }
 
   function text(node: any) {
-    return String(node && node.textContent || '').replace(/\\s+/g, ' ').trim();
+    return String(node && node.textContent || '').replace(/\s+/g, ' ').trim();
   }
 
   function isSelectmenuButton(el: any) {
