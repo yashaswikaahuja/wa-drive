@@ -89,6 +89,24 @@ console.log('\nWith adapter:');
   is('returns 1', r, 1);
 }
 
+// ── jQuery UI Selectmenu delegates to the dedicated adapter ───────────────────
+console.log('\n jQuery UI Selectmenu adapter routing:');
+{
+  const records = [];
+  globalLike.CcJQueryUiAdapter = {
+    isSelectmenuButton: (el) => !!el._jqueryUiSelectmenu,
+    selectmenu: async () => ({ success: true, verified: true, reason: '' }),
+  };
+  const el = makeEl({ _jqueryUiSelectmenu: true, className: 'ui-selectmenu-button' });
+  const result = await fillNg(el, '#speed-button', 'Fast', 'ng-dropdown', 'ng-dropdown', {
+    portalAdapters: {}, filledBySource: { '#speed-button': { label: 'Select a speed' } },
+    _replayResults: {}, _ccRecords: records, RUNTIME_VERSION: '5.90', _flushRecords: () => {},
+  });
+  is('adapter result awaited and returned as success', result, 1);
+  is('adapter success recorded as filled', records[0] && records[0].result, 'filled');
+  is('adapter strategy recorded', records[0] && records[0].strategy, 'jquery-ui-selectmenu');
+}
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
