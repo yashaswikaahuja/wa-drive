@@ -140,7 +140,8 @@
                   await fillOne(selector, value, type);
                 }
               } else {
-                fillOne(selector, value, type);
+                // The native ng-dropdown handler may delegate to an async widget adapter.
+                await fillOne(selector, value, type);
               }
               await settleAfterAct('select');
             } else if (_selectLike && el && el.tagName === 'SELECT') {
