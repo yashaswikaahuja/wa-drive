@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { hashAuthorizationToken } from "./service.ts";
+import { hashAuthorizationToken } from "./token.ts";
 
 const token = "a".repeat(43);
 const hash = hashAuthorizationToken(token);
