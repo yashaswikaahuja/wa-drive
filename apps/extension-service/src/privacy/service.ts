@@ -62,9 +62,6 @@ export function ensurePrivacySchema() {
     ALTER TABLE privacy_consents
       ADD COLUMN IF NOT EXISTS data_subject_id text,
       ADD COLUMN IF NOT EXISTS data_subject_consent_confirmed boolean NOT NULL DEFAULT false;
-    ALTER TABLE privacy_audit_events
-      ADD COLUMN IF NOT EXISTS data_subject_id text;
-
     CREATE INDEX IF NOT EXISTS idx_privacy_consents_scope
       ON privacy_consents (workspace_id, user_id, action, purpose, expires_at)
       WHERE revoked_at IS NULL;
@@ -103,6 +100,9 @@ export function ensurePrivacySchema() {
       reason text,
       created_at timestamptz NOT NULL DEFAULT now()
     );
+    ALTER TABLE privacy_audit_events
+      ADD COLUMN IF NOT EXISTS data_subject_id text;
+
     CREATE INDEX IF NOT EXISTS idx_privacy_audit_scope
       ON privacy_audit_events (workspace_id, created_at DESC);
   `).then(() => undefined).catch((error) => {
