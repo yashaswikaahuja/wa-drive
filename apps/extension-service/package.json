@@ -1,7 +1,7 @@
 {
   "name": "cybercontrol-extension-service",
   "version": "1.0.0",
-  "description": "Standalone API for the Chrome extension \u2014 profiles, mappings, adapters",
+  "description": "Standalone API for the Chrome extension — profiles, mappings, adapters",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "dev": "tsc -p tsconfig.json && node --watch dist/index.js",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
-    "test": "node -e \"console.log('[extension-service] no package tests yet')\""
+    "test": "node --experimental-strip-types --test src/privacy/engine.test.ts"
   },
   "dependencies": {
     "@cc/mapper": "workspace:*",
