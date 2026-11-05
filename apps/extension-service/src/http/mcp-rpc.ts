@@ -365,7 +365,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
       }
       if (typeof args.profileId !== 'string' || !args.profileId.trim() ||
           !Array.isArray(args.fields) || !args.fields.length || args.fields.length > 80 ||
-          args.fields.some((field: any) => typeof field !== 'string' || !field.trim())) {
+          args.fields.some((field: any) => typeof field !== 'string' || !field.trim() || field.length > 128)) {
         return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profileId_and_nonempty_fields_required' }, true)) };
       }
       try {
