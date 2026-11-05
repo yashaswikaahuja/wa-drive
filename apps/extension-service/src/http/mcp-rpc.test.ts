@@ -16,7 +16,7 @@ assert.equal(init.body.result.serverInfo.name, 'cybercontrol-browser');
 
 const listed = await respondToMcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, 'ws', run);
 const names = listed.body.result.tools.map((tool) => tool.name);
-assert.deepEqual(names, ['open_url', 'read_form', 'fill_form', 'click', 'list_profiles', 'fill', 'snapshot', 'list_tabs', 'close_tab', 'focus_tab', 'scroll', 'history', 'mouse_click', 'hover', 'drag', 'keyboard']);
+assert.deepEqual(names, ['open_url', 'read_form', 'fill_form', 'click', 'list_profiles', 'read_profile', 'fill', 'snapshot', 'list_tabs', 'close_tab', 'focus_tab', 'scroll', 'history', 'mouse_click', 'hover', 'drag', 'keyboard']);
 
 const note = await respondToMcp({ jsonrpc: '2.0', method: 'notifications/initialized' }, 'ws', run);
 assert.equal(note.kind, 'accept');
@@ -111,13 +111,31 @@ assert.equal(shot.body.result.isError, true);
 assert.equal(JSON.parse(shot.body.result.content[0].text).error, 'privacy_boundary_blocked');
 assert.equal(calls.length, beforeBlockedSnapshot);
 
-const disabledProfileRead = await respondToMcp({
+const missingProfileScope = await respondToMcp({
   jsonrpc: '2.0',
   id: '9a',
   method: 'tools/call',
   params: { name: 'read_profile', arguments: { profileId: 'p1' } },
 }, 'ws-9', run);
-assert.equal(disabledProfileRead.body.error.code, -32601);
+assert.equal(missingProfileScope.body.result.isError, true);
+assert.equal(JSON.parse(missingProfileScope.body.result.content[0].text).error, 'profileId_and_nonempty_fields_required');
+
+const approvalRequired = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '9aa',
+  method: 'tools/call',
+  params: { name: 'read_profile', arguments: { profileId: 'p1', fields: ['full_name', 'date_of_birth'] } },
+}, 'ws-9', run, {
+  readProfile: async (profileId, fields) => ({
+    error: 'approval_required', requestId: 'request-1', profileLabel: 'Asha',
+    fields, dataCategories: ['customer_identity', 'date_of_birth'],
+  }),
+});
+const approvalPayload = JSON.parse(approvalRequired.body.result.content[0].text);
+assert.equal(approvalPayload.error, 'approval_required');
+assert.equal(approvalPayload.requestId, 'request-1');
+assert.equal(approvalPayload.profileLabel, 'Asha');
+assert.deepEqual(approvalPayload.fields, ['full_name', 'date_of_birth']);
 
 const closed = await respondToMcp({
   jsonrpc: '2.0',
