@@ -62,14 +62,14 @@ router.post('/', async (req: any, res: any) => {
       const request = {
         action: 'read_customer_profile', purpose: 'form_filling', operationId,
         workspaceId, userId, dataSubjectId: profileId, dataSubjectConsentConfirmed: true,
-        recipient: { id: mcpClientId, displayName: mcpClientName || 'MCP client', endpoint: `mcp-session:${mcpSessionId}` },
+        recipient: { id: mcpClientId, displayName: String(mcpClientName || 'MCP client').slice(0, 120), endpoint: `mcp-session:${mcpSessionId}` },
         dataCategories: categories, fields,
       };
       const issued = await issueAuthorization({ workspaceId, userId, body: request });
       if (!issued.ok) {
         const pending = await createProfileReadRequest({
           workspaceId, userId, sessionId: mcpSessionId, clientId: mcpClientId,
-          clientName: mcpClientName || 'MCP client', profileId,
+          clientName: String(mcpClientName || 'MCP client').slice(0, 120), profileId,
           profileLabel: profile.displayLabel || profile.name || 'Customer',
           fields, dataCategories: categories,
         });
