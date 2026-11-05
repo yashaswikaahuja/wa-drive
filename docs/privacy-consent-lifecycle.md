@@ -37,7 +37,7 @@ Example request:
 }
 ```
 
-The endpoint requires `affirmative: true`. For customer-data reads, page-content/screenshot capture or transfer, file transfers and sensitive-trace persistence, the grant must also identify the customer/profile and carry `dataSubjectConsentConfirmed: true`. Field-scoped actions must name the permitted fields; screenshot operations instead rely on the separate redaction-verification requirement.
+The endpoint requires `affirmative: true`. For customer-data reads, page-content/screenshot capture or transfer, file transfers and sensitive-trace persistence, the grant must also identify the customer/profile and carry `dataSubjectConsentConfirmed: true`. Field-scoped actions must name the permitted fields. Screenshot transmission remains denied until a trusted pre-transfer redactor and verifiable proof are implemented.
 
 **Important limitation:** `dataSubjectConsentConfirmed` is an operator attestation recorded with the authenticated user ID. This backend cannot independently prove that a customer was informed or agreed. The operator-facing disclosure and evidence capture must be implemented before treating this as verified customer consent. The attestation is not a substitute for legal review or a data-subject consent workflow.
 
@@ -67,7 +67,7 @@ Example:
 }
 ```
 
-The ticket is bound to workspace, user, operation ID, consent scope and exact recipient. Consumption is one atomic SQL update, so concurrent attempts cannot both succeed. Consumption also checks that the underlying consent has not expired or been revoked.
+The ticket is bound to workspace, user, operation ID, consent scope and exact recipient. Consumption is one atomic SQL update, so concurrent attempts cannot both succeed. Consumption also checks that the underlying consent has not expired or been revoked. Screenshot egress remains blocked: the current code does not accept a client-supplied `redactionVerified` boolean as proof of safe redaction.
 
 ## Deployment
 
