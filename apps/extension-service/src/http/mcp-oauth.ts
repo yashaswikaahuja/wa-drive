@@ -362,8 +362,9 @@ export function mountOAuth(router: any) {
             const secret = process.env.JWT_SECRET;
             if (!secret) throw new Error('JWT_SECRET missing');
             const claims: any = jwt.verify(data.accessToken, secret);
+            const { iat: _iat, exp: _exp, nbf: _nbf, aud: _aud, iss: _iss, ...identityClaims } = claims;
             const accessToken = jwt.sign({
-              ...claims,
+              ...identityClaims,
               mcpClientId: bound.client_id,
               mcpClientName: bound.client_name,
               mcpSessionId: bound.session_id,
@@ -399,9 +400,10 @@ export function mountOAuth(router: any) {
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET missing');
     const claims: any = jwt.verify(row.access_token, secret);
+    const { iat: _iat, exp: _exp, nbf: _nbf, aud: _aud, iss: _iss, ...identityClaims } = claims;
     const sessionId = randomId('mcp_session_');
     const accessToken = jwt.sign({
-      ...claims,
+      ...identityClaims,
       mcpClientId: row.client_id,
       mcpClientName: row.client_name || 'MCP client',
       mcpSessionId: sessionId,
@@ -412,7 +414,7 @@ export function mountOAuth(router: any) {
         INSERT INTO mcp_oauth_sessions
           (session_id, client_id, client_name, user_id, workspace_id, role, refresh_token_hash)
         VALUES ($1,$2,$3,$4,$5,$6,$7)
-      `, [sessionId, row.client_id, row.client_name || 'MCP client', claims.userId, claims.workspaceId, claims.role || null, refreshHash]);
+      `, [sessionId, row.client_id, row.client_name || 'MCP client', identityClaims.userId, identityClaims.workspaceId, identityClaims.role || null, refreshHash]);
     }
     res.json({
       access_token: accessToken,
