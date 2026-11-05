@@ -65,7 +65,8 @@ jobs:
             echo "Extension package unchanged — nothing to commit."
           else
             git commit -m "chore(extension): repackage download zip [skip ci]"
-            # Master may move while we pack (other CI bots). Rebase then push.
+            # pack dirties generated extension bundles; drop them so rebase can run
+            git reset --hard HEAD
             git pull --rebase origin master
             git push origin HEAD:master
           fi
