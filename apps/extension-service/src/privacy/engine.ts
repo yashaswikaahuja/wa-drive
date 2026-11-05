@@ -156,27 +156,29 @@ function hasExactSetCoverage(grantValues: string[] | undefined, requestValues: s
 
 function validateRequest(request: PrivacyRequest): string | null {
   if (!request || !VALID_ACTIONS.has(request.action)) return "invalid_action";
-  if (typeof request.operationId !== "string" || !request.operationId.trim()) return "missing_operation_id";
+  if (typeof request.operationId !== "string" || !request.operationId.trim() || request.operationId.length > 200) return "invalid_operation_id";
   if (typeof request.workspaceId !== "string" || !request.workspaceId.trim()) return "missing_workspace_id";
   if (typeof request.userId !== "string" || !request.userId.trim()) return "missing_user_id";
+  if (request.dataSubjectId && request.dataSubjectId.length > 128) return "invalid_data_subject";
   if (CUSTOMER_DATA_ACTIONS.has(request.action)) {
     if (typeof request.dataSubjectId !== "string" || !request.dataSubjectId.trim()) return "missing_data_subject";
     if (request.dataSubjectConsentConfirmed !== true) return "data_subject_consent_not_confirmed";
     if (request.action !== "capture_screenshot" && request.action !== "send_screenshot" && (!Array.isArray(request.fields) || request.fields.length === 0)) return "missing_field_scope";
   }
   if (typeof request.purpose !== "string" || !/^[a-z][a-z0-9_.-]{1,79}$/.test(request.purpose)) return "invalid_purpose";
-  if (!Array.isArray(request.dataCategories) || request.dataCategories.length === 0) return "missing_data_categories";
+  if (!Array.isArray(request.dataCategories) || request.dataCategories.length === 0 || request.dataCategories.length > 20) return "invalid_data_categories";
   if (request.dataCategories.some((item) => !VALID_CATEGORIES.has(item))) return "invalid_data_category";
   if (new Set(request.dataCategories).size !== request.dataCategories.length) return "duplicate_data_category";
-  if (request.fields && (!Array.isArray(request.fields) || request.fields.some((field) => typeof field !== "string" || !field.trim()))) {
+  if (request.fields && (!Array.isArray(request.fields) || request.fields.length > 100 || request.fields.some((field) => typeof field !== "string" || !field.trim() || field.length > 128))) {
     return "invalid_field_scope";
   }
   if (request.sourceOrigin !== undefined && !normalizeOrigin(request.sourceOrigin)) return "invalid_source_origin";
   if (EXTERNAL_ACTIONS.has(request.action)) {
-    if (!request.recipient || typeof request.recipient.id !== "string" || !request.recipient.id.trim() || typeof request.recipient.displayName !== "string" || !request.recipient.displayName.trim()) {
+    if (!request.recipient || typeof request.recipient.id !== "string" || !request.recipient.id.trim() || request.recipient.id.length > 128 || typeof request.recipient.displayName !== "string" || !request.recipient.displayName.trim() || request.recipient.displayName.length > 120) {
       return "missing_transfer_recipient";
     }
     if (request.recipient.endpoint !== undefined && request.recipient.endpoint !== "") {
+      if (typeof request.recipient.endpoint !== "string" || request.recipient.endpoint.length > 2048) return "invalid_recipient_endpoint";
       try {
         const endpoint = new URL(request.recipient.endpoint);
         if (endpoint.protocol !== "https:") return "insecure_recipient_endpoint";
@@ -207,10 +209,11 @@ export function evaluatePrivacyRequest(
     return { decision: "deny", reason: "secret_data_category_prohibited" };
   }
 
-  // Screenshot bytes must be redacted before they cross any process/network
-  // boundary. Server-side redaction after receipt is explicitly insufficient.
-  if (request.action === "send_screenshot" && request.redactionVerified !== true) {
-    return { decision: "deny", reason: "screenshot_redaction_not_verified" };
+  // No trusted pre-transfer screenshot redaction proof exists yet. A client-supplied
+  // boolean is not proof; keep screenshot egress blocked until a trusted redactor
+  // and verifiable attestation are implemented.
+  if (request.action === "send_screenshot") {
+    return { decision: "deny", reason: "screenshot_redaction_not_implemented" };
   }
 
   const requestOrigin = request.sourceOrigin ? normalizeOrigin(request.sourceOrigin) : undefined;
