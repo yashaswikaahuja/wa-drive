@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS privacy_audit_events (
   action text,
   purpose text,
   recipient_id text,
+  recipient_endpoint text,
   source_origin text,
   data_categories jsonb,
   decision text NOT NULL,
@@ -68,3 +69,6 @@ ALTER TABLE privacy_consents
   ADD COLUMN IF NOT EXISTS data_subject_consent_confirmed boolean NOT NULL DEFAULT false;
 ALTER TABLE privacy_audit_events
   ADD COLUMN IF NOT EXISTS data_subject_id text;
+
+ALTER TABLE privacy_audit_events
+  ADD COLUMN IF NOT EXISTS recipient_endpoint text;
