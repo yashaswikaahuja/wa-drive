@@ -158,12 +158,12 @@ function validateRequest(request: PrivacyRequest): string | null {
   if (request.fields && (!Array.isArray(request.fields) || request.fields.some((field) => typeof field !== "string" || !field.trim()))) {
     return "invalid_field_scope";
   }
-  if (request.sourceOrigin && !normalizeOrigin(request.sourceOrigin)) return "invalid_source_origin";
+  if (request.sourceOrigin !== undefined && !normalizeOrigin(request.sourceOrigin)) return "invalid_source_origin";
   if (EXTERNAL_ACTIONS.has(request.action)) {
-    if (!request.recipient || !request.recipient.id.trim() || !request.recipient.displayName.trim()) {
+    if (!request.recipient || typeof request.recipient.id !== "string" || !request.recipient.id.trim() || typeof request.recipient.displayName !== "string" || !request.recipient.displayName.trim()) {
       return "missing_transfer_recipient";
     }
-    if (request.recipient.endpoint) {
+    if (request.recipient.endpoint !== undefined && request.recipient.endpoint !== "") {
       try {
         const endpoint = new URL(request.recipient.endpoint);
         if (endpoint.protocol !== "https:") return "insecure_recipient_endpoint";
@@ -207,12 +207,14 @@ export function evaluatePrivacyRequest(
   const matching = (Array.isArray(grants) ? grants : []).find((grant) => {
     if (!grant || grant.affirmative !== true) return false;
     if (grant.revokedAt != null) return false;
-    if (!Number.isFinite(grant.expiresAt) || grant.expiresAt <= now) return false;
+    if (!Number.isFinite(grant.createdAt) || grant.createdAt > now) return false;
+    if (!Number.isFinite(grant.expiresAt) || grant.expiresAt <= now || grant.expiresAt <= grant.createdAt) return false;
     if (!grant.id || grant.workspaceId !== request.workspaceId || grant.userId !== request.userId) return false;
     if (grant.action !== request.action || grant.purpose !== request.purpose) return false;
     if ((grant.recipientId || undefined) !== requestRecipientId) return false;
     if ((grant.recipientEndpoint || undefined) !== requestEndpoint) return false;
     const grantOrigin = grant.sourceOrigin ? normalizeOrigin(grant.sourceOrigin) : undefined;
+    if (grant.sourceOrigin && !grantOrigin) return false;
     if (grantOrigin !== requestOrigin) return false;
     if (!hasExactSetCoverage(grant.dataCategories, request.dataCategories)) return false;
     if (request.fields?.length && !hasExactSetCoverage(grant.fields, request.fields)) return false;
