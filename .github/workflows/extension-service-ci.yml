@@ -9,6 +9,7 @@ on:
       - 'apps/frontend/**'
       - 'packages/cc-*/**'
       - 'packages/svc-*/**'
+      - 'packages/backend-core/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/extension-service-ci.yml'
@@ -56,6 +57,10 @@ jobs:
         run: pnpm --filter cybercontrol-extension-service typecheck
       - name: Chrome extension typecheck
         run: pnpm --filter cybercontrol-extension typecheck
+      - name: Backend core build
+        run: pnpm --filter @cybercontrol/backend-core build
+      - name: Backend core auth tests
+        run: pnpm --filter @cybercontrol/backend-core test
       - name: Frontend typecheck
         run: pnpm --filter cybercontrol-frontend typecheck
       - name: Frontend production build
