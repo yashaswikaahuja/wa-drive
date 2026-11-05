@@ -340,7 +340,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
       const safeProfiles = (Array.isArray(rows) ? rows : []).map((row: any) => ({
         id: String(row?.id || ''),
         displayLabel: String(row?.displayLabel || row?.name || 'Customer'),
-        phoneLast4: row?.phoneLast4 == null || !/^\\d{4}$/.test(String(row.phoneLast4))
+        phoneLast4: row?.phoneLast4 == null || !/^\d{4}$/.test(String(row.phoneLast4))
           ? null
           : String(row.phoneLast4),
       })).filter((row: any) => row.id);
