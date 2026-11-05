@@ -11,6 +11,30 @@ const DEFAULT_CONSENT_TTL_MS = 15 * 60 * 1000;
 const MAX_CONSENT_TTL_MS = 24 * 60 * 60 * 1000;
 const AUTHORIZATION_TTL_MS = 60 * 1000;
 
+function requestFromBody(body: any, workspaceId: string, userId: string): PrivacyRequest {
+  const recipient = body?.recipient && typeof body.recipient === "object"
+    ? {
+        id: body.recipient.id,
+        displayName: body.recipient.displayName,
+        endpoint: body.recipient.endpoint,
+      }
+    : undefined;
+  return {
+    action: body?.action,
+    purpose: body?.purpose,
+    operationId: body?.operationId,
+    workspaceId,
+    userId,
+    dataSubjectId: body?.dataSubjectId,
+    dataSubjectConsentConfirmed: body?.dataSubjectConsentConfirmed,
+    sourceOrigin: body?.sourceOrigin,
+    recipient,
+    dataCategories: body?.dataCategories,
+    fields: body?.fields,
+    redactionVerified: body?.redactionVerified,
+  } as PrivacyRequest;
+}
+
 export async function ensurePrivacySchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS privacy_consents (
@@ -146,20 +170,10 @@ export async function createConsent(input: {
   }
 
   const now = Date.now();
-  const request: PrivacyRequest = {
-    action: body.action,
-    purpose: body.purpose,
+  const request = requestFromBody({
+    ...body,
     operationId: `consent-approval:${randomUUID()}`,
-    workspaceId,
-    userId,
-    dataSubjectId: body.dataSubjectId,
-    dataSubjectConsentConfirmed: body.dataSubjectConsentConfirmed,
-    sourceOrigin: body.sourceOrigin,
-    recipient: body.recipient,
-    dataCategories: body.dataCategories,
-    fields: body.fields,
-    redactionVerified: body.redactionVerified,
-  };
+  }, workspaceId, userId);
   const id = randomUUID();
   const candidate: ConsentGrant = {
     id, workspaceId, userId, dataSubjectId: request.dataSubjectId,
@@ -224,11 +238,7 @@ export async function issueAuthorization(input: {
   workspaceId: string; userId: string; body: any;
 }) {
   const { workspaceId, userId, body } = input;
-  const request: PrivacyRequest = {
-    ...body,
-    workspaceId,
-    userId,
-  };
+  const request = requestFromBody(body, workspaceId, userId);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
