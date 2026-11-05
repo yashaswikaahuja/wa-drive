@@ -177,12 +177,15 @@ export async function createConsent(input: {
 
   const { rows } = await pool.query(`
     INSERT INTO privacy_consents
-      (id, workspace_id, user_id, action, purpose, recipient_id, recipient_endpoint,
-       source_origin, data_categories, fields, affirmative, created_at, expires_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,true,to_timestamp($11 / 1000.0),to_timestamp($12 / 1000.0))
+      (id, workspace_id, user_id, data_subject_id, data_subject_consent_confirmed,
+       action, purpose, recipient_id, recipient_endpoint, source_origin, data_categories,
+       fields, affirmative, created_at, expires_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,true,
+            to_timestamp($13 / 1000.0),to_timestamp($14 / 1000.0))
     RETURNING *
   `, [
-    id, workspaceId, userId, request.action, request.purpose,
+    id, workspaceId, userId, request.dataSubjectId || null,
+    request.dataSubjectConsentConfirmed === true, request.action, request.purpose,
     request.recipient?.id || null, request.recipient?.endpoint || null,
     request.sourceOrigin || null, JSON.stringify(request.dataCategories),
     request.fields ? JSON.stringify(request.fields) : null, now, now + ttl,
