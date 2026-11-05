@@ -51,6 +51,8 @@ export interface PrivacyRequest {
   /** Stable, user-understandable purpose identifier; do not pass arbitrary UI copy. */
   purpose: string;
   operationId: string;
+  workspaceId: string;
+  userId: string;
   sourceOrigin?: string;
   recipient?: PrivacyRecipient;
   dataCategories: DataCategory[];
@@ -62,7 +64,8 @@ export interface PrivacyRequest {
 
 export interface ConsentGrant {
   id: string;
-  subjectId: string;
+  workspaceId: string;
+  userId: string;
   action: PrivacyAction;
   purpose: string;
   recipientId?: string;
@@ -146,6 +149,8 @@ function hasExactSetCoverage(grantValues: string[] | undefined, requestValues: s
 function validateRequest(request: PrivacyRequest): string | null {
   if (!request || !VALID_ACTIONS.has(request.action)) return "invalid_action";
   if (typeof request.operationId !== "string" || !request.operationId.trim()) return "missing_operation_id";
+  if (typeof request.workspaceId !== "string" || !request.workspaceId.trim()) return "missing_workspace_id";
+  if (typeof request.userId !== "string" || !request.userId.trim()) return "missing_user_id";
   if (typeof request.purpose !== "string" || !/^[a-z][a-z0-9_.-]{1,79}$/.test(request.purpose)) return "invalid_purpose";
   if (!Array.isArray(request.dataCategories) || request.dataCategories.length === 0) return "missing_data_categories";
   if (request.dataCategories.some((item) => !VALID_CATEGORIES.has(item))) return "invalid_data_category";
@@ -203,7 +208,7 @@ export function evaluatePrivacyRequest(
     if (!grant || grant.affirmative !== true) return false;
     if (grant.revokedAt != null) return false;
     if (!Number.isFinite(grant.expiresAt) || grant.expiresAt <= now) return false;
-    if (!grant.id || !grant.subjectId) return false;
+    if (!grant.id || grant.workspaceId !== request.workspaceId || grant.userId !== request.userId) return false;
     if (grant.action !== request.action || grant.purpose !== request.purpose) return false;
     if ((grant.recipientId || undefined) !== requestRecipientId) return false;
     if ((grant.recipientEndpoint || undefined) !== requestEndpoint) return false;
