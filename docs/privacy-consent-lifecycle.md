@@ -37,7 +37,7 @@ Example request:
 }
 ```
 
-The endpoint requires `affirmative: true`. For customer-data reads, external customer-data transfers, file transfers, screenshot transfers and sensitive-trace persistence, the grant must also identify the customer/profile and carry `dataSubjectConsentConfirmed: true`.
+The endpoint requires `affirmative: true`. For customer-data reads, page-content/screenshot capture or transfer, file transfers and sensitive-trace persistence, the grant must also identify the customer/profile and carry `dataSubjectConsentConfirmed: true`. Field-scoped actions must name the permitted fields; screenshot operations instead rely on the separate redaction-verification requirement.
 
 **Important limitation:** `dataSubjectConsentConfirmed` is an operator attestation recorded with the authenticated user ID. This backend cannot independently prove that a customer was informed or agreed. The operator-facing disclosure and evidence capture must be implemented before treating this as verified customer consent. The attestation is not a substitute for legal review or a data-subject consent workflow.
 
