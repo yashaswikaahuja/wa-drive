@@ -371,6 +371,23 @@ export async function consumeAuthorization(input: {
         WHERE c.id = privacy_authorizations.consent_id
           AND c.revoked_at IS NULL AND c.affirmative = true AND c.expires_at > now()
       )
+      AND (
+        request_json->>'action' <> 'read_customer_profile'
+        OR (
+          EXISTS (
+            SELECT 1 FROM workspace_privacy_policies p
+            WHERE p.workspace_id = privacy_authorizations.workspace_id
+              AND p.allow_mcp_profile_read = true
+          )
+          AND EXISTS (
+            SELECT 1 FROM mcp_oauth_sessions s
+            WHERE s.workspace_id = privacy_authorizations.workspace_id
+              AND s.user_id = privacy_authorizations.user_id
+              AND s.profile_access_enabled = true AND s.expires_at > now()
+              AND request_json->'recipient'->>'endpoint' = 'mcp-session:' || s.session_id
+          )
+        )
+      )
     RETURNING id, request_json, consent_id
   `, [tokenHash, workspaceId, userId, operationId]);
   if (!rows.length) {
