@@ -43,6 +43,10 @@ function randomId(prefix: string) {
   return prefix + crypto.randomBytes(24).toString('base64url');
 }
 
+function stableClientId(clientId: string) {
+  return 'mcp_' + crypto.createHash('sha256').update(clientId).digest('hex').slice(0, 32);
+}
+
 let tablesReady: Promise<void> | null = null;
 function ensureTables() {
   if (!tablesReady) {
@@ -370,7 +374,7 @@ export function mountOAuth(router: any) {
             delete identityClaims.iss;
             const accessToken = jwt.sign({
               ...identityClaims,
-              mcpClientId: bound.client_id,
+              mcpClientId: stableClientId(bound.client_id),
               mcpClientName: bound.client_name,
               mcpSessionId: bound.session_id,
             }, secret, { expiresIn: '15m' });
@@ -414,7 +418,7 @@ export function mountOAuth(router: any) {
     const sessionId = randomId('mcp_session_');
     const accessToken = jwt.sign({
       ...identityClaims,
-      mcpClientId: row.client_id,
+      mcpClientId: stableClientId(row.client_id),
       mcpClientName: row.client_name || 'MCP client',
       mcpSessionId: sessionId,
     }, secret, { expiresIn: '15m' });
