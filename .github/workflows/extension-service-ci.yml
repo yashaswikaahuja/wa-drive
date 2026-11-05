@@ -16,6 +16,7 @@ on:
   push:
     branches: [master]
     paths:
+      - 'packages/backend-core/**'
       - 'apps/extension-service/**'
       - 'apps/extension/**'
       - 'apps/frontend/**'
