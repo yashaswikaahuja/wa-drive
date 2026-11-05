@@ -10,6 +10,12 @@ import {
 
 const router = Router();
 router.use(authMiddleware);
+router.use((req: any, res: any, next: any) => {
+  if (typeof req.user?.userId !== "string" || !req.user.userId.trim()) {
+    return res.status(401).json({ error: "authenticated_user_required" });
+  }
+  next();
+});
 
 router.get("/consents", async (req: any, res: any) => {
   try {
