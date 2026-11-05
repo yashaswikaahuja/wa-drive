@@ -108,6 +108,19 @@ export function ensurePrivacySchema() {
     CREATE INDEX IF NOT EXISTS idx_privacy_audit_scope
       ON privacy_audit_events (workspace_id, created_at DESC);
 
+    CREATE TABLE IF NOT EXISTS mcp_oauth_sessions (
+      session_id TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      role TEXT,
+      refresh_token_hash TEXT UNIQUE,
+      profile_access_enabled BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '30 days'
+    );
+
     CREATE TABLE IF NOT EXISTS workspace_privacy_policies (
       workspace_id text PRIMARY KEY,
       allow_mcp_profile_read boolean NOT NULL DEFAULT false,
