@@ -61,3 +61,10 @@ CREATE TABLE IF NOT EXISTS privacy_audit_events (
 );
 CREATE INDEX IF NOT EXISTS idx_privacy_audit_scope
   ON privacy_audit_events (workspace_id, created_at DESC);
+
+-- Idempotent upgrade path for databases provisioned by an earlier draft.
+ALTER TABLE privacy_consents
+  ADD COLUMN IF NOT EXISTS data_subject_id text,
+  ADD COLUMN IF NOT EXISTS data_subject_consent_confirmed boolean NOT NULL DEFAULT false;
+ALTER TABLE privacy_audit_events
+  ADD COLUMN IF NOT EXISTS data_subject_id text;
