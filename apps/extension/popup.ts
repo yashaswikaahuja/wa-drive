@@ -779,7 +779,7 @@ async function refreshMcpPrivacy(credentials?: any) {
       </div>`;
     }).join('') : '';
     const privacyPanel = document.getElementById('mcp-privacy');
-    if (privacyPanel && requests.length) privacyPanel.open = true;
+    if (privacyPanel && requests.length) (privacyPanel as HTMLDetailsElement).open = true;
   } catch (error) {
     policyEl.textContent = 'Could not load MCP privacy controls. Profile reads remain blocked unless the server confirms permission.';
     sessionsEl.innerHTML = '';
@@ -822,7 +822,7 @@ if (mcpRequestsEl) {
   mcpRequestsEl.addEventListener('change', (event: any) => {
     const checkbox = event.target?.closest?.('[data-mcp-confirm]');
     if (!checkbox) return;
-    const approve = mcpRequestsEl.querySelector('[data-mcp-approve="' + CSS.escape(checkbox.dataset.mcpConfirm) + '"]');
+    const approve = mcpRequestsEl.querySelector('[data-mcp-approve="' + CSS.escape(checkbox.dataset.mcpConfirm) + '"]') as HTMLButtonElement | null;
     if (approve) approve.disabled = !checkbox.checked;
   });
   mcpRequestsEl.addEventListener('click', async (event: any) => {
@@ -831,7 +831,7 @@ if (mcpRequestsEl) {
     const button = approve || reject;
     if (!button) return;
     const requestId = button.dataset.mcpApprove || button.dataset.mcpReject;
-    const confirm = mcpRequestsEl.querySelector('[data-mcp-confirm="' + CSS.escape(requestId) + '"]');
+    const confirm = mcpRequestsEl.querySelector('[data-mcp-confirm="' + CSS.escape(requestId) + '"]') as HTMLInputElement | null;
     if (approve && !confirm?.checked) return;
     button.disabled = true;
     try {
