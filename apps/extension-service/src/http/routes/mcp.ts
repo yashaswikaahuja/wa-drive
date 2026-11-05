@@ -6,7 +6,7 @@
 import { Router } from 'express';
 import { userFromAuthorization } from '../auth.js';
 import { executeBrowserTask } from './browser-task.js';
-import { listWorkspaceProfiles, readWorkspaceProfile } from './profiles.js';
+import { listWorkspaceProfiles } from './profiles.js';
 import { respondToMcp } from '../mcp-rpc.js';
 import { mountOAuth, unauthorized } from '../mcp-oauth.js';
 
@@ -26,7 +26,6 @@ router.post('/', async (req: any, res: any) => {
   }
   const outcome = await respondToMcp(req.body, parsed.user.workspaceId, executeBrowserTask, {
     listProfiles: listWorkspaceProfiles,
-    readProfile: readWorkspaceProfile,
   });
   if (outcome.kind === 'accept') return res.status(202).end();
   if (wantsSse(accept)) {
