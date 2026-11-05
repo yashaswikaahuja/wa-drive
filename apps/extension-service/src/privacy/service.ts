@@ -56,6 +56,12 @@ export async function ensurePrivacySchema() {
       revoked_at timestamptz,
       CHECK (expires_at > created_at)
     );
+    ALTER TABLE privacy_consents
+      ADD COLUMN IF NOT EXISTS data_subject_id text,
+      ADD COLUMN IF NOT EXISTS data_subject_consent_confirmed boolean NOT NULL DEFAULT false;
+    ALTER TABLE privacy_audit_events
+      ADD COLUMN IF NOT EXISTS data_subject_id text;
+
     CREATE INDEX IF NOT EXISTS idx_privacy_consents_scope
       ON privacy_consents (workspace_id, user_id, action, purpose, expires_at)
       WHERE revoked_at IS NULL;
