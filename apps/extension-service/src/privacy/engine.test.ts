@@ -62,8 +62,8 @@ assert.equal(evaluatePrivacyRequest({ ...base, recipient: { ...base.recipient!, 
 assert.equal(evaluatePrivacyRequest({ ...base, dataCategories: ["customer_identity"] }, [grant], now).decision, "allow");
 assert.equal(evaluatePrivacyRequest({ ...base, dataCategories: ["government_id"] }, [grant], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest({ ...base, dataCategories: ["otp"] }, [grant], now).decision, "deny");
-assert.equal(evaluatePrivacyRequest({ ...base, action: "send_screenshot", dataCategories: ["screenshot"], redactionVerified: false }, [grant], now).decision, "deny");
-assert.equal(evaluatePrivacyRequest({ ...base, action: "send_screenshot", dataCategories: ["screenshot"], redactionVerified: true }, [grant], now).decision, "consent_required");
+assert.equal(evaluatePrivacyRequest({ ...base, action: "send_screenshot", dataCategories: ["screenshot"], redactionVerified: false }, [grant], now).reason, "screenshot_redaction_not_implemented");
+assert.equal(evaluatePrivacyRequest({ ...base, action: "send_screenshot", dataCategories: ["screenshot"], redactionVerified: true }, [grant], now).reason, "screenshot_redaction_not_implemented");
 assert.equal(evaluatePrivacyRequest({ ...base, sourceOrigin: "javascript:alert(1)" }, [grant], now).decision, "deny");
 assert.equal(isExternalPrivacyAction("send_file"), true);
 assert.equal(isExternalPrivacyAction("read_customer_profile"), false);
