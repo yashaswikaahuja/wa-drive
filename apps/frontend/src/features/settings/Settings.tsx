@@ -30,6 +30,8 @@ export default function Settings() {
   const [profilePolicy, setProfilePolicy] = useState(false);
   const [profilePolicyLoading, setProfilePolicyLoading] = useState(true);
   const [profilePolicySaving, setProfilePolicySaving] = useState(false);
+  const [profileConsents, setProfileConsents] = useState<any[]>([]);
+  const [profileConsentsLoading, setProfileConsentsLoading] = useState(true);
   const { reveal } = useReveal();
 
   const loadVerify = useCallback(() => {
@@ -69,6 +71,24 @@ export default function Settings() {
       .catch(() => setProfilePolicy(false))
       .finally(() => setProfilePolicyLoading(false));
   }, []);
+
+  const loadProfileConsents = useCallback(() => {
+    api.get('/privacy/consents', { skipErrorToast: true } as any)
+      .then(r => setProfileConsents(Array.isArray(r.data?.consents) ? r.data.consents : []))
+      .catch(() => setProfileConsents([]))
+      .finally(() => setProfileConsentsLoading(false));
+  }, []);
+  useEffect(() => { loadProfileConsents(); }, [loadProfileConsents]);
+
+  async function revokeProfileConsent(id: string) {
+    try {
+      await api.delete('/privacy/consents/' + encodeURIComponent(id), { skipErrorToast: true } as any);
+      toast.success('Profile access grant revoked');
+      loadProfileConsents();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Could not revoke profile access');
+    }
+  }
 
   async function updateProfilePolicy(enabled: boolean) {
     setProfilePolicySaving(true);
@@ -278,6 +298,26 @@ export default function Settings() {
         <p className="text-[11px] mt-3" style={{ color: 'hsl(var(--pt-muted))' }}>
           Passwords, OTPs, CAPTCHA answers and payment credentials are never available to MCP agents. Screenshot sharing remains a separate permission.
         </p>
+        <div className="mt-4 pt-3 border-t" style={{ borderColor: 'hsl(var(--pt-border-soft))' }}>
+          <p className="text-xs font-semibold mb-2" style={{ color: 'hsl(var(--ink))' }}>Active profile-read grants</p>
+          {profileConsentsLoading ? (
+            <p className="text-xs pt-muted">Loading grants…</p>
+          ) : profileConsents.filter((grant) => grant.action === 'read_customer_profile' && !grant.revokedAt && new Date(grant.expiresAt).getTime() > Date.now()).length === 0 ? (
+            <p className="text-xs pt-muted">No active grants.</p>
+          ) : (
+            <div className="space-y-2">
+              {profileConsents.filter((grant) => grant.action === 'read_customer_profile' && !grant.revokedAt && new Date(grant.expiresAt).getTime() > Date.now()).map((grant) => (
+                <div key={grant.id} className="rounded-lg border p-2 flex items-start gap-3" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium" style={{ color: 'hsl(var(--ink))' }}>{grant.recipientId || 'MCP client'} · {String(grant.dataSubjectId || 'Customer').slice(0, 12)}</p>
+                    <p className="text-[11px] pt-muted mt-1">{Array.isArray(grant.fields) ? grant.fields.join(', ') : 'Scoped fields'} · expires {new Date(grant.expiresAt).toLocaleTimeString()}</p>
+                  </div>
+                  <button type="button" onClick={() => revokeProfileConsent(grant.id)} className="pt-chip text-[11px] shrink-0">Revoke</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="card" style={reveal(6)}>
