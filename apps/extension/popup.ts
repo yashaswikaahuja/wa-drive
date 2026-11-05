@@ -33,7 +33,22 @@ const FILL_BTN_LABEL = 'Fill this form';
 versionEl.textContent = 'v' + VERSION;
 
 const HUB_FALLBACK = 'https://app.cybercontrol.fun';
+const HUB_APP_PATH = '/app';
 const THEME_KEY = 'cc-theme';
+
+/** Hub origin. API host `api.cybercontrol.fun` maps to `app.cybercontrol.fun`. */
+function hubOrigin(backendUrl) {
+  if (!backendUrl) return HUB_FALLBACK;
+  const raw = String(backendUrl);
+  if (/localhost:3000|127\.0\.0\.1:3000/.test(raw)) return 'http://localhost:5173';
+  try {
+    const u = new URL(raw);
+    if (u.hostname.startsWith('api.')) u.hostname = 'app.' + u.hostname.slice(4);
+    return u.origin;
+  } catch {
+    return HUB_FALLBACK;
+  }
+}
 
 function resolveThemePref(pref) {
   if (pref === 'light' || pref === 'dark') return pref;
@@ -141,14 +156,13 @@ function clearSearch() {
 
 async function openHub(path) {
   const data = await chrome.storage.local.get('backendUrl');
-  let frontendUrl = HUB_FALLBACK;
-  if (data.backendUrl?.includes('localhost:3000')) frontendUrl = 'http://localhost:5173';
-  else if (data.backendUrl) frontendUrl = String(data.backendUrl).replace(/\/api\/?$/, '') || HUB_FALLBACK;
-  const url = path ? frontendUrl.replace(/\/$/, '') + path : frontendUrl;
+  const origin = hubOrigin(data.backendUrl);
+  const suffix = !path || path === '/' ? HUB_APP_PATH : (path.startsWith('/') ? path : '/' + path);
+  const url = origin + suffix;
   const tabs = await chrome.tabs.query({});
-  const existing = tabs.find((t) => t.url?.startsWith(frontendUrl));
+  const existing = tabs.find((t) => t.url?.startsWith(origin));
   if (existing) {
-    chrome.tabs.update(existing.id, { active: true, url: path ? url : undefined });
+    chrome.tabs.update(existing.id, { active: true, url });
     chrome.windows.update(existing.windowId, { focused: true });
   } else {
     chrome.tabs.create({ url });
@@ -168,7 +182,7 @@ function showLoginEmpty(title, detail) {
     `<button type="button" class="primary" id="open-login-btn">Open CyberControl Hub</button>` +
     `</div>`;
   const btn = document.getElementById('open-login-btn');
-  if (btn) btn.onclick = () => openHub('/login');
+  if (btn) btn.onclick = () => openHub(HUB_APP_PATH);
 }
 
 function shortSha(s) {
@@ -408,10 +422,8 @@ function showResults(filled, skipped, failed, records) {
     cpLink.style.display = 'block';
     cpLink.onclick = async () => {
       const data = await chrome.storage.local.get('backendUrl');
-      const frontendUrl = (data.backendUrl || '').replace('/api', '').replace('api.', 'app.');
-      const profileId = selectedProfile?.id;
       const phone = selectedProfile?.phone || selectedProfile?.primary_contact_phone || '';
-      const url = frontendUrl + '/app/customers/' + encodeURIComponent(phone);
+      const url = hubOrigin(data.backendUrl) + '/app/customers/' + encodeURIComponent(phone);
       chrome.tabs.create({ url });
     };
   } else {
@@ -781,7 +793,7 @@ async function loadProfilesHttps(data?: any) {
     const btn = document.getElementById('retry-profiles');
     if (btn) btn.onclick = () => loadProfilesHttps();
     const hubBtn = document.getElementById('open-hub-customers');
-    if (hubBtn) hubBtn.onclick = () => openHub('/');
+    if (hubBtn) hubBtn.onclick = () => openHub(HUB_APP_PATH);
     return;
   }
   renderProfiles('');
@@ -951,7 +963,7 @@ undoBtn.addEventListener('click', async () => {
 
 // Open CyberControl Hub
 document.getElementById('open-btn').addEventListener('click', () => {
-  openHub('/');
+  openHub(HUB_APP_PATH);
 });
 
 // ── AI Agent flow ─────────────────────────────────────────────────────────
