@@ -53,6 +53,10 @@ export interface PrivacyRequest {
   operationId: string;
   workspaceId: string;
   userId: string;
+  /** Stable customer/profile subject; required for customer-data access and disclosure. */
+  dataSubjectId?: string;
+  /** Operator attestation that the data subject was informed and agreed. */
+  dataSubjectConsentConfirmed?: boolean;
   sourceOrigin?: string;
   recipient?: PrivacyRecipient;
   dataCategories: DataCategory[];
@@ -66,6 +70,8 @@ export interface ConsentGrant {
   id: string;
   workspaceId: string;
   userId: string;
+  dataSubjectId?: string;
+  dataSubjectConsentConfirmed?: boolean;
   action: PrivacyAction;
   purpose: string;
   recipientId?: string;
@@ -91,6 +97,8 @@ const EXTERNAL_ACTIONS = new Set<PrivacyAction>([
   "send_customer_data",
   "send_file",
 ]);
+
+const CUSTOMER_DATA_ACTIONS = new Set<PrivacyAction>(["read_customer_profile", "send_customer_data", "send_file", "send_screenshot", "persist_sensitive_trace"]);
 
 const SECRET_CATEGORIES = new Set<DataCategory>([
   "otp",
@@ -151,6 +159,10 @@ function validateRequest(request: PrivacyRequest): string | null {
   if (typeof request.operationId !== "string" || !request.operationId.trim()) return "missing_operation_id";
   if (typeof request.workspaceId !== "string" || !request.workspaceId.trim()) return "missing_workspace_id";
   if (typeof request.userId !== "string" || !request.userId.trim()) return "missing_user_id";
+  if (CUSTOMER_DATA_ACTIONS.has(request.action)) {
+    if (typeof request.dataSubjectId !== "string" || !request.dataSubjectId.trim()) return "missing_data_subject";
+    if (request.dataSubjectConsentConfirmed !== true) return "data_subject_consent_not_confirmed";
+  }
   if (typeof request.purpose !== "string" || !/^[a-z][a-z0-9_.-]{1,79}$/.test(request.purpose)) return "invalid_purpose";
   if (!Array.isArray(request.dataCategories) || request.dataCategories.length === 0) return "missing_data_categories";
   if (request.dataCategories.some((item) => !VALID_CATEGORIES.has(item))) return "invalid_data_category";
@@ -211,6 +223,8 @@ export function evaluatePrivacyRequest(
     if (!Number.isFinite(grant.expiresAt) || grant.expiresAt <= now || grant.expiresAt <= grant.createdAt) return false;
     if (!grant.id || grant.workspaceId !== request.workspaceId || grant.userId !== request.userId) return false;
     if (grant.action !== request.action || grant.purpose !== request.purpose) return false;
+    if ((grant.dataSubjectId || undefined) !== (request.dataSubjectId || undefined)) return false;
+    if (grant.dataSubjectConsentConfirmed !== request.dataSubjectConsentConfirmed) return false;
     if ((grant.recipientId || undefined) !== requestRecipientId) return false;
     if ((grant.recipientEndpoint || undefined) !== requestEndpoint) return false;
     const grantOrigin = grant.sourceOrigin ? normalizeOrigin(grant.sourceOrigin) : undefined;
