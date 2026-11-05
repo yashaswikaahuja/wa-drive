@@ -11,6 +11,8 @@ const base: PrivacyRequest = {
   action: "send_customer_data",
   purpose: "form_assistance",
   operationId: "op-1",
+  workspaceId: "workspace-1",
+  userId: "operator-1",
   sourceOrigin: "https://example.gov.in/path",
   recipient: { id: "openrouter", displayName: "OpenRouter", endpoint: "https://openrouter.ai/api/v1/chat/completions" },
   dataCategories: ["customer_identity", "date_of_birth"],
@@ -19,7 +21,8 @@ const base: PrivacyRequest = {
 
 const grant: ConsentGrant = {
   id: "consent-1",
-  subjectId: "operator-1",
+  workspaceId: "workspace-1",
+  userId: "operator-1",
   action: "send_customer_data",
   purpose: "form_assistance",
   recipientId: "openrouter",
@@ -42,6 +45,9 @@ assert.equal(evaluatePrivacyRequest(base, [], now).decision, "consent_required")
 assert.equal(evaluatePrivacyRequest(base, [{ ...grant, affirmative: false }], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest(base, [{ ...grant, expiresAt: now }], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest(base, [{ ...grant, revokedAt: now - 1 }], now).decision, "consent_required");
+assert.equal(evaluatePrivacyRequest({ ...base, userId: "other-user" }, [grant], now).decision, "consent_required");
+assert.equal(evaluatePrivacyRequest({ ...base, workspaceId: "other-workspace" }, [grant], now).decision, "consent_required");
+assert.equal(evaluatePrivacyRequest({ ...base, fields: ["full_name", "dob", "aadhaar_number"] }, [grant], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest({ ...base, purpose: "other_purpose" }, [grant], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest({ ...base, recipient: { ...base.recipient!, id: "other-provider" } }, [grant], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest({ ...base, dataCategories: ["customer_identity"] }, [grant], now).decision, "allow");
