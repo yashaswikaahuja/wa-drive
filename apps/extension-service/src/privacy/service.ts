@@ -415,6 +415,19 @@ export async function setWorkspaceProfilePolicy(workspaceId: string, userId: str
      RETURNING allow_mcp_profile_read AS "allowMcpProfileRead", updated_at AS "updatedAt"`,
     [workspaceId, userId, enabled],
   );
+  if (!enabled) {
+    await pool.query(
+      `UPDATE privacy_consents SET revoked_at = now()
+       WHERE workspace_id = $1 AND action = 'read_customer_profile'
+         AND recipient_endpoint LIKE 'mcp-session:%' AND revoked_at IS NULL`,
+      [workspaceId],
+    );
+    await pool.query(
+      `UPDATE privacy_profile_read_requests SET status = 'rejected', decided_at = now()
+       WHERE workspace_id = $1 AND status = 'pending'`,
+      [workspaceId],
+    );
+  }
   return rows[0];
 }
 
@@ -442,6 +455,19 @@ export async function setMcpProfileSessionPermission(
                profile_access_enabled AS "profileAccessEnabled", expires_at AS "expiresAt"`,
     [enabled, sessionId, workspaceId, userId],
   );
+  if (rows.length && !enabled) {
+    await pool.query(
+      `UPDATE privacy_consents SET revoked_at = now()
+       WHERE workspace_id = $1 AND user_id = $2
+         AND recipient_endpoint = $3 AND action = 'read_customer_profile' AND revoked_at IS NULL`,
+      [workspaceId, userId, `mcp-session:${sessionId}`],
+    );
+    await pool.query(
+      `UPDATE privacy_profile_read_requests SET status = 'rejected', decided_at = now()
+       WHERE workspace_id = $1 AND user_id = $2 AND mcp_session_id = $3 AND status = 'pending'`,
+      [workspaceId, userId, sessionId],
+    );
+  }
   return rows[0] || null;
 }
 
@@ -536,8 +562,8 @@ export async function decideProfileReadRequest(input: {
          VALUES ($1,$2,$3,$4,true,'read_customer_profile','form_filling',$5,$6,$7::jsonb,$8::jsonb,
                  true,to_timestamp($9 / 1000.0),to_timestamp($10 / 1000.0))`,
         [consentId, input.workspaceId, input.userId, row.data_subject_id,
-          row.mcp_client_id, `mcp-session:${row.mcp_session_id}`, row.data_categories,
-          row.fields, now, now + 5 * 60 * 1000],
+          row.mcp_client_id, `mcp-session:${row.mcp_session_id}`, JSON.stringify(row.data_categories),
+          JSON.stringify(row.fields), now, now + 5 * 60 * 1000],
       );
       await client.query(
         `UPDATE privacy_profile_read_requests SET status = 'approved', decided_at = now() WHERE id = $1`,
