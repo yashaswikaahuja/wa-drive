@@ -95,6 +95,7 @@ export default function Settings() {
     try {
       const r = await api.patch('/privacy/profile-policy', { allowMcpProfileRead: enabled }, { skipErrorToast: true } as any);
       setProfilePolicy(r.data?.allowMcpProfileRead === true);
+      loadProfileConsents();
       toast.success(enabled ? 'MCP profile access enabled for this workspace' : 'MCP profile access disabled');
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Could not update privacy policy');
