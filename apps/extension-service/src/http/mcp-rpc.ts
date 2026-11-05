@@ -79,16 +79,19 @@ const tools = [
   },
   {
     name: 'list_profiles',
-    description: 'List customer profiles in this workspace. Use an id with read_profile or fill.',
+    description: 'List customer profiles in this workspace. Returns profile id, customer display name, and only the last four phone digits for disambiguation. Full phone numbers and other profile fields are never returned; use fill with an id to fill a page.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'read_profile',
-    description: 'Read one customer profile and the field values the extension Fill uses.',
+    description: 'Read selected fields from one customer profile for visual/manual form filling. Requires workspace admin policy, operator-enabled access for this MCP client session, and a just-in-time operator approval for this customer and exact field list. Never returns passwords, OTPs, CAPTCHA answers, or payment credentials.',
     inputSchema: {
       type: 'object',
-      properties: { profileId: { type: 'string' } },
-      required: ['profileId'],
+      properties: {
+        profileId: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 80 },
+      },
+      required: ['profileId', 'fields'],
       additionalProperties: false,
     },
   },
@@ -107,7 +110,7 @@ const tools = [
   },
   {
     name: 'snapshot',
-    description: 'Photograph the open page so you can see the GUI. Omit scope for the visible screen. scope "page" stitches the whole page, capped at six screens. Pass selector (from read_form) or rect {x, y, width, height} in visible-screen CSS pixels to photograph one area. The JPEG may be smaller than the screen: width/height are JPEG pixels, cssWidth/cssHeight are CSS pixels, scaleX/scaleY convert JPEG coordinates to mouse_click CSS pixels (cssX = imageX * scaleX). Does not type or click.',
+    description: 'Screenshot transfer is disabled until trusted redaction and consent enforcement are implemented. This tool currently returns a privacy denial. Omit scope for the visible screen. scope "page" stitches the whole page, capped at six screens. Pass selector (from read_form) or rect {x, y, width, height} in visible-screen CSS pixels to photograph one area. The JPEG may be smaller than the screen: width/height are JPEG pixels, cssWidth/cssHeight are CSS pixels, scaleX/scaleY convert JPEG coordinates to mouse_click CSS pixels (cssX = imageX * scaleX). Does not type or click.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -272,26 +275,7 @@ function toolText(payload: any, isError: boolean) {
   };
 }
 
-function withoutImage(payload: any) {
-  if (!payload || typeof payload !== 'object') return payload;
-  const copy = Object.assign({}, payload);
-  if (copy.result && typeof copy.result === 'object') {
-    copy.result = Object.assign({}, copy.result);
-    delete copy.result.image;
-  }
-  return copy;
-}
-
-function toolSnapshot(payload: any, isError: boolean) {
-  const result = payload && payload.result;
-  const raw = result && typeof result.image === 'string' ? result.image : '';
-  const data = raw.replace(/^data:image\/\w+;base64,/, '');
-  const content: any[] = [{ type: 'text', text: JSON.stringify(withoutImage(payload), null, 2) }];
-  if (data) content.push({ type: 'image', data, mimeType: (result && result.mimeType) || 'image/jpeg' });
-  return { content, isError: isError || !data };
-}
-
-export async function respondToMcp(message: any, workspaceId: string, run: (workspaceId: string, body: any) => Promise<{ status: number, payload: any }>, profiles?: { listProfiles?: (workspaceId: string) => Promise<any>, readProfile?: (workspaceId: string, profileId: string) => Promise<any> }) {
+export async function respondToMcp(message: any, workspaceId: string, run: (workspaceId: string, body: any) => Promise<{ status: number, payload: any }>, profiles?: { listProfiles?: (workspaceId: string) => Promise<any>; readProfile?: (profileId: string, fields: string[]) => Promise<any> }) {
   if (!message || typeof message !== 'object' || Array.isArray(message)) {
     return { kind: 'json' as const, status: 200, body: rpcError(null, -32600, 'invalid request') };
   }
@@ -323,8 +307,8 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
           'Stop at CAPTCHA, OTP, and payment. Do not solve a CAPTCHA and do not invent card numbers, UPI ids, or OTPs. Tell the operator what is on screen.',
           'On an IRCTC train list, Book Now stays inactive until a class and an availability cell have been clicked. Read between those clicks.',
           'Dropdowns: if read_form includes options, fill_form with that type and value equal to one option. If options is null, click the dropdown, read_form, then click the choice. Read again before a dependent dropdown such as District after State.',
-          'list_profiles and read_profile show the customers in this workspace. fill runs the extension Fill button for one profileId on the open page. It uses saved mappings and that profile. Call it once, then read_form to see what landed.',
-          'snapshot photographs the GUI when read_form is not enough. Call it with no arguments for the visible screen, scope page for the whole page, or a selector or rect for one area. It does not type or click. The JPEG can be smaller than the screen: mouse_click x,y are CSS pixels, cssX = imageX * scaleX from the snapshot result.',
+          'list_profiles returns profile id, customer display name, and only the last four phone digits. read_profile is available only after workspace policy, operator session permission, and just-in-time approval for the selected customer and exact fields. If approval is pending, ask the operator to approve it in the CyberControl extension, then retry. Prefer local fill when possible.',
+          'snapshot image transfer is currently disabled by the privacy boundary. Do not try alternate screenshot routes or request raw page images.',
           'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector; it never uses a left nav, and to bottom stays on the window so infinite pages can grow. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. action hover or drag on mouse_click works even when hover and drag are missing from the tool list. hover moves the mouse over a point or selector. drag moves from x,y to x2,y2 or from selector to toSelector and fires HTML5 dragstart/drop. click also finds visible links by text; a link that navigates is success (moved true) even if the old frame is gone. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first; arrows move a range slider. read_form includes iframe fields with frameId, hover figures (type hover), drag handles (type drag), and drop targets (type drop); duplicate ids in hidden tab panes are omitted. One browser task at a time per workspace, including fill and scroll. copy frameId on fill_form, click, keyboard, mouse_click, hover, and drag. After any of those, read_form or snapshot before the next click or fill.',
         ].join(' '),
       }),
@@ -366,14 +350,30 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
     if (name === 'list_profiles') {
       if (!profiles || !profiles.listProfiles) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profiles_unavailable' }, true)) };
       const rows = await profiles.listProfiles(workspaceId);
-      return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ profiles: rows }, false)) };
+      const safeProfiles = (Array.isArray(rows) ? rows : []).map((row: any) => ({
+        id: String(row?.id || ''),
+        displayLabel: String(row?.displayLabel || row?.name || 'Customer'),
+        phoneLast4: row?.phoneLast4 == null || !/^\d{4}$/.test(String(row.phoneLast4))
+          ? null
+          : String(row.phoneLast4),
+      })).filter((row: any) => row.id);
+      return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ profiles: safeProfiles }, false)) };
     }
     if (name === 'read_profile') {
-      if (!args.profileId) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profileId required' }, true)) };
-      if (!profiles || !profiles.readProfile) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profiles_unavailable' }, true)) };
-      const profile = await profiles.readProfile(workspaceId, String(args.profileId));
-      if (!profile) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profile_not_found' }, true)) };
-      return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(profile, false)) };
+      if (!profiles?.readProfile) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profile_read_unavailable' }, true)) };
+      }
+      if (typeof args.profileId !== 'string' || !args.profileId.trim() ||
+          !Array.isArray(args.fields) || !args.fields.length || args.fields.length > 80 ||
+          args.fields.some((field: any) => typeof field !== 'string' || !field.trim() || field.length > 128)) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profileId_and_nonempty_fields_required' }, true)) };
+      }
+      try {
+        const result = await profiles.readProfile(args.profileId, args.fields);
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(result, result?.error !== undefined)) };
+      } catch (error: any) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profile_read_failed' }, true)) };
+      }
     }
     if (name === 'fill') {
       if (!args.profileId) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profileId required' }, true)) };
@@ -381,15 +381,12 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
       return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(out.payload, out.status >= 400)) };
     }
     if (name === 'snapshot') {
-      const hasArea = !!(args.selector || (args.rect && Number(args.rect.width) > 1 && Number(args.rect.height) > 1));
-      const out = await run(workspaceId, {
-        task: 'snapshot',
-        tabId: args.tabId || null,
-        scope: hasArea ? 'area' : (args.scope === 'page' ? 'page' : 'viewport'),
-        selector: args.selector || '',
-        rect: args.rect || null,
-      });
-      return { kind: 'json' as const, status: 200, body: rpcResult(id, toolSnapshot(out.payload, out.status >= 400)) };
+      // Fail closed at the MCP egress boundary. No screenshot task is executed,
+      // so raw image bytes cannot be returned to an MCP client.
+      return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({
+        error: 'privacy_boundary_blocked',
+        message: 'Screenshot transfer is disabled until trusted redaction and verifiable consent are enforced before egress.',
+      }, true)) };
     }
     if (name === 'list_tabs') {
       const out = await run(workspaceId, { task: 'list_tabs' });

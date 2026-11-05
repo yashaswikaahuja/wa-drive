@@ -8,6 +8,11 @@ const router = Router();
 export async function listWorkspaceProfiles(workspaceId: string) {
   const { rows } = await pool.query(`
     SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
+           CASE
+             WHEN length(regexp_replace(COALESCE(primary_contact_phone, ''), '[^0-9]', '', 'g')) >= 4
+             THEN right(regexp_replace(COALESCE(primary_contact_phone, ''), '[^0-9]', '', 'g'), 4)
+             ELSE NULL
+           END AS "phoneLast4",
            relationship, updated_at AS "updatedAt"
     FROM profiles
     WHERE workspace_id = $1 AND deleted_at IS NULL

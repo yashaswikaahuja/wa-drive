@@ -712,6 +712,144 @@ async function init() {
 
   // Profiles stay on HTTPS (Stage A/B live socket = presence + fill_debug only — not CRUD)
   await loadProfilesHttps(data);
+  await refreshMcpPrivacy(data);
+  setInterval(() => {
+    if (document.visibilityState === 'visible') void refreshMcpPrivacy();
+  }, 5000);
+}
+
+/** Read and render the workspace gate, per-MCP-session operator switches, and pending approvals. */
+async function refreshMcpPrivacy(credentials?: any) {
+  const policyEl = document.getElementById('mcp-policy-state');
+  const sessionsEl = document.getElementById('mcp-sessions');
+  const requestsEl = document.getElementById('mcp-requests');
+  if (!policyEl || !sessionsEl || !requestsEl) return;
+  const creds = credentials || await chrome.storage.local.get(['accessToken', 'backendUrl']);
+  if (!creds.accessToken || !creds.backendUrl) return;
+  const base = String(creds.backendUrl).replace(/\/$/, '');
+  const headers = { Authorization: 'Bearer ' + creds.accessToken };
+  try {
+    const [policyRes, sessionsRes, requestsRes] = await Promise.all([
+      fetch(base + '/privacy/profile-policy', { headers }),
+      fetch(base + '/privacy/mcp-sessions', { headers }),
+      fetch(base + '/privacy/profile-read-requests', { headers }),
+    ]);
+    if (!policyRes.ok || !sessionsRes.ok || !requestsRes.ok) throw new Error('privacy_controls_unavailable');
+    const policy = await policyRes.json();
+    const sessionsBody = await sessionsRes.json();
+    const requestsBody = await requestsRes.json();
+    const enabled = policy.allowMcpProfileRead === true;
+    policyEl.innerHTML = enabled
+      ? '<span style="color:hsl(var(--pt-success))">Workspace policy: enabled</span> · Each client session still needs operator approval.'
+      : '<span style="color:hsl(var(--pt-danger))">Workspace policy: disabled</span> · Ask a workspace admin to enable it in Hub Settings.';
+    const sessions = Array.isArray(sessionsBody.sessions) ? sessionsBody.sessions : [];
+    sessionsEl.innerHTML = sessions.length ? sessions.map((session) => {
+      const active = session.profileAccessEnabled === true;
+      const disabled = !enabled && !active;
+      return `<div style="border:1px solid hsl(var(--pt-border));border-radius:8px;padding:8px;display:flex;align-items:center;gap:8px">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:11px;font-weight:650;color:hsl(var(--pt-ink))">${escapeHtml(session.clientName || 'MCP client')}</div>
+          <div class="pt-muted" style="font-size:10px">${active ? 'Session access enabled' : 'Session access disabled'}</div>
+        </div>
+        <button type="button" data-mcp-session="${escapeHtml(session.sessionId)}" data-enabled="${active ? 'false' : 'true'}"
+          ${disabled ? 'disabled' : ''} style="font-size:10px;padding:5px 8px;border-radius:7px;border:1px solid hsl(var(--pt-border));background:${active ? 'hsl(var(--pt-secondary))' : 'hsl(var(--pt-marigold))'};color:${active ? 'hsl(var(--pt-ink))' : '#20170e'}">
+          ${active ? 'Disable' : 'Enable'}
+        </button>
+      </div>`;
+    }).join('') : '<div class="pt-muted" style="font-size:11px">No connected MCP client sessions yet.</div>';
+    const requests = Array.isArray(requestsBody.requests) ? requestsBody.requests : [];
+    requestsEl.innerHTML = requests.length ? '<div style="font-size:11px;font-weight:700;color:hsl(var(--pt-ink))">Pending customer-data approvals</div>' + requests.map((request) => {
+      const fields = Array.isArray(request.fields) ? request.fields : [];
+      const categories = Array.isArray(request.dataCategories) ? request.dataCategories : [];
+      return `<div style="border:1px solid hsl(var(--pt-warning));border-radius:8px;padding:9px;display:grid;gap:6px">
+        <div style="font-size:11px;font-weight:700;color:hsl(var(--pt-ink))">${escapeHtml(request.profileLabel || 'Customer')}</div>
+        <div class="pt-muted" style="font-size:10px">Client: ${escapeHtml(request.clientName || 'MCP client')}</div>
+        <div style="font-size:10px;color:hsl(var(--pt-ink-soft));overflow-wrap:anywhere">Fields: ${escapeHtml(fields.join(', '))}</div>
+        <div class="pt-muted" style="font-size:10px">Categories: ${escapeHtml(categories.join(', '))}</div>
+        <label style="display:flex;gap:6px;align-items:flex-start;font-size:10px;color:hsl(var(--pt-ink-soft))">
+          <input type="checkbox" data-mcp-confirm="${escapeHtml(request.id)}" style="margin-top:1px">
+          I have informed this customer and they agreed to share these fields with this MCP client for form filling.
+        </label>
+        <div style="display:flex;gap:6px">
+          <button type="button" data-mcp-approve="${escapeHtml(request.id)}" disabled
+            style="flex:1;font-size:10px;padding:6px;border-radius:7px;background:hsl(var(--pt-marigold));color:#20170e">Approve for 5 minutes</button>
+          <button type="button" data-mcp-reject="${escapeHtml(request.id)}"
+            style="font-size:10px;padding:6px;border-radius:7px;border:1px solid hsl(var(--pt-border));color:hsl(var(--pt-ink))">Reject</button>
+        </div>
+      </div>`;
+    }).join('') : '';
+    const privacyPanel = document.getElementById('mcp-privacy');
+    if (privacyPanel && requests.length) (privacyPanel as HTMLDetailsElement).open = true;
+  } catch (error) {
+    policyEl.textContent = 'Could not load MCP privacy controls. Profile reads remain blocked unless the server confirms permission.';
+    sessionsEl.innerHTML = '';
+    requestsEl.innerHTML = '';
+    console.warn('[CC privacy] controls unavailable', error);
+  }
+}
+
+async function updateMcpPrivacy(path, body) {
+  const creds = await chrome.storage.local.get(['accessToken', 'backendUrl']);
+  if (!creds.accessToken || !creds.backendUrl) throw new Error('Sign in required');
+  const response = await fetch(String(creds.backendUrl).replace(/\/$/, '') + path, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + creds.accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Privacy setting update failed');
+  return result;
+}
+
+const mcpSessionsEl = document.getElementById('mcp-sessions');
+if (mcpSessionsEl) mcpSessionsEl.addEventListener('click', async (event: any) => {
+  const button = event.target?.closest?.('[data-mcp-session]');
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await updateMcpPrivacy('/privacy/mcp-sessions/' + encodeURIComponent(button.dataset.mcpSession) + '/profile-access', {
+      enabled: button.dataset.enabled === 'true',
+    });
+    await refreshMcpPrivacy();
+  } catch (error: any) {
+    showStatus(error.message || 'Could not update MCP session', CC.danger);
+    button.disabled = false;
+  }
+});
+
+const mcpRequestsEl = document.getElementById('mcp-requests');
+if (mcpRequestsEl) {
+  mcpRequestsEl.addEventListener('change', (event: any) => {
+    const checkbox = event.target?.closest?.('[data-mcp-confirm]');
+    if (!checkbox) return;
+    const approve = mcpRequestsEl.querySelector('[data-mcp-approve="' + CSS.escape(checkbox.dataset.mcpConfirm) + '"]') as HTMLButtonElement | null;
+    if (approve) approve.disabled = !checkbox.checked;
+  });
+  mcpRequestsEl.addEventListener('click', async (event: any) => {
+    const approve = event.target?.closest?.('[data-mcp-approve]');
+    const reject = event.target?.closest?.('[data-mcp-reject]');
+    const button = approve || reject;
+    if (!button) return;
+    const requestId = button.dataset.mcpApprove || button.dataset.mcpReject;
+    const confirm = mcpRequestsEl.querySelector('[data-mcp-confirm="' + CSS.escape(requestId) + '"]') as HTMLInputElement | null;
+    if (approve && !confirm?.checked) return;
+    button.disabled = true;
+    try {
+      const creds = await chrome.storage.local.get(['accessToken', 'backendUrl']);
+      const response = await fetch(String(creds.backendUrl).replace(/\/$/, '') + '/privacy/profile-read-requests/' + encodeURIComponent(requestId) + '/decision', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + creds.accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approve: !!approve, customerInformed: !!(approve && confirm?.checked) }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Approval decision failed');
+      showStatus(approve ? 'Customer profile read approved for 5 minutes. Ask the MCP agent to retry.' : 'Profile read request rejected.', approve ? CC.success : CC.warning);
+      await refreshMcpPrivacy();
+    } catch (error: any) {
+      showStatus(error.message || 'Could not decide profile request', CC.danger);
+      button.disabled = false;
+    }
+  });
 }
 
 /** Prefer live profiles_list; HTTPS /profiles only as fallback. */

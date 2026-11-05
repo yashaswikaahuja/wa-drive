@@ -23,6 +23,9 @@ export function userFromAuthorization(authHeader: any) {
         userId: decoded.userId,
         workspaceId: decoded.workspaceId,
         role: decoded.role,
+        mcpClientId: typeof decoded.mcpClientId === 'string' ? decoded.mcpClientId : null,
+        mcpClientName: typeof decoded.mcpClientName === 'string' ? decoded.mcpClientName : null,
+        mcpSessionId: typeof decoded.mcpSessionId === 'string' ? decoded.mcpSessionId : null,
       },
     };
   } catch (e: any) {
@@ -38,6 +41,12 @@ export function userFromAuthorization(authHeader: any) {
 export function authMiddleware( req: any, res: any, next: any) {
   const parsed = userFromAuthorization(req.headers.authorization || '');
   if (!parsed.ok) return res.status(401).json({ error: parsed.error });
+  // MCP access tokens are scoped to POST /api/mcp only. Do not accept them on
+  // ordinary REST routes such as /api/profiles/:id or /api/privacy: that would
+  // let an MCP client bypass read_profile consent or approve its own request.
+  if (parsed.user.mcpClientId || parsed.user.mcpSessionId) {
+    return res.status(403).json({ error: 'mcp_token_not_allowed_for_rest_api' });
+  }
   req.user = parsed.user;
   next();
 }
