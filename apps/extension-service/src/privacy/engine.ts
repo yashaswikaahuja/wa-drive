@@ -98,7 +98,7 @@ const EXTERNAL_ACTIONS = new Set<PrivacyAction>([
   "send_file",
 ]);
 
-const CUSTOMER_DATA_ACTIONS = new Set<PrivacyAction>(["read_customer_profile", "send_customer_data", "send_file", "send_screenshot", "persist_sensitive_trace"]);
+const CUSTOMER_DATA_ACTIONS = new Set<PrivacyAction>(["read_customer_profile", "capture_screenshot", "send_screenshot", "send_page_content", "send_customer_data", "send_file", "persist_sensitive_trace"]);
 
 const SECRET_CATEGORIES = new Set<DataCategory>([
   "otp",
@@ -162,6 +162,7 @@ function validateRequest(request: PrivacyRequest): string | null {
   if (CUSTOMER_DATA_ACTIONS.has(request.action)) {
     if (typeof request.dataSubjectId !== "string" || !request.dataSubjectId.trim()) return "missing_data_subject";
     if (request.dataSubjectConsentConfirmed !== true) return "data_subject_consent_not_confirmed";
+    if (request.action !== "capture_screenshot" && request.action !== "send_screenshot" && (!Array.isArray(request.fields) || request.fields.length === 0)) return "missing_field_scope";
   }
   if (typeof request.purpose !== "string" || !/^[a-z][a-z0-9_.-]{1,79}$/.test(request.purpose)) return "invalid_purpose";
   if (!Array.isArray(request.dataCategories) || request.dataCategories.length === 0) return "missing_data_categories";
