@@ -107,6 +107,35 @@ export function ensurePrivacySchema() {
 
     CREATE INDEX IF NOT EXISTS idx_privacy_audit_scope
       ON privacy_audit_events (workspace_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS workspace_privacy_policies (
+      workspace_id text PRIMARY KEY,
+      allow_mcp_profile_read boolean NOT NULL DEFAULT false,
+      updated_by text,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS privacy_profile_read_requests (
+      id uuid PRIMARY KEY,
+      workspace_id text NOT NULL,
+      user_id text NOT NULL,
+      mcp_session_id text NOT NULL,
+      mcp_client_id text NOT NULL,
+      mcp_client_name text NOT NULL,
+      data_subject_id text NOT NULL,
+      profile_label text NOT NULL,
+      fields jsonb NOT NULL,
+      data_categories jsonb NOT NULL,
+      purpose text NOT NULL DEFAULT 'form_filling',
+      status text NOT NULL DEFAULT 'pending',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      expires_at timestamptz NOT NULL,
+      decided_at timestamptz,
+      CHECK (status IN ('pending','approved','rejected','expired'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_profile_read_requests_pending
+      ON privacy_profile_read_requests (workspace_id, user_id, expires_at)
+      WHERE status = 'pending';
   `).then(() => undefined).catch((error) => {
     privacySchemaReady = null;
     throw error;
@@ -345,4 +374,190 @@ export async function consumeAuthorization(input: {
     decision: "allow", reason: "single_use_authorization_consumed",
   });
   return { authorizationId: result.id, request: result.request_json };
+}
+
+
+export async function getWorkspaceProfilePolicy(workspaceId: string) {
+  await ensurePrivacySchema();
+  await pool.query(
+    `INSERT INTO workspace_privacy_policies (workspace_id, allow_mcp_profile_read)
+     VALUES ($1, false) ON CONFLICT (workspace_id) DO NOTHING`,
+    [workspaceId],
+  );
+  const { rows } = await pool.query(
+    'SELECT allow_mcp_profile_read AS "allowMcpProfileRead", updated_at AS "updatedAt" FROM workspace_privacy_policies WHERE workspace_id = $1',
+    [workspaceId],
+  );
+  return rows[0] || { allowMcpProfileRead: false, updatedAt: null };
+}
+
+export async function setWorkspaceProfilePolicy(workspaceId: string, userId: string, enabled: boolean) {
+  await ensurePrivacySchema();
+  const { rows } = await pool.query(
+    `INSERT INTO workspace_privacy_policies (workspace_id, allow_mcp_profile_read, updated_by, updated_at)
+     VALUES ($1,$2,$3,now())
+     ON CONFLICT (workspace_id) DO UPDATE
+       SET allow_mcp_profile_read = EXCLUDED.allow_mcp_profile_read,
+           updated_by = EXCLUDED.updated_by, updated_at = now()
+     RETURNING allow_mcp_profile_read AS "allowMcpProfileRead", updated_at AS "updatedAt"`,
+    [workspaceId, userId, enabled],
+  );
+  return rows[0];
+}
+
+export async function listMcpProfileSessions(workspaceId: string, userId: string) {
+  await ensurePrivacySchema();
+  const { rows } = await pool.query(
+    `SELECT session_id AS "sessionId", client_id AS "clientId", client_name AS "clientName",
+            profile_access_enabled AS "profileAccessEnabled", expires_at AS "expiresAt"
+     FROM mcp_oauth_sessions
+     WHERE workspace_id = $1 AND user_id = $2 AND expires_at > now()
+     ORDER BY created_at DESC LIMIT 50`,
+    [workspaceId, userId],
+  );
+  return rows;
+}
+
+export async function setMcpProfileSessionPermission(
+  workspaceId: string, userId: string, sessionId: string, enabled: boolean,
+) {
+  await ensurePrivacySchema();
+  const { rows } = await pool.query(
+    `UPDATE mcp_oauth_sessions SET profile_access_enabled = $1
+     WHERE session_id = $2 AND workspace_id = $3 AND user_id = $4 AND expires_at > now()
+     RETURNING session_id AS "sessionId", client_name AS "clientName",
+               profile_access_enabled AS "profileAccessEnabled", expires_at AS "expiresAt"`,
+    [enabled, sessionId, workspaceId, userId],
+  );
+  return rows[0] || null;
+}
+
+export async function createProfileReadRequest(input: {
+  workspaceId: string; userId: string; sessionId: string; clientId: string; clientName: string;
+  profileId: string; profileLabel: string; fields: string[]; dataCategories: string[];
+}) {
+  await ensurePrivacySchema();
+  const id = randomUUID();
+  const { rows } = await pool.query(
+    `INSERT INTO privacy_profile_read_requests
+      (id, workspace_id, user_id, mcp_session_id, mcp_client_id, mcp_client_name,
+       data_subject_id, profile_label, fields, data_categories, expires_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,now() + interval '5 minutes')
+     RETURNING id, profile_label AS "profileLabel", fields, data_categories AS "dataCategories", expires_at AS "expiresAt"`,
+    [id, input.workspaceId, input.userId, input.sessionId, input.clientId, input.clientName,
+      input.profileId, input.profileLabel, JSON.stringify(input.fields), JSON.stringify(input.dataCategories)],
+  );
+  await audit({
+    workspaceId: input.workspaceId, userId: input.userId, eventType: "profile_read_approval_requested",
+    operationId: id, request: {
+      action: "read_customer_profile", purpose: "form_filling", operationId: id,
+      workspaceId: input.workspaceId, userId: input.userId, dataSubjectId: input.profileId,
+      dataSubjectConsentConfirmed: false, recipient: { id: input.clientId, displayName: input.clientName, endpoint: `mcp-session:${input.sessionId}` },
+      dataCategories: input.dataCategories, fields: input.fields,
+    } as PrivacyRequest, decision: "consent_required", reason: "just_in_time_approval_required",
+  });
+  return rows[0];
+}
+
+export async function listProfileReadRequests(workspaceId: string, userId: string) {
+  await ensurePrivacySchema();
+  await pool.query(
+    `UPDATE privacy_profile_read_requests SET status = 'expired'
+     WHERE workspace_id = $1 AND user_id = $2 AND status = 'pending' AND expires_at <= now()`,
+    [workspaceId, userId],
+  );
+  const { rows } = await pool.query(
+    `SELECT id, mcp_client_name AS "clientName", data_subject_id AS "profileId",
+            profile_label AS "profileLabel", fields, data_categories AS "dataCategories",
+            created_at AS "createdAt", expires_at AS "expiresAt"
+     FROM privacy_profile_read_requests
+     WHERE workspace_id = $1 AND user_id = $2 AND status = 'pending' AND expires_at > now()
+     ORDER BY created_at ASC LIMIT 20`,
+    [workspaceId, userId],
+  );
+  return rows;
+}
+
+export async function decideProfileReadRequest(input: {
+  workspaceId: string; userId: string; requestId: string; approve: boolean; customerInformed: boolean;
+}) {
+  await ensurePrivacySchema();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const found = await client.query(
+      `SELECT * FROM privacy_profile_read_requests
+       WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+         AND status = 'pending' AND expires_at > now()
+       FOR UPDATE`,
+      [input.requestId, input.workspaceId, input.userId],
+    );
+    if (!found.rows.length) { await client.query("ROLLBACK"); return null; }
+    const row = found.rows[0];
+    if (input.approve && input.customerInformed !== true) {
+      await client.query("ROLLBACK");
+      return { error: "customer_confirmation_required" as const };
+    }
+    if (input.approve) {
+      const policy = await client.query(
+        'SELECT allow_mcp_profile_read FROM workspace_privacy_policies WHERE workspace_id = $1',
+        [input.workspaceId],
+      );
+      const session = await client.query(
+        `SELECT 1 FROM mcp_oauth_sessions
+         WHERE session_id = $1 AND workspace_id = $2 AND user_id = $3
+           AND profile_access_enabled = true AND expires_at > now()`,
+        [row.mcp_session_id, input.workspaceId, input.userId],
+      );
+      if (policy.rows[0]?.allow_mcp_profile_read !== true || !session.rows.length) {
+        await client.query("ROLLBACK");
+        return { error: "profile_access_policy_or_session_disabled" as const };
+      }
+      const now = Date.now();
+      const consentId = randomUUID();
+      await client.query(
+        `INSERT INTO privacy_consents
+          (id, workspace_id, user_id, data_subject_id, data_subject_consent_confirmed,
+           action, purpose, recipient_id, recipient_endpoint, data_categories, fields,
+           affirmative, created_at, expires_at)
+         VALUES ($1,$2,$3,$4,true,'read_customer_profile','form_filling',$5,$6,$7::jsonb,$8::jsonb,
+                 true,to_timestamp($9 / 1000.0),to_timestamp($10 / 1000.0))`,
+        [consentId, input.workspaceId, input.userId, row.data_subject_id,
+          row.mcp_client_id, `mcp-session:${row.mcp_session_id}`, row.data_categories,
+          row.fields, now, now + 5 * 60 * 1000],
+      );
+      await client.query(
+        `UPDATE privacy_profile_read_requests SET status = 'approved', decided_at = now() WHERE id = $1`,
+        [input.requestId],
+      );
+      await client.query("COMMIT");
+      await audit({
+        workspaceId: input.workspaceId, userId: input.userId, eventType: "profile_read_approved",
+        consentId, operationId: input.requestId,
+        request: {
+          action: "read_customer_profile", purpose: "form_filling", operationId: input.requestId,
+          workspaceId: input.workspaceId, userId: input.userId, dataSubjectId: row.data_subject_id,
+          dataSubjectConsentConfirmed: true,
+          recipient: { id: row.mcp_client_id, displayName: row.mcp_client_name, endpoint: `mcp-session:${row.mcp_session_id}` },
+          dataCategories: row.data_categories, fields: row.fields,
+        } as PrivacyRequest, decision: "allow", reason: "operator_approved_scoped_profile_read",
+      });
+      return { approved: true, expiresInMs: 5 * 60 * 1000 };
+    }
+    await client.query(
+      `UPDATE privacy_profile_read_requests SET status = 'rejected', decided_at = now() WHERE id = $1`,
+      [input.requestId],
+    );
+    await client.query("COMMIT");
+    await audit({
+      workspaceId: input.workspaceId, userId: input.userId, eventType: "profile_read_rejected",
+      operationId: input.requestId, decision: "deny", reason: "operator_rejected",
+    });
+    return { approved: false };
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw error;
+  } finally {
+    client.release();
+  }
 }
