@@ -94,6 +94,7 @@ export function ensurePrivacySchema() {
       action text,
       purpose text,
       recipient_id text,
+      recipient_endpoint text,
       source_origin text,
       data_categories jsonb,
       decision text NOT NULL,
@@ -101,7 +102,8 @@ export function ensurePrivacySchema() {
       created_at timestamptz NOT NULL DEFAULT now()
     );
     ALTER TABLE privacy_audit_events
-      ADD COLUMN IF NOT EXISTS data_subject_id text;
+      ADD COLUMN IF NOT EXISTS data_subject_id text,
+      ADD COLUMN IF NOT EXISTS recipient_endpoint text;
 
     CREATE INDEX IF NOT EXISTS idx_privacy_audit_scope
       ON privacy_audit_events (workspace_id, created_at DESC);
@@ -160,13 +162,13 @@ async function audit(input: {
   await pool.query(`
     INSERT INTO privacy_audit_events
       (workspace_id, user_id, data_subject_id, event_type, operation_id, consent_id, action, purpose,
-       recipient_id, source_origin, data_categories, decision, reason)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13)
+       recipient_id, recipient_endpoint, source_origin, data_categories, decision, reason)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14)
   `, [
     workspaceId, userId, request?.dataSubjectId || null, eventType, operationId || null, consentId || null,
     request?.action || null, request?.purpose || null, request?.recipient?.id || null,
-    request?.sourceOrigin || null, request ? JSON.stringify(request.dataCategories) : null,
-    decision, reason || null,
+    request?.recipient?.endpoint || null, request?.sourceOrigin || null,
+    request ? JSON.stringify(request.dataCategories) : null, decision, reason || null,
   ]);
 }
 
