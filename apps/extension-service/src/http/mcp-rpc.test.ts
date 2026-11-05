@@ -71,7 +71,7 @@ const listedProfiles = await respondToMcp({
   method: 'tools/call',
   params: { name: 'list_profiles', arguments: {} },
 }, 'ws-9', run, {
-  listProfiles: async (workspaceId) => [{ id: 'p1', name: 'Asha', displayLabel: 'Asha Kumar', phone: '9999999999', workspaceId }],
+  listProfiles: async (workspaceId) => [{ id: 'p1', name: 'Asha', displayLabel: 'Asha Kumar', phone: '9999999999', phoneLast4: '9999', workspaceId }],
 });
 const profileRows = JSON.parse(listedProfiles.body.result.content[0].text).profiles;
 assert.equal(profileRows[0].id, 'p1');
@@ -79,6 +79,8 @@ assert.equal(profileRows[0].displayLabel, 'Asha Kumar');
 assert.equal(profileRows[0].phone, undefined);
 assert.equal(profileRows[0].workspaceId, undefined);
 assert.equal(profileRows[0].name, undefined);
+assert.equal(profileRows[0].phoneLast4, '9999');
+assert.equal(profileRows[0].phoneLast4.length, 4);
 
 const filled = await respondToMcp({
   jsonrpc: '2.0',
