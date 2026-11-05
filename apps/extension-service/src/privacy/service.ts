@@ -35,8 +35,11 @@ function requestFromBody(body: any, workspaceId: string, userId: string): Privac
   } as PrivacyRequest;
 }
 
-export async function ensurePrivacySchema() {
-  await pool.query(`
+let privacySchemaReady: Promise<void> | null = null;
+
+export function ensurePrivacySchema() {
+  if (privacySchemaReady) return privacySchemaReady;
+  privacySchemaReady = pool.query(`
     CREATE TABLE IF NOT EXISTS privacy_consents (
       id uuid PRIMARY KEY,
       workspace_id text NOT NULL,
@@ -102,7 +105,11 @@ export async function ensurePrivacySchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_privacy_audit_scope
       ON privacy_audit_events (workspace_id, created_at DESC);
-  `);
+  `).then(() => undefined).catch((error) => {
+    privacySchemaReady = null;
+    throw error;
+  });
+  return privacySchemaReady;
 }
 
 function toGrant(row: any): ConsentGrant {
@@ -166,6 +173,7 @@ async function audit(input: {
 export async function createConsent(input: {
   workspaceId: string; userId: string; body: any;
 }) {
+  await ensurePrivacySchema();
   const { workspaceId, userId, body } = input;
   if (body?.affirmative !== true) {
     return { ok: false as const, status: 400, error: "explicit_affirmative_consent_required" };
@@ -218,6 +226,7 @@ export async function createConsent(input: {
 }
 
 export async function listConsents(workspaceId: string, userId: string) {
+  await ensurePrivacySchema();
   const { rows } = await pool.query(`
     SELECT * FROM privacy_consents
     WHERE workspace_id = $1 AND user_id = $2
@@ -227,6 +236,7 @@ export async function listConsents(workspaceId: string, userId: string) {
 }
 
 export async function revokeConsent(workspaceId: string, userId: string, consentId: string) {
+  await ensurePrivacySchema();
   const { rows } = await pool.query(`
     UPDATE privacy_consents SET revoked_at = now()
     WHERE id = $1 AND workspace_id = $2 AND user_id = $3 AND revoked_at IS NULL
@@ -243,6 +253,7 @@ export async function revokeConsent(workspaceId: string, userId: string, consent
 export async function issueAuthorization(input: {
   workspaceId: string; userId: string; body: any;
 }) {
+  await ensurePrivacySchema();
   const { workspaceId, userId, body } = input;
   const request = requestFromBody(body, workspaceId, userId);
   const client = await pool.connect();
@@ -301,6 +312,7 @@ export async function issueAuthorization(input: {
 export async function consumeAuthorization(input: {
   workspaceId: string; userId: string; token: string; operationId: string;
 }) {
+  await ensurePrivacySchema();
   const { workspaceId, userId, token, operationId } = input;
   if (typeof token !== "string" || token.length < 40 || token.length > 100 ||
       typeof operationId !== "string" || !operationId.trim()) return null;
