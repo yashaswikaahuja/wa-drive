@@ -13,6 +13,8 @@ const base: PrivacyRequest = {
   operationId: "op-1",
   workspaceId: "workspace-1",
   userId: "operator-1",
+  dataSubjectId: "profile-123",
+  dataSubjectConsentConfirmed: true,
   sourceOrigin: "https://example.gov.in/path",
   recipient: { id: "openrouter", displayName: "OpenRouter", endpoint: "https://openrouter.ai/api/v1/chat/completions" },
   dataCategories: ["customer_identity", "date_of_birth"],
@@ -23,6 +25,8 @@ const grant: ConsentGrant = {
   id: "consent-1",
   workspaceId: "workspace-1",
   userId: "operator-1",
+  dataSubjectId: "profile-123",
+  dataSubjectConsentConfirmed: true,
   action: "send_customer_data",
   purpose: "form_assistance",
   recipientId: "openrouter",
@@ -42,6 +46,11 @@ assert.deepEqual(evaluatePrivacyRequest(base, [grant], now), {
 });
 
 assert.equal(evaluatePrivacyRequest(base, [], now).decision, "consent_required");
+assert.equal(evaluatePrivacyRequest({ ...base, dataSubjectId: undefined }, [grant], now).reason, "missing_data_subject");
+assert.equal(evaluatePrivacyRequest({ ...base, dataSubjectConsentConfirmed: false }, [grant], now).reason, "data_subject_consent_not_confirmed");
+assert.equal(evaluatePrivacyRequest({ ...base, fields: [] }, [grant], now).reason, "missing_field_scope");
+assert.equal(evaluatePrivacyRequest({ ...base, dataSubjectId: "profile-other" }, [grant], now).decision, "consent_required");
+assert.equal(evaluatePrivacyRequest({ ...base, dataSubjectConsentConfirmed: false }, [grant], now).decision, "deny");
 assert.equal(evaluatePrivacyRequest(base, [{ ...grant, affirmative: false }], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest(base, [{ ...grant, expiresAt: now }], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest(base, [{ ...grant, revokedAt: now - 1 }], now).decision, "consent_required");
@@ -53,8 +62,8 @@ assert.equal(evaluatePrivacyRequest({ ...base, recipient: { ...base.recipient!, 
 assert.equal(evaluatePrivacyRequest({ ...base, dataCategories: ["customer_identity"] }, [grant], now).decision, "allow");
 assert.equal(evaluatePrivacyRequest({ ...base, dataCategories: ["government_id"] }, [grant], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest({ ...base, dataCategories: ["otp"] }, [grant], now).decision, "deny");
-assert.equal(evaluatePrivacyRequest({ ...base, action: "send_screenshot", dataCategories: ["screenshot"], redactionVerified: false }, [grant], now).decision, "deny");
-assert.equal(evaluatePrivacyRequest({ ...base, action: "send_screenshot", dataCategories: ["screenshot"], redactionVerified: true }, [grant], now).decision, "consent_required");
+assert.equal(evaluatePrivacyRequest({ ...base, action: "send_screenshot", dataCategories: ["screenshot"], redactionVerified: false }, [grant], now).reason, "screenshot_redaction_not_implemented");
+assert.equal(evaluatePrivacyRequest({ ...base, action: "send_screenshot", dataCategories: ["screenshot"], redactionVerified: true }, [grant], now).reason, "screenshot_redaction_not_implemented");
 assert.equal(evaluatePrivacyRequest({ ...base, sourceOrigin: "javascript:alert(1)" }, [grant], now).decision, "deny");
 assert.equal(isExternalPrivacyAction("send_file"), true);
 assert.equal(isExternalPrivacyAction("read_customer_profile"), false);

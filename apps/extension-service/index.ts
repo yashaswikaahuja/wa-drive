@@ -32,6 +32,8 @@ import syncRouter from './src/http/routes/sync.js';
 import fillRouter from './src/http/routes/fill.js';
 import browserTaskRouter from './src/http/routes/browser-task.js';
 import mcpRouter from './src/http/routes/mcp.js';
+import privacyRouter from './src/http/routes/privacy.js';
+import { ensurePrivacySchema } from './src/privacy/service.js';
 import { discoveryRouter } from './src/http/mcp-oauth.js';
 import { ensureSchema } from './src/db/store.js';
 import { pool } from './src/db/db.js';
@@ -93,6 +95,7 @@ app.use('/api/sync', syncRouter);
 app.use('/api', fillRouter);
 app.use('/api/browser-task', browserTaskRouter);
 app.use('/api/mcp', mcpRouter);
+app.use('/api/privacy', privacyRouter);
 app.use('/.well-known', discoveryRouter);
 
 // 404 fallthrough
@@ -130,5 +133,6 @@ server.listen(PORT, () => {
   console.log(`[extension-service] DATABASE_URL present: ${!!process.env.DATABASE_URL}`);
   console.log(`[extension-service] DATA_DIR: ${process.env.DATA_DIR || 'default ./data'}`);
   ensureSchema().catch((e) => console.error('[extension-service] ensureSchema on boot failed:', e.message));
+  ensurePrivacySchema().catch((e) => console.error('[extension-service] ensurePrivacySchema on boot failed:', e.message));
   ensureKnowledgeSchema().catch((e) => console.error('[extension-service] knowledge schema on boot failed:', e.message));
 });
