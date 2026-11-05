@@ -23,6 +23,9 @@ export function userFromAuthorization(authHeader: any) {
         userId: decoded.userId,
         workspaceId: decoded.workspaceId,
         role: decoded.role,
+        mcpClientId: typeof decoded.mcpClientId === 'string' ? decoded.mcpClientId : null,
+        mcpClientName: typeof decoded.mcpClientName === 'string' ? decoded.mcpClientName : null,
+        mcpSessionId: typeof decoded.mcpSessionId === 'string' ? decoded.mcpSessionId : null,
       },
     };
   } catch (e: any) {
