@@ -48,6 +48,7 @@ assert.deepEqual(evaluatePrivacyRequest(base, [grant], now), {
 assert.equal(evaluatePrivacyRequest(base, [], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest({ ...base, dataSubjectId: undefined }, [grant], now).reason, "missing_data_subject");
 assert.equal(evaluatePrivacyRequest({ ...base, dataSubjectConsentConfirmed: false }, [grant], now).reason, "data_subject_consent_not_confirmed");
+assert.equal(evaluatePrivacyRequest({ ...base, fields: [] }, [grant], now).reason, "missing_field_scope");
 assert.equal(evaluatePrivacyRequest({ ...base, dataSubjectId: "profile-other" }, [grant], now).decision, "consent_required");
 assert.equal(evaluatePrivacyRequest({ ...base, dataSubjectConsentConfirmed: false }, [grant], now).decision, "deny");
 assert.equal(evaluatePrivacyRequest(base, [{ ...grant, affirmative: false }], now).decision, "consent_required");
