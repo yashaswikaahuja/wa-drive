@@ -1,4 +1,5 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { hashAuthorizationToken } from "./token.js";
 import { pool } from "../db/db.js";
 import {
   evaluatePrivacyRequest,
@@ -9,10 +10,6 @@ import {
 const DEFAULT_CONSENT_TTL_MS = 15 * 60 * 1000;
 const MAX_CONSENT_TTL_MS = 24 * 60 * 60 * 1000;
 const AUTHORIZATION_TTL_MS = 60 * 1000;
-
-export function hashAuthorizationToken(token: string): string {
-  return createHash("sha256").update(token, "utf8").digest("hex");
-}
 
 export async function ensurePrivacySchema() {
   await pool.query(`
@@ -107,6 +104,8 @@ function publicConsent(row: any) {
     recipientId: row.recipient_id || null,
     recipientEndpoint: row.recipient_endpoint || null,
     sourceOrigin: row.source_origin || null,
+    dataSubjectId: row.data_subject_id || null,
+    dataSubjectConsentConfirmed: row.data_subject_consent_confirmed === true,
     dataCategories: row.data_categories,
     fields: row.fields,
     affirmative: row.affirmative,
@@ -123,11 +122,11 @@ async function audit(input: {
   const { workspaceId, userId, eventType, operationId, consentId, request, decision, reason } = input;
   await pool.query(`
     INSERT INTO privacy_audit_events
-      (workspace_id, user_id, event_type, operation_id, consent_id, action, purpose,
+      (workspace_id, user_id, data_subject_id, event_type, operation_id, consent_id, action, purpose,
        recipient_id, source_origin, data_categories, decision, reason)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13)
   `, [
-    workspaceId, userId, eventType, operationId || null, consentId || null,
+    workspaceId, userId, request?.dataSubjectId || null, eventType, operationId || null, consentId || null,
     request?.action || null, request?.purpose || null, request?.recipient?.id || null,
     request?.sourceOrigin || null, request ? JSON.stringify(request.dataCategories) : null,
     decision, reason || null,
@@ -153,6 +152,8 @@ export async function createConsent(input: {
     operationId: `consent-approval:${randomUUID()}`,
     workspaceId,
     userId,
+    dataSubjectId: body.dataSubjectId,
+    dataSubjectConsentConfirmed: body.dataSubjectConsentConfirmed,
     sourceOrigin: body.sourceOrigin,
     recipient: body.recipient,
     dataCategories: body.dataCategories,
@@ -161,7 +162,9 @@ export async function createConsent(input: {
   };
   const id = randomUUID();
   const candidate: ConsentGrant = {
-    id, workspaceId, userId, action: request.action, purpose: request.purpose,
+    id, workspaceId, userId, dataSubjectId: request.dataSubjectId,
+    dataSubjectConsentConfirmed: request.dataSubjectConsentConfirmed,
+    action: request.action, purpose: request.purpose,
     recipientId: request.recipient?.id, recipientEndpoint: request.recipient?.endpoint,
     sourceOrigin: request.sourceOrigin, dataCategories: request.dataCategories,
     fields: request.fields, createdAt: now, expiresAt: now + ttl,
@@ -288,6 +291,11 @@ export async function consumeAuthorization(input: {
     SET consumed_at = now()
     WHERE token_hash = $1 AND workspace_id = $2 AND user_id = $3
       AND operation_id = $4 AND consumed_at IS NULL AND expires_at > now()
+      AND EXISTS (
+        SELECT 1 FROM privacy_consents c
+        WHERE c.id = privacy_authorizations.consent_id
+          AND c.revoked_at IS NULL AND c.affirmative = true AND c.expires_at > now()
+      )
     RETURNING id, request_json, consent_id
   `, [tokenHash, workspaceId, userId, operationId]);
   if (!rows.length) {
