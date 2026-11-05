@@ -415,11 +415,6 @@ export async function setWorkspaceProfilePolicy(workspaceId: string, userId: str
      RETURNING allow_mcp_profile_read AS "allowMcpProfileRead", updated_at AS "updatedAt"`,
     [workspaceId, userId, enabled],
   );
-  await audit({
-    workspaceId, userId, eventType: "workspace_profile_policy_changed",
-    decision: enabled ? "allow" : "deny",
-    reason: enabled ? "workspace_admin_enabled_mcp_profile_read" : "workspace_admin_disabled_mcp_profile_read",
-  });
   if (!enabled) {
     await pool.query(
       `UPDATE privacy_consents SET revoked_at = now()
@@ -433,6 +428,11 @@ export async function setWorkspaceProfilePolicy(workspaceId: string, userId: str
       [workspaceId],
     );
   }
+  await audit({
+    workspaceId, userId, eventType: "workspace_profile_policy_changed",
+    decision: enabled ? "allow" : "deny",
+    reason: enabled ? "workspace_admin_enabled_mcp_profile_read" : "workspace_admin_disabled_mcp_profile_read",
+  });
   return rows[0];
 }
 
@@ -460,13 +460,6 @@ export async function setMcpProfileSessionPermission(
                profile_access_enabled AS "profileAccessEnabled", expires_at AS "expiresAt"`,
     [enabled, sessionId, workspaceId, userId],
   );
-  if (rows.length) {
-    await audit({
-      workspaceId, userId, eventType: "mcp_profile_session_permission_changed",
-      decision: enabled ? "allow" : "deny",
-      reason: enabled ? "operator_enabled_mcp_profile_read_for_session" : "operator_disabled_mcp_profile_read_for_session",
-    });
-  }
   if (rows.length && !enabled) {
     await pool.query(
       `UPDATE privacy_consents SET revoked_at = now()
@@ -479,6 +472,13 @@ export async function setMcpProfileSessionPermission(
        WHERE workspace_id = $1 AND user_id = $2 AND mcp_session_id = $3 AND status = 'pending'`,
       [workspaceId, userId, sessionId],
     );
+  }
+  if (rows.length) {
+    await audit({
+      workspaceId, userId, eventType: "mcp_profile_session_permission_changed",
+      decision: enabled ? "allow" : "deny",
+      reason: enabled ? "operator_enabled_mcp_profile_read_for_session" : "operator_disabled_mcp_profile_read_for_session",
+    });
   }
   return rows[0] || null;
 }
