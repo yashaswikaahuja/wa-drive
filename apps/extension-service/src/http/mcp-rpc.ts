@@ -262,26 +262,7 @@ function toolText(payload: any, isError: boolean) {
   };
 }
 
-function withoutImage(payload: any) {
-  if (!payload || typeof payload !== 'object') return payload;
-  const copy = Object.assign({}, payload);
-  if (copy.result && typeof copy.result === 'object') {
-    copy.result = Object.assign({}, copy.result);
-    delete copy.result.image;
-  }
-  return copy;
-}
-
-function toolSnapshot(payload: any, isError: boolean) {
-  const result = payload && payload.result;
-  const raw = result && typeof result.image === 'string' ? result.image : '';
-  const data = raw.replace(/^data:image\/\w+;base64,/, '');
-  const content: any[] = [{ type: 'text', text: JSON.stringify(withoutImage(payload), null, 2) }];
-  if (data) content.push({ type: 'image', data, mimeType: (result && result.mimeType) || 'image/jpeg' });
-  return { content, isError: isError || !data };
-}
-
-export async function respondToMcp(message: any, workspaceId: string, run: (workspaceId: string, body: any) => Promise<{ status: number, payload: any }>, profiles?: { listProfiles?: (workspaceId: string) => Promise<any>, readProfile?: (workspaceId: string, profileId: string) => Promise<any> }) {
+export async function respondToMcp(message: any, workspaceId: string, run: (workspaceId: string, body: any) => Promise<{ status: number, payload: any }>, profiles?: { listProfiles?: (workspaceId: string) => Promise<any> }) {
   if (!message || typeof message !== 'object' || Array.isArray(message)) {
     return { kind: 'json' as const, status: 200, body: rpcError(null, -32600, 'invalid request') };
   }
