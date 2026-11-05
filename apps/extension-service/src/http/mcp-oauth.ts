@@ -422,14 +422,14 @@ export function mountOAuth(router: any) {
       mcpClientName: row.client_name || 'MCP client',
       mcpSessionId: sessionId,
     }, secret, { expiresIn: '15m' });
-    if (row.refresh_token) {
-      const refreshHash = crypto.createHash('sha256').update(row.refresh_token).digest('hex');
-      await pool.query(`
-        INSERT INTO mcp_oauth_sessions
-          (session_id, client_id, client_name, user_id, workspace_id, role, refresh_token_hash)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-      `, [sessionId, row.client_id, row.client_name || 'MCP client', identityClaims.userId, identityClaims.workspaceId, identityClaims.role || null, refreshHash]);
-    }
+    const refreshHash = row.refresh_token
+      ? crypto.createHash('sha256').update(row.refresh_token).digest('hex')
+      : null;
+    await pool.query(`
+      INSERT INTO mcp_oauth_sessions
+        (session_id, client_id, client_name, user_id, workspace_id, role, refresh_token_hash)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `, [sessionId, row.client_id, row.client_name || 'MCP client', identityClaims.userId, identityClaims.workspaceId, identityClaims.role || null, refreshHash]);
     res.json({
       access_token: accessToken,
       token_type: 'Bearer',
