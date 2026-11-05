@@ -71,11 +71,16 @@ const listedProfiles = await respondToMcp({
   method: 'tools/call',
   params: { name: 'list_profiles', arguments: {} },
 }, 'ws-9', run, {
-  listProfiles: async (workspaceId) => [{ id: 'p1', name: 'Asha', workspaceId }],
+  listProfiles: async (workspaceId) => [{ id: 'p1', name: 'Asha', displayLabel: 'Asha Kumar', phone: '9999999999', phoneLast4: '9999', workspaceId }],
 });
 const profileRows = JSON.parse(listedProfiles.body.result.content[0].text).profiles;
 assert.equal(profileRows[0].id, 'p1');
-assert.equal(profileRows[0].workspaceId, 'ws-9');
+assert.equal(profileRows[0].displayLabel, 'Asha Kumar');
+assert.equal(profileRows[0].phone, undefined);
+assert.equal(profileRows[0].workspaceId, undefined);
+assert.equal(profileRows[0].name, undefined);
+assert.equal(profileRows[0].phoneLast4, '9999');
+assert.equal(profileRows[0].phoneLast4.length, 4);
 
 const filled = await respondToMcp({
   jsonrpc: '2.0',
@@ -93,25 +98,44 @@ assert.deepEqual(shotPlan.offsets, [0, 800, 1600, 2400, 3200, 4000]);
 assert.equal(shotPlan.clipped, true);
 assert.equal(pageShotOffsets(900, 800, 6).clipped, false);
 
+const beforeBlockedSnapshot = calls.length;
 const shot = await respondToMcp({
   jsonrpc: '2.0',
   id: 9,
   method: 'tools/call',
   params: { name: 'snapshot', arguments: { scope: 'page', selector: 'form-field-1', rect: { x: 1, y: 2, width: 40, height: 20 } } },
-}, 'ws-9', async (_workspaceId, body) => {
-  assert.equal(body.task, 'snapshot');
-  assert.equal(body.scope, 'area');
-  assert.equal(body.selector, 'form-field-1');
-  return {
-    status: 200,
-    payload: { ok: true, result: { ok: true, image: 'abc', mimeType: 'image/jpeg', width: 10, height: 20, scope: 'area' } },
-  };
+}, 'ws-9', async () => {
+  throw new Error('snapshot must not execute while egress is blocked');
 });
-assert.equal(shot.body.result.isError, false);
-assert.equal(shot.body.result.content[1].type, 'image');
-assert.equal(shot.body.result.content[1].data, 'abc');
-assert.equal(shot.body.result.content[1].mimeType, 'image/jpeg');
-assert.equal(JSON.parse(shot.body.result.content[0].text).result.image, undefined);
+assert.equal(shot.body.result.isError, true);
+assert.equal(JSON.parse(shot.body.result.content[0].text).error, 'privacy_boundary_blocked');
+assert.equal(calls.length, beforeBlockedSnapshot);
+
+const missingProfileScope = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '9a',
+  method: 'tools/call',
+  params: { name: 'read_profile', arguments: { profileId: 'p1' } },
+}, 'ws-9', run);
+assert.equal(missingProfileScope.body.result.isError, true);
+assert.equal(JSON.parse(missingProfileScope.body.result.content[0].text).error, 'profileId_and_nonempty_fields_required');
+
+const approvalRequired = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '9aa',
+  method: 'tools/call',
+  params: { name: 'read_profile', arguments: { profileId: 'p1', fields: ['full_name', 'date_of_birth'] } },
+}, 'ws-9', run, {
+  readProfile: async (profileId, fields) => ({
+    error: 'approval_required', requestId: 'request-1', profileLabel: 'Asha',
+    fields, dataCategories: ['customer_identity', 'date_of_birth'],
+  }),
+});
+const approvalPayload = JSON.parse(approvalRequired.body.result.content[0].text);
+assert.equal(approvalPayload.error, 'approval_required');
+assert.equal(approvalPayload.requestId, 'request-1');
+assert.equal(approvalPayload.profileLabel, 'Asha');
+assert.deepEqual(approvalPayload.fields, ['full_name', 'date_of_birth']);
 
 const closed = await respondToMcp({
   jsonrpc: '2.0',

@@ -5,6 +5,7 @@
  * same CyberControl JWT /api/auth/login already returns.
  */
 import crypto from 'node:crypto';
+import jwt from 'jsonwebtoken';
 import { Router } from 'express';
 import { pool } from '../db/db.js';
 
@@ -42,6 +43,10 @@ function randomId(prefix: string) {
   return prefix + crypto.randomBytes(24).toString('base64url');
 }
 
+function stableClientId(clientId: string) {
+  return 'mcp_' + crypto.createHash('sha256').update(clientId).digest('hex').slice(0, 32);
+}
+
 let tablesReady: Promise<void> | null = null;
 function ensureTables() {
   if (!tablesReady) {
@@ -59,7 +64,21 @@ function ensureTables() {
         code_challenge TEXT NOT NULL,
         access_token TEXT NOT NULL,
         refresh_token TEXT,
+        client_name TEXT,
         expires_at TIMESTAMPTZ NOT NULL
+      );
+      ALTER TABLE mcp_oauth_codes ADD COLUMN IF NOT EXISTS client_name TEXT;
+      CREATE TABLE IF NOT EXISTS mcp_oauth_sessions (
+        session_id TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        role TEXT,
+        refresh_token_hash TEXT UNIQUE,
+        profile_access_enabled BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '30 days'
       );
     `).then(() => undefined).catch((err) => {
       tablesReady = null;
@@ -277,9 +296,9 @@ export function mountOAuth(router: any) {
       await ensureTables();
       const code = randomId('code_');
       await pool.query(
-        `INSERT INTO mcp_oauth_codes (code, client_id, redirect_uri, code_challenge, access_token, refresh_token, expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6, now() + interval '10 minutes')`,
-        [code, fields.client_id, fields.redirect_uri, fields.code_challenge, session.accessToken, session.refreshToken || null]
+        `INSERT INTO mcp_oauth_codes (code, client_id, redirect_uri, code_challenge, access_token, refresh_token, client_name, expires_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7, now() + interval '10 minutes')`,
+        [code, fields.client_id, fields.redirect_uri, fields.code_challenge, session.accessToken, session.refreshToken || null, fields.client_name]
       );
       const target = new URL(fields.redirect_uri);
       target.searchParams.set('code', code);
@@ -325,6 +344,11 @@ export function mountOAuth(router: any) {
     if (grant === 'refresh_token') {
       const refreshToken = String(body.refresh_token || '');
       if (!refreshToken) return res.status(400).json({ error: 'invalid_grant' });
+      await ensureTables();
+      const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+      const sessionResult = await pool.query('SELECT * FROM mcp_oauth_sessions WHERE refresh_token_hash = $1 AND expires_at > now()', [tokenHash]);
+      const bound = sessionResult.rows[0];
+      if (!bound) return res.status(400).json({ error: 'invalid_grant' });
       const targets = [
         (process.env.HUB_ORIGIN || 'http://backend:3000') + '/api/auth/refresh',
         (process.env.API_ORIGIN || 'https://api.cybercontrol.fun') + '/api/auth/refresh',
@@ -339,15 +363,33 @@ export function mountOAuth(router: any) {
           });
           const data = await refreshed.json().catch(() => ({}));
           if (refreshed.ok && data.accessToken) {
+            const secret = process.env.JWT_SECRET;
+            if (!secret) throw new Error('JWT_SECRET missing');
+            const claims: any = jwt.verify(data.accessToken, secret);
+            const identityClaims = { ...claims };
+            delete identityClaims.iat;
+            delete identityClaims.exp;
+            delete identityClaims.nbf;
+            delete identityClaims.aud;
+            delete identityClaims.iss;
+            const accessToken = jwt.sign({
+              ...identityClaims,
+              mcpClientId: stableClientId(bound.client_id),
+              mcpClientName: bound.client_name,
+              mcpSessionId: bound.session_id,
+            }, secret, { expiresIn: '15m' });
+            const nextRefresh = data.refreshToken || refreshToken;
+            const nextHash = crypto.createHash('sha256').update(nextRefresh).digest('hex');
+            await pool.query('UPDATE mcp_oauth_sessions SET refresh_token_hash = $1, expires_at = now() + interval \'30 days\' WHERE session_id = $2', [nextHash, bound.session_id]);
             return res.json({
-              access_token: data.accessToken,
+              access_token: accessToken,
               token_type: 'Bearer',
-              expires_in: 86400,
-              refresh_token: data.refreshToken || refreshToken,
+              expires_in: 900,
+              refresh_token: nextRefresh,
               scope: SCOPE,
             });
           }
-        } catch { /* try the public login next */ }
+        } catch (err) { /* try the public login next */ }
       }
       return res.status(400).json({ error: 'invalid_grant' });
     }
@@ -364,10 +406,34 @@ export function mountOAuth(router: any) {
     if (!row || new Date(row.expires_at).getTime() < Date.now()) return res.status(400).json({ error: 'invalid_grant' });
     if (row.client_id !== clientId || row.redirect_uri !== redirectUri) return res.status(400).json({ error: 'invalid_grant' });
     if (pkceS256(verifier) !== row.code_challenge) return res.status(400).json({ error: 'invalid_grant' });
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error('JWT_SECRET missing');
+    const claims: any = jwt.verify(row.access_token, secret);
+    const identityClaims = { ...claims };
+    delete identityClaims.iat;
+    delete identityClaims.exp;
+    delete identityClaims.nbf;
+    delete identityClaims.aud;
+    delete identityClaims.iss;
+    const sessionId = randomId('mcp_session_');
+    const accessToken = jwt.sign({
+      ...identityClaims,
+      mcpClientId: stableClientId(row.client_id),
+      mcpClientName: row.client_name || 'MCP client',
+      mcpSessionId: sessionId,
+    }, secret, { expiresIn: '15m' });
+    const refreshHash = row.refresh_token
+      ? crypto.createHash('sha256').update(row.refresh_token).digest('hex')
+      : null;
+    await pool.query(`
+      INSERT INTO mcp_oauth_sessions
+        (session_id, client_id, client_name, user_id, workspace_id, role, refresh_token_hash)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `, [sessionId, row.client_id, row.client_name || 'MCP client', identityClaims.userId, identityClaims.workspaceId, identityClaims.role || null, refreshHash]);
     res.json({
-      access_token: row.access_token,
+      access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: 86400,
+      expires_in: 900,
       refresh_token: row.refresh_token,
       scope: SCOPE,
     });

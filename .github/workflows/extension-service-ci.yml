@@ -1,0 +1,68 @@
+name: Extension service and privacy CI
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'apps/extension-service/**'
+      - 'apps/extension/**'
+      - 'apps/frontend/**'
+      - 'packages/cc-*/**'
+      - 'packages/svc-*/**'
+      - 'packages/backend-core/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/extension-service-ci.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'packages/backend-core/**'
+      - 'apps/extension-service/**'
+      - 'apps/extension/**'
+      - 'apps/frontend/**'
+      - 'packages/cc-*/**'
+      - 'packages/svc-*/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/extension-service-ci.yml'
+
+jobs:
+  privacy-and-service:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cc
+          POSTGRES_PASSWORD: ccpass
+          POSTGRES_DB: cybercontrol
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Extension-service tests
+        run: pnpm --filter cybercontrol-extension-service test
+      - name: Extension-service typecheck
+        run: pnpm --filter cybercontrol-extension-service typecheck
+      - name: Chrome extension typecheck
+        run: pnpm --filter cybercontrol-extension typecheck
+      - name: Backend core build
+        run: pnpm --filter @cybercontrol/backend-core build
+      - name: Backend core auth tests
+        run: pnpm --filter @cybercontrol/backend-core test
+      - name: Frontend typecheck
+        run: pnpm --filter cybercontrol-frontend typecheck
+      - name: Frontend production build
+        run: pnpm --filter cybercontrol-frontend build

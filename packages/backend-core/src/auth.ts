@@ -15,6 +15,11 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
   try {
     const decoded: any = jwt.verify(header.slice(7), JWT_SECRET);
+    // MCP tokens are accepted only by the dedicated /api/mcp handler. They
+    // must not access ordinary Hub APIs (including customer profile routes).
+    if (decoded.mcpClientId || decoded.mcpSessionId) {
+      return res.status(403).json({ error: 'mcp_token_not_allowed_for_rest_api' });
+    }
     (req as any).user = { userId: decoded.userId, workspaceId: decoded.workspaceId, role: decoded.role, sessionId: decoded.sessionId };
     next();
   } catch (e) {
