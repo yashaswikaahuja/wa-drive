@@ -360,13 +360,13 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
       return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ profiles: safeProfiles }, false)) };
     }
     if (name === 'read_profile') {
-      if (!profiles?.readProfile) {
-        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profile_read_unavailable' }, true)) };
-      }
       if (typeof args.profileId !== 'string' || !args.profileId.trim() ||
           !Array.isArray(args.fields) || !args.fields.length || args.fields.length > 80 ||
           args.fields.some((field: any) => typeof field !== 'string' || !field.trim() || field.length > 128)) {
         return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profileId_and_nonempty_fields_required' }, true)) };
+      }
+      if (!profiles?.readProfile) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profile_read_unavailable' }, true)) };
       }
       try {
         const result = await profiles.readProfile(args.profileId, args.fields);
