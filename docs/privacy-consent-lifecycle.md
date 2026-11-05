@@ -76,3 +76,15 @@ The service calls `ensurePrivacySchema()` at startup. The matching SQL migration
 ## Scope boundary
 
 This lifecycle API does not by itself protect MCP, Agent, Teach, screenshot, transliteration or trace code paths. Each caller must issue and consume an authorization immediately before the sensitive read/transfer/persistence operation. Until those integrations land, those existing paths remain unresolved.
+
+
+## Part 3 — MCP egress boundary
+
+The MCP server now fails closed for the two highest-risk read paths:
+
+- `read_profile` is no longer advertised or callable as an MCP tool. The MCP route no longer wires the full-profile reader into the RPC handler.
+- `list_profiles` returns only a profile ID and display label. Phone numbers, relationship metadata, timestamps and customer field values are not exposed through MCP.
+- `snapshot` returns `privacy_boundary_blocked` without invoking the browser task. No screenshot bytes are fetched, serialized or returned to the MCP client.
+- The local `fill` tool remains available. It accepts a profile ID and runs the existing extension fill workflow; it does not return the profile JSON to the MCP caller.
+
+This is an intentional temporary restriction, not a complete consent integration. MCP profile-field reads and screenshot sharing will remain unavailable until the final egress boundary consumes a server-issued, single-use authorization bound to the authenticated user, customer, action, purpose, recipient and exact field/screenshot scope. Screenshot sharing additionally requires trusted redaction before bytes leave the service. Do not treat workspace authentication or the operator attestation as customer consent.

@@ -16,11 +16,16 @@ If a tool returns `no_extension_connected`, the extension is not on the workspac
 
 ## Profiles and Fill
 
-`list_profiles` returns the customers in this workspace: `id`, `name`, `phone`, and `displayLabel`.
+`list_profiles` returns only the customer profile `id`, `displayLabel`, and `phoneLast4`. It does not return full phone numbers or saved profile fields.
 
-`read_profile` with that `profileId` returns `fields`, the values the extension can type. Read this before deciding which customer to fill.
+`read_profile` is available for visual/manual filling, but is denied by default. It requires all three gates:
+1. A workspace admin enables **Allow MCP agents to read customer profiles** in CyberControl Hub → Settings → AI & MCP privacy.
+2. The operator opens this extension panel and enables profile access for the exact connected MCP client session.
+3. For each customer and exact field list, the operator approves a just-in-time request in the extension panel and confirms that the customer was informed and agreed. The approval lasts five minutes.
 
-`fill` runs the extension Fill button on the open form for one `profileId`. The extension plans from the saved mappings and that profile, then types in Chrome. This is the same Fill the operator uses. It is not `fill_form`.
+Call `read_profile` with `profileId` and a non-empty `fields` array. If the result is `approval_required`, the operator must approve the request in the extension panel; then retry the same call. Only the approved fields are returned. Passwords, OTPs, CAPTCHA answers, and payment credentials are never available. Disabling workspace policy or a client session revokes its outstanding profile-read grants and pending requests.
+
+`fill` runs the extension Fill button on the open form for one `profileId`. The extension plans from saved mappings and that profile, then types locally in Chrome. Prefer this local path whenever it can complete the task; it does not export the profile to the MCP client.
 
 ```json
 { "profileId": "the id from list_profiles" }

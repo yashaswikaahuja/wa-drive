@@ -27,6 +27,11 @@ export default function Settings() {
   const [vstatus, setVstatus] = useState<VerifyStatus | null>(null);
   const [verifyChannel, setVerifyChannel] = useState<Channel | null>(null);
   const [themePref, setThemePref] = useState<ThemePreference>(() => getThemePreference());
+  const [profilePolicy, setProfilePolicy] = useState(false);
+  const [profilePolicyLoading, setProfilePolicyLoading] = useState(true);
+  const [profilePolicySaving, setProfilePolicySaving] = useState(false);
+  const [profileConsents, setProfileConsents] = useState<any[]>([]);
+  const [profileConsentsLoading, setProfileConsentsLoading] = useState(true);
   const { reveal } = useReveal();
 
   const loadVerify = useCallback(() => {
@@ -59,6 +64,45 @@ export default function Settings() {
       if (u) useAuthStore.getState().setUser({ ...u, email: value });
     }
   }, [loadVerify]);
+
+  useEffect(() => {
+    api.get('/privacy/profile-policy', { skipErrorToast: true } as any)
+      .then(r => setProfilePolicy(r.data?.allowMcpProfileRead === true))
+      .catch(() => setProfilePolicy(false))
+      .finally(() => setProfilePolicyLoading(false));
+  }, []);
+
+  const loadProfileConsents = useCallback(() => {
+    api.get('/privacy/consents', { skipErrorToast: true } as any)
+      .then(r => setProfileConsents(Array.isArray(r.data?.consents) ? r.data.consents : []))
+      .catch(() => setProfileConsents([]))
+      .finally(() => setProfileConsentsLoading(false));
+  }, []);
+  useEffect(() => { loadProfileConsents(); }, [loadProfileConsents]);
+
+  async function revokeProfileConsent(id: string) {
+    try {
+      await api.delete('/privacy/consents/' + encodeURIComponent(id), { skipErrorToast: true } as any);
+      toast.success('Profile access grant revoked');
+      loadProfileConsents();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Could not revoke profile access');
+    }
+  }
+
+  async function updateProfilePolicy(enabled: boolean) {
+    setProfilePolicySaving(true);
+    try {
+      const r = await api.patch('/privacy/profile-policy', { allowMcpProfileRead: enabled }, { skipErrorToast: true } as any);
+      setProfilePolicy(r.data?.allowMcpProfileRead === true);
+      loadProfileConsents();
+      toast.success(enabled ? 'MCP profile access enabled for this workspace' : 'MCP profile access disabled');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Could not update privacy policy');
+    } finally {
+      setProfilePolicySaving(false);
+    }
+  }
 
   useEffect(() => {
     api.get('/drive/status')
@@ -223,7 +267,61 @@ export default function Settings() {
         </div>
       </section>
 
-      <section className="card" style={reveal(5)}>
+      <section className="card mb-4" style={reveal(5)}>
+        <div className="flex items-center gap-2 mb-2">
+          <SealCheck size={16} style={{ color: 'hsl(var(--pt-muted))' }} />
+          <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>AI & MCP privacy</h3>
+        </div>
+        <p className="text-xs mb-3" style={{ color: 'hsl(var(--pt-muted))' }}>
+          Control whether connected MCP agents may request customer profile fields for visual or manual form filling. This is only the workspace-level gate; each MCP client session and each customer read still require separate operator approval.
+        </p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium" style={{ color: 'hsl(var(--ink))' }}>Allow MCP agents to read customer profiles</p>
+            <p className="text-xs mt-1" style={{ color: 'hsl(var(--pt-muted))' }}>
+              {profilePolicyLoading ? 'Checking policy…' : profilePolicy ? 'Workspace policy enabled' : 'Disabled by default'}
+            </p>
+          </div>
+          {user?.role === 'admin' ? (
+            <button
+              type="button"
+              disabled={profilePolicyLoading || profilePolicySaving}
+              onClick={() => updateProfilePolicy(!profilePolicy)}
+              className={profilePolicy ? 'btn-primary text-xs shrink-0' : 'pt-chip text-xs shrink-0'}
+              aria-pressed={profilePolicy}
+            >
+              {profilePolicySaving ? 'Saving…' : profilePolicy ? 'Enabled' : 'Enable'}
+            </button>
+          ) : (
+            <span className="badge">{profilePolicy ? 'Enabled' : 'Disabled'}</span>
+          )}
+        </div>
+        <p className="text-[11px] mt-3" style={{ color: 'hsl(var(--pt-muted))' }}>
+          Passwords, OTPs, CAPTCHA answers and payment credentials are never available to MCP agents. Screenshot sharing remains a separate permission.
+        </p>
+        <div className="mt-4 pt-3 border-t" style={{ borderColor: 'hsl(var(--pt-border-soft))' }}>
+          <p className="text-xs font-semibold mb-2" style={{ color: 'hsl(var(--ink))' }}>Active profile-read grants</p>
+          {profileConsentsLoading ? (
+            <p className="text-xs pt-muted">Loading grants…</p>
+          ) : profileConsents.filter((grant) => grant.action === 'read_customer_profile' && !grant.revokedAt && new Date(grant.expiresAt).getTime() > Date.now()).length === 0 ? (
+            <p className="text-xs pt-muted">No active grants.</p>
+          ) : (
+            <div className="space-y-2">
+              {profileConsents.filter((grant) => grant.action === 'read_customer_profile' && !grant.revokedAt && new Date(grant.expiresAt).getTime() > Date.now()).map((grant) => (
+                <div key={grant.id} className="rounded-lg border p-2 flex items-start gap-3" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium" style={{ color: 'hsl(var(--ink))' }}>{grant.recipientId || 'MCP client'} · {String(grant.dataSubjectId || 'Customer').slice(0, 12)}</p>
+                    <p className="text-[11px] pt-muted mt-1">{Array.isArray(grant.fields) ? grant.fields.join(', ') : 'Scoped fields'} · expires {new Date(grant.expiresAt).toLocaleTimeString()}</p>
+                  </div>
+                  <button type="button" onClick={() => revokeProfileConsent(grant.id)} className="pt-chip text-[11px] shrink-0">Revoke</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="card" style={reveal(6)}>
         <h3 className="text-sm font-semibold mb-3" style={{ color: 'hsl(var(--ink))' }}>Platform</h3>
         <div className="space-y-2 text-xs">
           <div className="flex justify-between gap-3">
