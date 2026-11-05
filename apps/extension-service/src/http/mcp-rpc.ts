@@ -83,6 +83,19 @@ const tools = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'read_profile',
+    description: 'Read selected fields from one customer profile for visual/manual form filling. Requires workspace admin policy, operator-enabled access for this MCP client session, and a just-in-time operator approval for this customer and exact field list. Never returns passwords, OTPs, CAPTCHA answers, or payment credentials.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        profileId: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 80 },
+      },
+      required: ['profileId', 'fields'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'fill',
     description: 'Run the extension Fill button on the open page for one profile. The extension plans from saved mappings and that profile, then types in Chrome. One browser task at a time per workspace; a second fill or scroll waits for the first. Does not solve CAPTCHA or submit payment.',
     inputSchema: {
@@ -262,7 +275,7 @@ function toolText(payload: any, isError: boolean) {
   };
 }
 
-export async function respondToMcp(message: any, workspaceId: string, run: (workspaceId: string, body: any) => Promise<{ status: number, payload: any }>, profiles?: { listProfiles?: (workspaceId: string) => Promise<any> }) {
+export async function respondToMcp(message: any, workspaceId: string, run: (workspaceId: string, body: any) => Promise<{ status: number, payload: any }>, profiles?: { listProfiles?: (workspaceId: string) => Promise<any>; readProfile?: (profileId: string, fields: string[]) => Promise<any> }) {
   if (!message || typeof message !== 'object' || Array.isArray(message)) {
     return { kind: 'json' as const, status: 200, body: rpcError(null, -32600, 'invalid request') };
   }
@@ -294,7 +307,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
           'Stop at CAPTCHA, OTP, and payment. Do not solve a CAPTCHA and do not invent card numbers, UPI ids, or OTPs. Tell the operator what is on screen.',
           'On an IRCTC train list, Book Now stays inactive until a class and an availability cell have been clicked. Read between those clicks.',
           'Dropdowns: if read_form includes options, fill_form with that type and value equal to one option. If options is null, click the dropdown, read_form, then click the choice. Read again before a dependent dropdown such as District after State.',
-          'list_profiles returns profile id, customer display name, and only the last four phone digits for disambiguation. It never returns the full phone number or other profile fields. Direct profile-field reading is disabled. Use fill with a profileId to run the operator-approved local fill workflow.',
+          'list_profiles returns profile id, customer display name, and only the last four phone digits. read_profile is available only after workspace policy, operator session permission, and just-in-time approval for the selected customer and exact fields. If approval is pending, ask the operator to approve it in the CyberControl extension, then retry. Prefer local fill when possible.',
           'snapshot image transfer is currently disabled by the privacy boundary. Do not try alternate screenshot routes or request raw page images.',
           'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector; it never uses a left nav, and to bottom stays on the window so infinite pages can grow. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. action hover or drag on mouse_click works even when hover and drag are missing from the tool list. hover moves the mouse over a point or selector. drag moves from x,y to x2,y2 or from selector to toSelector and fires HTML5 dragstart/drop. click also finds visible links by text; a link that navigates is success (moved true) even if the old frame is gone. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first; arrows move a range slider. read_form includes iframe fields with frameId, hover figures (type hover), drag handles (type drag), and drop targets (type drop); duplicate ids in hidden tab panes are omitted. One browser task at a time per workspace, including fill and scroll. copy frameId on fill_form, click, keyboard, mouse_click, hover, and drag. After any of those, read_form or snapshot before the next click or fill.',
         ].join(' '),
@@ -345,6 +358,22 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
           : String(row.phoneLast4),
       })).filter((row: any) => row.id);
       return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ profiles: safeProfiles }, false)) };
+    }
+    if (name === 'read_profile') {
+      if (!profiles?.readProfile) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profile_read_unavailable' }, true)) };
+      }
+      if (typeof args.profileId !== 'string' || !args.profileId.trim() ||
+          !Array.isArray(args.fields) || !args.fields.length || args.fields.length > 80 ||
+          args.fields.some((field: any) => typeof field !== 'string' || !field.trim())) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profileId_and_nonempty_fields_required' }, true)) };
+      }
+      try {
+        const result = await profiles.readProfile(args.profileId, args.fields);
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(result, result?.error !== undefined)) };
+      } catch (error: any) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profile_read_failed' }, true)) };
+      }
     }
     if (name === 'fill') {
       if (!args.profileId) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'profileId required' }, true)) };
