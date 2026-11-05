@@ -362,7 +362,12 @@ export function mountOAuth(router: any) {
             const secret = process.env.JWT_SECRET;
             if (!secret) throw new Error('JWT_SECRET missing');
             const claims: any = jwt.verify(data.accessToken, secret);
-            const { iat: _iat, exp: _exp, nbf: _nbf, aud: _aud, iss: _iss, ...identityClaims } = claims;
+            const identityClaims = { ...claims };
+            delete identityClaims.iat;
+            delete identityClaims.exp;
+            delete identityClaims.nbf;
+            delete identityClaims.aud;
+            delete identityClaims.iss;
             const accessToken = jwt.sign({
               ...identityClaims,
               mcpClientId: bound.client_id,
@@ -400,7 +405,12 @@ export function mountOAuth(router: any) {
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET missing');
     const claims: any = jwt.verify(row.access_token, secret);
-    const { iat: _iat, exp: _exp, nbf: _nbf, aud: _aud, iss: _iss, ...identityClaims } = claims;
+    const identityClaims = { ...claims };
+    delete identityClaims.iat;
+    delete identityClaims.exp;
+    delete identityClaims.nbf;
+    delete identityClaims.aud;
+    delete identityClaims.iss;
     const sessionId = randomId('mcp_session_');
     const accessToken = jwt.sign({
       ...identityClaims,
