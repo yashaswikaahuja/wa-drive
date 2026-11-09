@@ -4,6 +4,22 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
+function servePrivacyHtml() {
+  const rewrite = (req: { url?: string }, _res: unknown, next: () => void) => {
+    if (req.url === "/privacy" || req.url === "/privacy/") req.url = "/privacy.html";
+    next();
+  };
+  return {
+    name: "privacy-html",
+    configureServer(server: { middlewares: { use: (fn: typeof rewrite) => void } }) {
+      server.middlewares.use(rewrite);
+    },
+    configurePreviewServer(server: { middlewares: { use: (fn: typeof rewrite) => void } }) {
+      server.middlewares.use(rewrite);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
@@ -12,7 +28,7 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [servePrivacyHtml(), react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
