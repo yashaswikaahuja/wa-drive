@@ -16,18 +16,21 @@ const DOC_AUTHORITY = {
 };
 const IDENTITY_FIELDS = new Set(['name','father_name','mother_name','husband_name','dob','gender','nationality','category','religion','aadhaar_number','pan_number','voter_id_number','address','permanent_address','phone','email','city','district','state','pincode']);
 
-/**
- * Derive a person's profile from their per-document extractions (NO stored blob).
- * overrides = operator-confirmed fields (profiles.data) which always win.
- */
-export async function deriveProfile(workspaceId: any, phone: any, personKey: any, overrides: any = {}) {
-  const { rows } = await pool.query(
-    `SELECT suggested, created_at FROM extraction_cache
-     WHERE workspace_id = $1 AND phone = $2 AND person_key = $3 ORDER BY created_at`,
-    [workspaceId, phone, personKey]
-  );
+function personKeyOf(profile: any) {
+  return String(profile?.displayLabel || profile?.name || '')
+    .toLowerCase()
+    .replace(/[^a-z\u0900-\u097F]/g, '')
+    .trim();
+}
+
+function extractionGroupKey(phone: any, personKey: any) {
+  return String(phone || '') + '\0' + String(personKey || '');
+}
+
+/** Merge extraction_cache rows for one person. overrides = operator-confirmed fields. */
+export function mergeExtractionRows(rows: any[], phone: any, overrides: any = {}) {
   const result: any = {};
-  for (const row of rows) {
+  for (const row of rows || []) {
     const sugg = row.suggested || {};
     for (const [k, v] of Object.entries(sugg)) {
       if (k === 'document_type') continue;
@@ -51,15 +54,51 @@ export async function deriveProfile(workspaceId: any, phone: any, personKey: any
       }
     }
   }
-  // operator overrides always win
   for (const [k, v] of Object.entries(overrides || {})) {
     const ov: any = v;
     if (ov && (ov.source === 'manual' || ov.source === 'document_corrected')) result[k] = ov;
   }
-  // auto-fill mobile from the WhatsApp number if no doc provided one
   if (!result.phone || !String(result.phone?.value ?? '').trim()) {
-    const mobile = String(phone).slice(-10);
+    const mobile = String(phone || '').slice(-10);
     if (/^[6-9]\d{9}$/.test(mobile)) result.phone = { value: mobile, source: 'whatsapp', confidence: 0.95, needsReview: false };
   }
   return result;
+}
+
+/**
+ * Derive a person's profile from their per-document extractions (NO stored blob).
+ * overrides = operator-confirmed fields (profiles.data) which always win.
+ */
+export async function deriveProfile(workspaceId: any, phone: any, personKey: any, overrides: any = {}) {
+  const { rows } = await pool.query(
+    `SELECT suggested, created_at FROM extraction_cache
+     WHERE workspace_id = $1 AND phone = $2 AND person_key = $3 ORDER BY created_at`,
+    [workspaceId, phone, personKey]
+  );
+  return mergeExtractionRows(rows, phone, overrides);
+}
+
+/**
+ * One extraction_cache read for the workspace, then derive every listed profile in memory.
+ * Used so the extension customer list already has fields for instant details.
+ */
+export async function deriveProfilesForWorkspace(workspaceId: any, profiles: any[]) {
+  if (!Array.isArray(profiles) || !profiles.length) return profiles || [];
+  const { rows } = await pool.query(
+    `SELECT phone, person_key, suggested, created_at FROM extraction_cache
+     WHERE workspace_id = $1 ORDER BY created_at`,
+    [workspaceId]
+  );
+  const groups = new Map<string, any[]>();
+  for (const row of rows) {
+    const k = extractionGroupKey(row.phone, row.person_key);
+    const g = groups.get(k);
+    if (g) g.push(row);
+    else groups.set(k, [row]);
+  }
+  for (const profile of profiles) {
+    const k = extractionGroupKey(profile.phone, personKeyOf(profile));
+    profile.data = mergeExtractionRows(groups.get(k) || [], profile.phone, profile.data || {});
+  }
+  return profiles;
 }

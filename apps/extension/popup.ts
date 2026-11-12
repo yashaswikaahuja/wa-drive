@@ -39,6 +39,7 @@ const detailBackBtn = document.getElementById('detail-back');
 const detailHubBtn = document.getElementById('detail-hub');
 const FILL_BTN_LABEL = 'Fill this form';
 let _detailOpenId = null;
+const _profileCache = new Map();
 versionEl.textContent = 'v' + VERSION;
 
 const HUB_FALLBACK = 'https://app.cybercontrol.fun';
@@ -568,11 +569,17 @@ function renderProfiles(query) {
     el.addEventListener('click', () => {
       selectProfile(el.dataset.id);
     });
+    el.addEventListener('pointerenter', () => {
+      const id = el.dataset.id;
+      if (id && !profileHasDetailFields(_profileCache.get(id) || allProfiles.find((p) => p.id === id))) {
+        void prefetchProfile(id);
+      }
+    });
   });
   profilesEl.querySelectorAll('.profile-detail-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      void openProfileDetail(btn.getAttribute('data-id'));
+      openProfileDetail(btn.getAttribute('data-id'));
     });
   });
 
@@ -582,7 +589,7 @@ function renderProfiles(query) {
   }
 }
 
-function selectProfile(id) {
+function selectProfile(id, opts: { skipRender?: boolean } = {}) {
   selectedProfile = allProfiles.find(p => p.id === id) || null;
   fillBtn.disabled = !selectedProfile;
   applyAgentVisibility();
@@ -593,23 +600,55 @@ function selectProfile(id) {
     chrome.storage.session.remove('_cc_selected').catch(() => {});
   }
   updateFillHint();
-  renderProfiles(searchEl.value);
+  if (!opts.skipRender) renderProfiles(searchEl.value);
 }
 
 let _prefetchedProfile = null;
+let _prefetchInflight = new Map();
+
+function rememberProfile(profile) {
+  if (!profile?.id) return profile;
+  _profileCache.set(profile.id, profile);
+  _prefetchedProfile = profile;
+  const listed = allProfiles.find((p) => p.id === profile.id);
+  if (listed && profile.data) listed.data = profile.data;
+  return profile;
+}
+
+function profileHasDetailFields(profile) {
+  const data = profile?.data;
+  return !!(data && typeof data === 'object' && Object.keys(data).length > 0);
+}
+
 async function prefetchProfile(id) {
+  if (!id) return null;
+  const cached = _profileCache.get(id);
+  if (profileHasDetailFields(cached)) return cached;
+  const listed = allProfiles.find((p) => p.id === id);
+  if (profileHasDetailFields(listed)) return rememberProfile(listed);
+  if (_prefetchInflight.has(id)) return _prefetchInflight.get(id);
+  const pending = (async () => {
+    try {
+      const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
+      const r = await fetch(data.backendUrl + '/profiles/' + id, {
+        headers: { Authorization: 'Bearer ' + data.accessToken }
+      });
+      if (r.ok) {
+        const full = rememberProfile(await r.json());
+        if (_detailOpenId === id && !profileHasDetailFields(cached || listed)) {
+          renderProfileDetail(full);
+        }
+        return full;
+      }
+    } catch {}
+    return null;
+  })();
+  _prefetchInflight.set(id, pending);
   try {
-    const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
-    const r = await fetch(data.backendUrl + '/profiles/' + id, {
-      headers: { Authorization: 'Bearer ' + data.accessToken }
-    });
-    if (r.ok) {
-      _prefetchedProfile = await r.json();
-      if (_detailOpenId === id) renderProfileDetail(_prefetchedProfile);
-      return _prefetchedProfile;
-    }
-  } catch {}
-  return null;
+    return await pending;
+  } finally {
+    _prefetchInflight.delete(id);
+  }
 }
 
 // Keyboard navigation
@@ -942,6 +981,9 @@ async function loadProfilesHttps(data?: any) {
   }
 
   allProfiles = profiles || [];
+  for (const p of allProfiles) {
+    if (profileHasDetailFields(p)) _profileCache.set(p.id, p);
+  }
   const sess = await chrome.storage.session.get('_cc_selected');
   if (sess._cc_selected) {
     selectedProfile = allProfiles.find((p) => p.id === sess._cc_selected) || null;
@@ -1202,19 +1244,17 @@ function renderProfileDetail(profile) {
     : `<div class="detail-empty">No stored fields yet. Complete this profile in Hub.</div>`;
 }
 
-async function openProfileDetail(id) {
+function openProfileDetail(id) {
   if (!id) return;
   _detailOpenId = id;
   document.body.classList.add('showing-detail');
-  if (selectedProfile?.id !== id) selectProfile(id);
   const listRow = allProfiles.find((p) => p.id === id) || selectedProfile;
-  const cached = _prefetchedProfile?.id === id ? _prefetchedProfile : listRow;
-  renderProfileDetail(cached || { id, name: 'Customer' });
-  updateFillHint();
-  if (_prefetchedProfile?.id !== id) {
-    const full = await prefetchProfile(id);
-    if (_detailOpenId === id && full) renderProfileDetail(full);
-  }
+  const cached = _profileCache.get(id) || (_prefetchedProfile?.id === id ? _prefetchedProfile : null);
+  const profile = cached || listRow || { id, name: 'Customer' };
+  renderProfileDetail(profile);
+  if (selectedProfile?.id !== id) selectProfile(id, { skipRender: true });
+  else updateFillHint();
+  if (!profileHasDetailFields(profile)) void prefetchProfile(id);
 }
 
 async function openSelectedInHub() {
@@ -1374,7 +1414,7 @@ if (detailBtn) {
   detailBtn.addEventListener('click', () => {
     if (!selectedProfile) return;
     if (_detailOpenId === selectedProfile.id) closeProfileDetail();
-    else void openProfileDetail(selectedProfile.id);
+    else openProfileDetail(selectedProfile.id);
   });
 }
 if (detailBackBtn) {

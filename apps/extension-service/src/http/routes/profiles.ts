@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../../db/db.js';
 import { authMiddleware } from '../auth.js';
-import { deriveProfile } from '@cybercontrol/svc-fill-planner';
+import { deriveProfile, deriveProfilesForWorkspace } from '@cybercontrol/svc-fill-planner';
 
 const router = Router();
 
@@ -13,12 +13,12 @@ export async function listWorkspaceProfiles(workspaceId: string) {
              THEN right(regexp_replace(COALESCE(primary_contact_phone, ''), '[^0-9]', '', 'g'), 4)
              ELSE NULL
            END AS "phoneLast4",
-           relationship, updated_at AS "updatedAt"
+           relationship, updated_at AS "updatedAt", data
     FROM profiles
     WHERE workspace_id = $1 AND deleted_at IS NULL
     ORDER BY updated_at DESC
   `, [workspaceId]);
-  return rows;
+  return deriveProfilesForWorkspace(workspaceId, rows);
 }
 
 function fieldValue(value: any) {
