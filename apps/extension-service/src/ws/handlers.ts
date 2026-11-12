@@ -27,6 +27,7 @@ import { send, broadcast } from './server.js';
 import { buildFillMapping, persistFillSession } from './fill.js';
 import { resolveBrowserTask } from './browser-task.js';
 import { pool } from '../db/db.js';
+import { listWorkspaceProfiles } from '../http/routes/profiles.js';
 
 /**
  * @typedef {object} HandlerContext
@@ -467,20 +468,13 @@ handlers.set('fill_session', async ( session: any, message: any) => {
  */
 handlers.set('profiles_list', async ( session: any, message: any) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
-              relationship, updated_at AS "updatedAt"
-       FROM profiles
-       WHERE workspace_id = $1 AND deleted_at IS NULL
-       ORDER BY updated_at DESC`,
-      [session.workspaceId]
-    );
+    const profiles = await listWorkspaceProfiles(session.workspaceId);
     send(session.sessionId, {
       type: 'profiles_list',
       ref: message.id,
       serverTime: Date.now(),
-      profiles: rows,
-      count: rows.length,
+      profiles,
+      count: profiles.length,
       transport: 'wss',
     });
   } catch (err) {
