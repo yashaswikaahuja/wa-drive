@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.92.39",
+  "version": "5.92.40",
   "description": "Fill government and portal forms from CyberControl customer profiles - for cafe operators.",
   "homepage_url": "https://app.cybercontrol.fun/app",
   "permissions": [
     "storage",
+    "activeTab",
     "scripting",
     "tabs",
     "alarms",
@@ -27,9 +28,7 @@
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*",
     "http://localhost:5173/*",
-    "http://127.0.0.1:5173/*"
-  ],
-  "optional_host_permissions": [
+    "http://127.0.0.1:5173/*",
     "http://*/*",
     "https://*/*"
   ],
