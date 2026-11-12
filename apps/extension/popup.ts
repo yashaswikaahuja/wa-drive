@@ -298,24 +298,6 @@ async function getActivePageTab() {
   return tab || null;
 }
 
-/** Request optional host access for the form origin after the operator taps Fill. */
-async function ensureFormTabAccess(tab) {
-  if (!tab?.id) throw new Error('No active tab');
-  const url = String(tab.url || '');
-  if (!url || /^(chrome|edge|about|chrome-extension|devtools):/i.test(url)) {
-    throw new Error('Open a form page first');
-  }
-  if (url.startsWith('file:')) throw new Error('File pages cannot be filled');
-  let origin = '';
-  try { origin = new URL(url).origin; } catch { throw new Error('Open a form page first'); }
-  if (!origin || origin === 'null') throw new Error('Open a form page first');
-  const origins = [origin + '/*'];
-  const have = await chrome.permissions.contains({ origins });
-  if (have) return;
-  const granted = await chrome.permissions.request({ origins });
-  if (!granted) throw new Error('Allow access to this form page to fill');
-}
-
 // Paper-theme status colors (match frontend .pt-paper)
 const CC = {
   warning: 'hsl(35 92% 38%)',
@@ -1013,7 +995,9 @@ fillBtn.addEventListener('click', async () => {
     if (!tab.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge://')) {
       showStatus('Open a form page first', CC.danger); hideProgress(); return;
     }
-    await ensureFormTabAccess(tab);
+    if (tab.url.startsWith('file:')) {
+      showStatus('File pages cannot be filled', CC.danger); hideProgress(); return;
+    }
     _lastFillTabId = tab.id;
     try { _lastFillHost = new URL(tab.url).hostname.replace(/^www\./, ''); } catch { _lastFillHost = null; }
 
@@ -1086,16 +1070,11 @@ fillBtn.addEventListener('click', async () => {
     }
     showStatus(statusMsg, statusColor);
   } catch (e) {
-    const raw = e && e.message ? String(e.message) : '';
-    if (/Allow access|Open a form|File pages|No active tab/.test(raw)) {
-      showStatus(raw, CC.danger);
-    } else {
-      const errApi = globalThis.CcRuntimeErrors;
-      const msg = errApi?.operatorMessageFor
-        ? errApi.operatorMessageFor('gateway_error', null)
-        : 'Something went wrong while filling.';
-      showStatus(msg, CC.danger);
-    }
+    const errApi = globalThis.CcRuntimeErrors;
+    const msg = errApi?.operatorMessageFor
+      ? errApi.operatorMessageFor('gateway_error', null)
+      : 'Something went wrong while filling.';
+    showStatus(msg, CC.danger);
   } finally {
     fillBtn.disabled = !selectedProfile;
     fillBtn.innerHTML = FILL_BTN_LABEL;

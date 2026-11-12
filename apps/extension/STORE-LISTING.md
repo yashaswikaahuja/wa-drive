@@ -5,7 +5,7 @@ Use this copy in the Developer Dashboard. Upload `release/cybercontrol-extension
 ## Item
 
 - **Name:** CyberControl AutoFill
-- **Version:** see `manifest.json` (currently 5.92.39)
+- **Version:** see `manifest.json` (currently 5.92.40)
 - **Homepage:** https://app.cybercontrol.fun/app
 - **Privacy policy:** https://cybercontrol.fun/privacy
 - **Category:** Productivity
@@ -39,13 +39,17 @@ Fill the current web form from a CyberControl customer profile after an explicit
 
 Saves the Hub session token, API URL, theme, and the last selected customer so the side panel stays signed in.
 
+### activeTab
+
+Used when the operator opens the side panel or taps Fill this form, so the extension can work on the form tab they are looking at.
+
 ### scripting
 
 Injects the bundled fill scripts into the current form tab after the operator taps Fill this form. Scripts are shipped in the package. No remote JavaScript is executed.
 
 ### tabs
 
-Reads the form tab URL so Chrome can ask the operator for access to that origin when they tap Fill this form. Also finds or opens the Hub tab at https://app.cybercontrol.fun/app. Side-panel clicks do not grant host access, so this permission is required before the origin prompt.
+Finds the Hub tab to open https://app.cybercontrol.fun/app, and identifies the active form tab for fill.
 
 ### alarms
 
@@ -59,9 +63,9 @@ The operator UI is a Chrome side panel (`popup.html`), not a toolbar popup.
 
 Talks to the CyberControl API, Hub, and fill WebSocket. Profiles are loaded over HTTPS; fill planning uses the authenticated WebSocket.
 
-### Optional host access (`http://*/*`, `https://*/*`)
+### Host access (`http://*/*`, `https://*/*`)
 
-Not granted at install. When the operator taps Fill this form, Chrome asks for access to that form's origin. Bundled fill scripts then run on that tab only. File pages are not accessed.
+Cafe operators fill many government portals. After the operator taps Fill this form, bundled scripts run on that page only. The extension does not inject a content script on every website. File pages are not accessed.
 
 The Hub bridge content script is limited to `https://app.cybercontrol.fun/*`. Store packages do not include localhost.
 
