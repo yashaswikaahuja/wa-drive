@@ -632,6 +632,11 @@
       font-weight: 650;
       font-family: inherit;
     }
+    #completeness-warn button.warn-cancel {
+      background: hsl(var(--pt-card));
+      color: hsl(var(--pt-ink-soft));
+      border: 1px solid hsl(var(--pt-border));
+    }
 
     #results {
       display: none;
@@ -794,7 +799,7 @@
       font-weight: 700;
       font-family: inherit;
       cursor: pointer;
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       gap: 8px;
@@ -804,6 +809,7 @@
         0 10px 22px -8px hsl(27 95% 55% / 0.55);
       transition: filter .15s, transform .15s;
     }
+    body.can-fill:not(.is-locked) #fill-btn { display: flex; }
     #fill-btn:hover:not(:disabled) { filter: brightness(1.04); transform: translateY(-1px); }
     #fill-btn:active:not(:disabled) { transform: translateY(0); }
     #fill-btn:disabled {

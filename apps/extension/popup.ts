@@ -40,6 +40,8 @@ const detailHubBtn = document.getElementById('detail-hub');
 const FILL_BTN_LABEL = 'Fill this form';
 let _detailOpenId = null;
 const _profileCache = new Map();
+let _canFillPage = false;
+let _completenessResolve = null;
 versionEl.textContent = 'v' + VERSION;
 
 const HUB_FALLBACK = 'https://app.cybercontrol.fun';
@@ -127,10 +129,38 @@ function initialsFor(name) {
     .toUpperCase() || '?';
 }
 
+function isFillableFormUrl(url) {
+  if (!url) return false;
+  if (/^(chrome|edge|about|chrome-extension|devtools|file):/i.test(url)) return false;
+  let parsed;
+  try { parsed = new URL(url); } catch { return false; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  const host = parsed.hostname.replace(/^www\./, '');
+  if (host === 'app.cybercontrol.fun' || host === 'cybercontrol.fun') return false;
+  if (host === 'localhost' || host === '127.0.0.1') return false;
+  return true;
+}
+
+function hideCompletenessWarn(cancelled = true) {
+  const warn = document.getElementById('completeness-warn');
+  if (warn) {
+    warn.style.display = 'none';
+    warn.innerHTML = '';
+  }
+  if (_completenessResolve) {
+    const resolve = _completenessResolve;
+    _completenessResolve = null;
+    resolve(cancelled);
+  }
+}
+
 function updateFillHint() {
   if (!fillHintEl || !fillBtn) return;
+  const canFill = !!(selectedProfile && _canFillPage);
+  document.body.classList.toggle('can-fill', canFill);
+  fillBtn.disabled = !canFill;
   if (detailBtn) detailBtn.disabled = !selectedProfile;
-  if (selectedProfile) {
+  if (canFill) {
     const name = selectedProfile.name || 'customer';
     fillHintEl.textContent = _detailOpenId
       ? `Reviewing ${name}`
@@ -138,8 +168,16 @@ function updateFillHint() {
     fillHintEl.classList.add('ready');
     fillBtn.title = `Fill the open form for ${name}`;
     if (detailBtn) detailBtn.title = `View details for ${name}`;
+  } else if (selectedProfile) {
+    const name = selectedProfile.name || 'customer';
+    fillHintEl.textContent = _detailOpenId
+      ? `Reviewing ${name}`
+      : `Open a form page to fill for ${name}`;
+    fillHintEl.classList.remove('ready');
+    fillBtn.title = 'Open a form page first';
+    if (detailBtn) detailBtn.title = `View details for ${name}`;
   } else {
-    fillHintEl.textContent = 'Select a customer to fill the open form';
+    fillHintEl.textContent = 'Select a customer, then open a form page';
     fillHintEl.classList.remove('ready');
     fillBtn.title = 'Select a customer first';
     if (detailBtn) detailBtn.title = 'View customer details';
@@ -152,6 +190,7 @@ function updateSearchClear() {
 }
 
 function clearSelection() {
+  hideCompletenessWarn();
   closeProfileDetail();
   selectedProfile = null;
   fillBtn.disabled = true;
@@ -187,7 +226,10 @@ async function openHub(path) {
 
 function setLocked(locked) {
   document.body.classList.toggle('is-locked', !!locked);
-  if (locked) closeProfileDetail();
+  if (locked) {
+    hideCompletenessWarn();
+    closeProfileDetail();
+  }
 }
 
 function showLoginEmpty(title, detail) {
@@ -358,6 +400,10 @@ async function syncActivePage() {
     const tab = await getActivePageTab();
     let host = null;
     try { if (tab?.url) host = new URL(tab.url).hostname.replace(/^www\./, ''); } catch {}
+    const fillable = isFillableFormUrl(tab?.url);
+    if (_canFillPage && !fillable) hideCompletenessWarn();
+    _canFillPage = fillable;
+    updateFillHint();
     clearStaleFillSummary(tab?.id || null, host);
   } catch { /* ignore */ }
 }
@@ -590,6 +636,7 @@ function renderProfiles(query) {
 }
 
 function selectProfile(id, opts: { skipRender?: boolean } = {}) {
+  hideCompletenessWarn();
   selectedProfile = allProfiles.find(p => p.id === id) || null;
   fillBtn.disabled = !selectedProfile;
   applyAgentVisibility();
@@ -678,6 +725,8 @@ searchEl.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (_detailOpenId) {
       closeProfileDetail();
+    } else if (document.getElementById('completeness-warn')?.style.display === 'flex') {
+      hideCompletenessWarn();
     } else if (String(searchEl.value || '').trim()) {
       clearSearch();
     } else if (selectedProfile) {
@@ -1278,11 +1327,16 @@ fillBtn.addEventListener('click', async () => {
   const { percent, missing } = getCompleteness(full);
   if (percent < 100 && missing.length > 0) {
     const warn = document.getElementById('completeness-warn');
-    warn.innerHTML = `<span>⚠️ ${percent}% complete — will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button id="fill-anyway">Fill anyway</button>`;
+    warn.innerHTML = `<span>⚠️ ${percent}% complete — will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button type="button" id="fill-anyway">Fill anyway</button><button type="button" id="fill-cancel" class="warn-cancel">Not now</button>`;
     warn.style.display = 'flex';
-    await new Promise<void>((resolve) => {
-      document.getElementById('fill-anyway').onclick = () => { warn.style.display = 'none'; resolve(); };
+    const cancelled = await new Promise((resolve) => {
+      _completenessResolve = resolve;
+      const anyway = document.getElementById('fill-anyway');
+      const cancel = document.getElementById('fill-cancel');
+      if (anyway) anyway.onclick = () => hideCompletenessWarn(false);
+      if (cancel) cancel.onclick = () => hideCompletenessWarn(true);
     });
+    if (cancelled) return;
   }
 
   fillBtn.disabled = true;
@@ -1379,8 +1433,8 @@ fillBtn.addEventListener('click', async () => {
       : 'Something went wrong while filling.';
     showStatus(msg, CC.danger);
   } finally {
-    fillBtn.disabled = !selectedProfile;
     fillBtn.innerHTML = FILL_BTN_LABEL;
+    updateFillHint();
     hideProgress();
   }
 });
