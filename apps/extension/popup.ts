@@ -298,6 +298,24 @@ async function getActivePageTab() {
   return tab || null;
 }
 
+/** Request optional host access for the form origin after the operator taps Fill. */
+async function ensureFormTabAccess(tab) {
+  if (!tab?.id) throw new Error('No active tab');
+  const url = String(tab.url || '');
+  if (!url || /^(chrome|edge|about|chrome-extension|devtools):/i.test(url)) {
+    throw new Error('Open a form page first');
+  }
+  if (url.startsWith('file:')) throw new Error('File pages cannot be filled');
+  let origin = '';
+  try { origin = new URL(url).origin; } catch { throw new Error('Open a form page first'); }
+  if (!origin || origin === 'null') throw new Error('Open a form page first');
+  const origins = [origin + '/*'];
+  const have = await chrome.permissions.contains({ origins });
+  if (have) return;
+  const granted = await chrome.permissions.request({ origins });
+  if (!granted) throw new Error('Allow access to this form page to fill');
+}
+
 // Paper-theme status colors (match frontend .pt-paper)
 const CC = {
   warning: 'hsl(35 92% 38%)',
@@ -995,6 +1013,7 @@ fillBtn.addEventListener('click', async () => {
     if (!tab.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge://')) {
       showStatus('Open a form page first', CC.danger); hideProgress(); return;
     }
+    await ensureFormTabAccess(tab);
     _lastFillTabId = tab.id;
     try { _lastFillHost = new URL(tab.url).hostname.replace(/^www\./, ''); } catch { _lastFillHost = null; }
 
@@ -1040,7 +1059,7 @@ fillBtn.addEventListener('click', async () => {
       backendUrl: data.backendUrl,
       accessToken: data.accessToken,
       runtimeVersion: VERSION,
-      executionPreference: modeSelect ? modeSelect.value : 'AUTO',
+      executionPreference: 'AUTO',
       onProgress: (text, pct) => updateProgress(text, pct),
     });
 
@@ -1067,11 +1086,16 @@ fillBtn.addEventListener('click', async () => {
     }
     showStatus(statusMsg, statusColor);
   } catch (e) {
-    const errApi = globalThis.CcRuntimeErrors;
-    const msg = errApi?.operatorMessageFor
-      ? errApi.operatorMessageFor('gateway_error', null)
-      : 'Something went wrong while filling.';
-    showStatus(msg, CC.danger);
+    const raw = e && e.message ? String(e.message) : '';
+    if (/Allow access|Open a form|File pages|No active tab/.test(raw)) {
+      showStatus(raw, CC.danger);
+    } else {
+      const errApi = globalThis.CcRuntimeErrors;
+      const msg = errApi?.operatorMessageFor
+        ? errApi.operatorMessageFor('gateway_error', null)
+        : 'Something went wrong while filling.';
+      showStatus(msg, CC.danger);
+    }
   } finally {
     fillBtn.disabled = !selectedProfile;
     fillBtn.innerHTML = FILL_BTN_LABEL;
@@ -1104,229 +1128,25 @@ document.getElementById('open-btn').addEventListener('click', () => {
   openHub(HUB_APP_PATH);
 });
 
-// ── AI Agent flow ─────────────────────────────────────────────────────────
-// Plan-then-execute model: popup posts (goal + page snapshot + driver list)
-// to /api/agent/plan, hub returns proposed actions, operator approves,
-// popup runs cc.run(actions) in the active tab.
+// Cafe Auto fill is the only execution path. Remote action lists are not run
+// (Chrome Web Store MV3: no interpreter for commands fetched from a server).
 let _pendingPlan = null;
 
-async function injectDriversInto(tabId) {
-  // Inject network monitor in MAIN world (best-effort)
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      world: 'MAIN',
-      files: ['autofill/plugins/network-monitor.js'],
-    });
-  } catch (e) {}
-  // Inject plugins + drivers in ISOLATED world
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: [
-      'autofill/plugins/interface.js',
-      'autofill/plugins/cascade-select.js',
-      'autofill/plugins/ng-dropdown.js',
-      'autofill/plugins/button-click.js',
-      'autofill/plugins/keystroke-input.js',
-      'drivers/dispatch.js',
-      'drivers/dom.js',
-      'drivers/input.js',
-      'drivers/select.js',
-      'drivers/interaction.js',
-    ],
+function cafeFillOnlyMessage() {
+  showStatus('Use Fill this form. Remote action lists are not executed.', CC.warning);
+}
+
+if (agentBtn) {
+  agentBtn.addEventListener('click', () => cafeFillOnlyMessage());
+}
+if (agentExecuteBtn) {
+  agentExecuteBtn.addEventListener('click', () => cafeFillOnlyMessage());
+}
+if (agentCancelBtn) {
+  agentCancelBtn.addEventListener('click', () => {
+    if (agentPanel) agentPanel.style.display = 'none';
+    _pendingPlan = null;
   });
 }
-
-agentBtn.addEventListener('click', async () => {
-  if (!selectedProfile) return;
-  // Phase 0 (CYB-85): Agent path is legacy client intelligence — off by default.
-  await refreshLegacyFillGate();
-  if (!allowLegacyClientFill) {
-    showStatus('Legacy Agent disabled. Use Fill Form (side panel).', CC.warning);
-    return;
-  }
-  agentBtn.disabled = true;
-  agentBtn.textContent = '🤖 ...';
-  showStatus('Snapshotting page + planning…', CC.info);
-
-  try {
-    const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
-    const tab = await getActivePageTab();
-    if (!tab?.id) throw new Error('No active page tab');
-    await injectDriversInto(tab.id);
-
-    // Get snapshot + driver list from page via cc.do
-    const [{ result: pageData }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: async () => {
-        if (typeof cc === 'undefined') return { error: 'drivers not injected' };
-        const snap = await cc.do({ name: 'dom.snapshot', args: { kinds: ['input', 'select', 'textarea', 'button', 'checkbox', 'radio'], limit: 200 } });
-        const drivers = cc.listDrivers();
-        return { snapshot: snap.result, drivers };
-      },
-    });
-    if (pageData.error) throw new Error(pageData.error);
-
-    // Fetch FULL profile detail (list endpoint only returns summary {id,name,phone})
-    let fullProfile: any = selectedProfile;
-    try {
-      const detailRes = await fetch(data.backendUrl + '/profiles/' + selectedProfile.id, {
-        headers: { 'Authorization': 'Bearer ' + data.accessToken },
-      });
-      if (detailRes.ok) {
-        const detail = await detailRes.json();
-        fullProfile = typeof detail === 'string' ? JSON.parse(detail) : detail;
-      }
-    } catch (e) {}
-
-    // Flatten data — strip metadata keys
-    const META_KEYS = new Set(['id', 'displayLabel', 'displayName', 'relationship', 'createdAt', 'updatedAt', 'workspaceId', 'createdBy', 'updatedBy', 'documentId', 'confirmedAt', 'confirmedBy', 'source', 'confidence']);
-    const flatProfile: any = {};
-    const raw = fullProfile.data || fullProfile;
-    for (const [k, v] of Object.entries(raw)) {
-      if (META_KEYS.has(k)) continue;
-      flatProfile[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
-    }
-    if (fullProfile.name) flatProfile.name = flatProfile.name || fullProfile.name;
-    if (fullProfile.phone) flatProfile.phone = flatProfile.phone || fullProfile.phone;
-
-    const goal = `Fill the form on ${pageData.snapshot.url} for the customer profile. Skip submit/continue buttons.`;
-
-    const planRes = await fetch(data.backendUrl + '/agent/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.accessToken },
-      body: JSON.stringify({
-        goal,
-        snapshot: pageData.snapshot,
-        drivers: pageData.drivers,
-        profile: flatProfile,
-        profileId: selectedProfile.id,
-        hostname: new URL(tab.url).hostname,
-      }),
-    });
-    if (!planRes.ok) {
-      const errBody = await planRes.text();
-      let pretty = '';
-      try {
-        const parsed = JSON.parse(errBody);
-        if (parsed.status === 413) pretty = 'Form too big for one prompt — try again on a shorter section';
-        else if (parsed.status === 429) pretty = 'AI rate-limited — wait 30s and retry';
-        else if (parsed.status === 400) pretty = 'AI rejected schema — extension version mismatch?';
-        else pretty = parsed.error || errBody.slice(0, 100);
-      } catch (e) { pretty = errBody.slice(0, 120); }
-      throw new Error('plan ' + planRes.status + ': ' + pretty);
-    }
-    const plan = await planRes.json();
-
-    if (!plan.actions || plan.actions.length === 0) {
-      showStatus('Agent returned 0 actions. Check console for raw response.', CC.warning);
-      console.log('[CC agent] empty plan, raw:', plan);
-      agentBtn.textContent = '🤖';
-      applyAgentVisibility();
-      return;
-    }
-
-    _pendingPlan = { plan, snapshot: pageData.snapshot, tab, profile: flatProfile };
-    renderPlan(plan.actions);
-    agentPanel.style.display = 'block';
-    showStatus(`Agent proposed ${plan.actions.length} actions (${plan.durationMs}ms, ${plan.model}). Review + execute.`, CC.success);
-  } catch (e) {
-    showStatus('Agent error: ' + e.message, CC.danger);
-    console.error('[CC agent]', e);
-  } finally {
-    agentBtn.textContent = '🤖';
-    applyAgentVisibility();
-  }
-});
-
-function renderPlan(actions) {
-  agentActionsEl.innerHTML = actions.map((a, i) => {
-    const args = JSON.stringify(a.args).slice(0, 80);
-    return `<div class="agent-step">
-      <span class="n">${i + 1}.</span>
-      <span class="name">${a.name}</span>
-      <span class="args">${args}</span>
-    </div>`;
-  }).join('');
-}
-
-agentCancelBtn.addEventListener('click', () => {
-  agentPanel.style.display = 'none';
-  _pendingPlan = null;
-});
-
-agentExecuteBtn.addEventListener('click', async () => {
-  if (!_pendingPlan) return;
-  const { plan, snapshot, tab } = _pendingPlan;
-  agentExecuteBtn.disabled = true;
-  agentExecuteBtn.textContent = '...';
-  showStatus('Executing ' + plan.actions.length + ' actions…', CC.info);
-
-  try {
-    const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
-    // Execute in tab via cc.run
-    const [{ result: execResult }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      args: [plan.actions],
-      func: async (actions) => {
-        if (typeof cc === 'undefined') return { error: 'drivers not loaded' };
-        return await cc.run(actions);
-      },
-    });
-
-    if (execResult.error) throw new Error(execResult.error);
-
-    const okCount = execResult.steps.filter(s => s.ok).length;
-    showStatus(`Done: ${okCount}/${execResult.steps.length} actions succeeded`, execResult.ok ? CC.success : CC.warning);
-
-    // Render per-step results inline so operator sees what happened
-    agentActionsEl.innerHTML = plan.actions.map((a, i) => {
-      const r = execResult.steps[i];
-      const ok = r && r.ok;
-      const color = ok ? 'hsl(158 60% 28%)' : 'hsl(0 65% 45%)';
-      const summary = r?.error || (r?.result ? JSON.stringify(r.result).slice(0, 80) : '?');
-      const args = JSON.stringify(a.args).slice(0, 60);
-      return `<div class="agent-step">
-        <span style="color:${color}">${ok ? '✓' : '✗'}</span>
-        <span class="name">${a.name}</span>
-        <span class="args">${args}</span>
-        <div class="n" style="padding-left:16px;font-size:10px;margin-top:2px">${summary}</div>
-      </div>`;
-    }).join('');
-
-    // Snapshot after for trace
-    const [{ result: snapAfter }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: async () => (await cc.do({ name: 'dom.snapshot', args: {} })).result,
-    });
-
-    // Persist trace (best-effort) — also pass profile + formKey so server can
-    // learn (formKey, label) -> profileKey mappings from successful fills.
-    fetch(data.backendUrl + '/agent/trace', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.accessToken },
-      body: JSON.stringify({
-        goal: 'agent execute',
-        plan,
-        results: execResult,
-        snapshotBefore: snapshot,
-        snapshotAfter: snapAfter,
-        profileId: selectedProfile?.id,
-        profile: _pendingPlan?.profile || null,
-        formKey: plan.formKey || null,
-      }),
-    }).catch(e => console.warn('[CC agent] trace persist failed:', e));
-
-    agentExecuteBtn.textContent = '✓ Done';
-    setTimeout(() => { agentExecuteBtn.textContent = '▶ Execute'; }, 3000);
-    _pendingPlan = null;
-  } catch (e) {
-    showStatus('Execute error: ' + e.message, CC.danger);
-    console.error('[CC agent execute]', e);
-  } finally {
-    agentExecuteBtn.disabled = false;
-    agentExecuteBtn.textContent = '▶ Execute';
-  }
-});
 
 init();
