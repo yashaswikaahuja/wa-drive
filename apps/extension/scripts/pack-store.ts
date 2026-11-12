@@ -7,7 +7,7 @@
  *
  * Usage: node apps/extension/scripts/pack-store.js
  */
-import { createWriteStream, existsSync, mkdirSync, cpSync, rmSync, readFileSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, cpSync, rmSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -65,6 +65,25 @@ for (const name of INCLUDE) {
     continue;
   }
   cpSync(src, join(stageDir, name), { recursive: true });
+}
+
+rewriteStoreManifest(join(stageDir, 'manifest.json'));
+
+function rewriteStoreManifest(manifestPath: string) {
+  if (!existsSync(manifestPath)) return;
+  const m = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const dropLocal = (arr: string[] = []) => arr.filter((u) => !/localhost|127\.0\.0\.1/.test(u));
+  if (m.externally_connectable?.matches) {
+    m.externally_connectable.matches = dropLocal(m.externally_connectable.matches);
+  }
+  if (Array.isArray(m.host_permissions)) m.host_permissions = dropLocal(m.host_permissions);
+  if (Array.isArray(m.content_scripts)) {
+    for (const cs of m.content_scripts) {
+      if (Array.isArray(cs.matches)) cs.matches = dropLocal(cs.matches);
+    }
+  }
+  writeFileSync(manifestPath, JSON.stringify(m, null, 2) + '\n');
+  console.log('[pack] store manifest: localhost origins stripped');
 }
 
 // ZIP with Python zipfile — uses POSIX "/" separators.

@@ -5,7 +5,7 @@ Use this copy in the Developer Dashboard. Upload `release/cybercontrol-extension
 ## Item
 
 - **Name:** CyberControl AutoFill
-- **Version:** see `manifest.json` (currently 5.92.38)
+- **Version:** see `manifest.json` (currently 5.92.39)
 - **Homepage:** https://app.cybercontrol.fun/app
 - **Privacy policy:** https://cybercontrol.fun/privacy
 - **Category:** Productivity
@@ -39,17 +39,13 @@ Fill the current web form from a CyberControl customer profile after an explicit
 
 Saves the Hub session token, API URL, theme, and the last selected customer so the side panel stays signed in.
 
-### activeTab
-
-Used when the operator opens the side panel or taps Fill this form, so the extension can work on the form tab they are looking at.
-
 ### scripting
 
 Injects the bundled fill scripts into the current form tab after the operator taps Fill this form. Scripts are shipped in the package. No remote JavaScript is executed.
 
 ### tabs
 
-Finds the Hub tab to open https://app.cybercontrol.fun/app, and identifies the active form tab for fill.
+Reads the form tab URL so Chrome can ask the operator for access to that origin when they tap Fill this form. Also finds or opens the Hub tab at https://app.cybercontrol.fun/app. Side-panel clicks do not grant host access, so this permission is required before the origin prompt.
 
 ### alarms
 
@@ -63,15 +59,15 @@ The operator UI is a Chrome side panel (`popup.html`), not a toolbar popup.
 
 Talks to the CyberControl API, Hub, and fill WebSocket. Profiles are loaded over HTTPS; fill planning uses the authenticated WebSocket.
 
-### Host access (`http://*/*`, `https://*/*`)
+### Optional host access (`http://*/*`, `https://*/*`)
 
-Cafe operators fill many government portals. After the operator taps Fill this form, bundled scripts run on that page only. The extension does not inject a content script on every website.
+Not granted at install. When the operator taps Fill this form, Chrome asks for access to that form's origin. Bundled fill scripts then run on that tab only. File pages are not accessed.
 
-The Hub bridge content script is limited to `https://app.cybercontrol.fun/*` (and local Hub URLs for development). File pages are not accessed.
+The Hub bridge content script is limited to `https://app.cybercontrol.fun/*`. Store packages do not include localhost.
 
 ### externally_connectable
 
-Only the CyberControl Hub origin may message the extension. Localhost entries are for Hub development.
+Only the CyberControl Hub origin (`https://app.cybercontrol.fun/*`) may message the extension.
 
 ## Privacy practices (dashboard)
 
@@ -79,7 +75,7 @@ Only the CyberControl Hub origin may message the extension. Localhost entries ar
 - **Does not collect:** passwords, OTP, CAPTCHA, payment credentials, or browsing history.
 - **Used for:** filling the current form and improving mapping quality in the cafe workspace.
 - **Not sold.** Not used for credit or advertising.
-- **Remote code:** none. All executable code is in the store package. The API returns profile values and field mappings (data), not scripts.
+- **Remote code:** none. All executable code is in the store package. The API returns profile values and field mappings (data), not scripts. The extension does not execute remote action lists.
 
 ## Screenshots
 
