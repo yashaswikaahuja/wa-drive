@@ -29,7 +29,16 @@ const searchClear = document.getElementById('search-clear');
 const listCountEl = document.getElementById('list-count');
 const listHintEl = document.getElementById('list-hint');
 const fillHintEl = document.getElementById('fill-hint');
+const detailBtn = document.getElementById('detail-btn');
+const profileDetailEl = document.getElementById('profile-detail');
+const detailNameEl = document.getElementById('detail-name');
+const detailSubEl = document.getElementById('detail-sub');
+const detailBadgeEl = document.getElementById('detail-badge');
+const detailBodyEl = document.getElementById('detail-body');
+const detailBackBtn = document.getElementById('detail-back');
+const detailHubBtn = document.getElementById('detail-hub');
 const FILL_BTN_LABEL = 'Fill this form';
+let _detailOpenId = null;
 versionEl.textContent = 'v' + VERSION;
 
 const HUB_FALLBACK = 'https://app.cybercontrol.fun';
@@ -119,15 +128,20 @@ function initialsFor(name) {
 
 function updateFillHint() {
   if (!fillHintEl || !fillBtn) return;
+  if (detailBtn) detailBtn.disabled = !selectedProfile;
   if (selectedProfile) {
     const name = selectedProfile.name || 'customer';
-    fillHintEl.textContent = `Ready to fill for ${name}`;
+    fillHintEl.textContent = _detailOpenId
+      ? `Reviewing ${name}`
+      : `Ready to fill for ${name}`;
     fillHintEl.classList.add('ready');
     fillBtn.title = `Fill the open form for ${name}`;
+    if (detailBtn) detailBtn.title = `View details for ${name}`;
   } else {
     fillHintEl.textContent = 'Select a customer to fill the open form';
     fillHintEl.classList.remove('ready');
     fillBtn.title = 'Select a customer first';
+    if (detailBtn) detailBtn.title = 'View customer details';
   }
 }
 
@@ -137,6 +151,7 @@ function updateSearchClear() {
 }
 
 function clearSelection() {
+  closeProfileDetail();
   selectedProfile = null;
   fillBtn.disabled = true;
   applyAgentVisibility();
@@ -171,6 +186,7 @@ async function openHub(path) {
 
 function setLocked(locked) {
   document.body.classList.toggle('is-locked', !!locked);
+  if (locked) closeProfileDetail();
 }
 
 function showLoginEmpty(title, detail) {
@@ -479,7 +495,7 @@ function updateListMeta(query, visibleCount, totalFiltered) {
   }
   if (listHintEl) {
     if (selectedProfile) {
-      listHintEl.textContent = 'Enter to fill · Esc to clear';
+      listHintEl.textContent = 'Details · Enter to fill · Esc to clear';
     } else if (totalFiltered > 0) {
       listHintEl.textContent = '↑↓ to move · Enter to select';
     } else {
@@ -543,6 +559,7 @@ function renderProfiles(query) {
         </div>
         <div class="profile-phone">${phoneLabel}</div>
       </div>
+      <button type="button" class="profile-detail-btn" data-id="${escapeHtml(p.id)}" title="View details" aria-label="View details for ${name}">i</button>
       <div class="profile-check" aria-hidden="true">✓</div>
     </div>`;
   }).join('');
@@ -550,6 +567,12 @@ function renderProfiles(query) {
   profilesEl.querySelectorAll('.profile-item').forEach(el => {
     el.addEventListener('click', () => {
       selectProfile(el.dataset.id);
+    });
+  });
+  profilesEl.querySelectorAll('.profile-detail-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void openProfileDetail(btn.getAttribute('data-id'));
     });
   });
 
@@ -580,8 +603,13 @@ async function prefetchProfile(id) {
     const r = await fetch(data.backendUrl + '/profiles/' + id, {
       headers: { Authorization: 'Bearer ' + data.accessToken }
     });
-    if (r.ok) _prefetchedProfile = await r.json();
+    if (r.ok) {
+      _prefetchedProfile = await r.json();
+      if (_detailOpenId === id) renderProfileDetail(_prefetchedProfile);
+      return _prefetchedProfile;
+    }
   } catch {}
+  return null;
 }
 
 // Keyboard navigation
@@ -609,7 +637,9 @@ searchEl.addEventListener('keydown', (e) => {
     }
   } else if (e.key === 'Escape') {
     e.preventDefault();
-    if (String(searchEl.value || '').trim()) {
+    if (_detailOpenId) {
+      closeProfileDetail();
+    } else if (String(searchEl.value || '').trim()) {
       clearSearch();
     } else if (selectedProfile) {
       clearSelection();
@@ -965,11 +995,244 @@ function getCompleteness(profile) {
   return { percent: Math.round(filled / REQUIRED_FIELDS.length * 100), missing };
 }
 
+const PROFILE_DETAIL_SECTIONS = [
+  {
+    id: 'personal',
+    title: 'Personal',
+    fields: [
+      ['name', 'Full name', true],
+      ['first_name', 'First name'],
+      ['middle_name', 'Middle name'],
+      ['last_name', 'Last name'],
+      ['father_name', "Father's name", true],
+      ['mother_name', "Mother's name"],
+      ['husband_name', "Husband's name"],
+      ['dob', 'Date of birth', true],
+      ['gender', 'Gender', true],
+      ['marital_status', 'Marital status'],
+      ['nationality', 'Nationality'],
+      ['category', 'Category'],
+      ['religion', 'Religion'],
+    ],
+  },
+  {
+    id: 'identity',
+    title: 'Identity',
+    fields: [
+      ['aadhaar_number', 'Aadhaar', true],
+      ['ayushman_id', 'Ayushman / ABHA'],
+      ['name_devanagari', 'Name (Hindi)'],
+      ['pan_number', 'PAN'],
+      ['voter_id', 'Voter ID'],
+      ['driving_license', 'Driving license'],
+    ],
+  },
+  {
+    id: 'contact',
+    title: 'Contact & address',
+    fields: [
+      ['phone', 'Mobile'],
+      ['email', 'Email'],
+      ['address', 'Address', true],
+      ['permanent_address', 'Permanent address'],
+      ['village', 'Village'],
+      ['block', 'Block'],
+      ['sub_division', 'Sub-division'],
+      ['post_office', 'Post office'],
+      ['police_station', 'Police station'],
+      ['ward_no', 'Ward'],
+      ['city', 'City'],
+      ['district', 'District'],
+      ['state', 'State', true],
+      ['pincode', 'PIN code', true],
+    ],
+  },
+  {
+    id: 'education_10th',
+    title: '10th',
+    fields: [
+      ['board_10th', 'Board'],
+      ['roll_number_10th', 'Roll number'],
+      ['passing_year_10th', 'Year'],
+      ['percentage_10th', 'Percentage'],
+      ['school_name', 'School'],
+    ],
+  },
+  {
+    id: 'education_12th',
+    title: '12th',
+    fields: [
+      ['board_12th', 'Board'],
+      ['roll_number_12th', 'Roll number'],
+      ['stream_12th', 'Stream'],
+      ['passing_year_12th', 'Year'],
+      ['percentage_12th', 'Percentage'],
+    ],
+  },
+  {
+    id: 'education_grad',
+    title: 'Graduation',
+    fields: [
+      ['university_name', 'University'],
+      ['degree', 'Degree'],
+      ['passing_year_grad', 'Year'],
+      ['percentage_grad', 'Percentage'],
+    ],
+  },
+  {
+    id: 'bank',
+    title: 'Bank',
+    fields: [
+      ['account_holder_name', 'Account holder'],
+      ['bank_account_number', 'Account number'],
+      ['ifsc_code', 'IFSC'],
+      ['bank_name', 'Bank'],
+      ['branch_name', 'Branch'],
+    ],
+  },
+  {
+    id: 'travel',
+    title: 'Travel',
+    fields: [
+      ['departure', 'From'],
+      ['arrival', 'To'],
+      ['journey_date', 'Journey date'],
+      ['travel_class', 'Class'],
+      ['quota', 'Quota'],
+    ],
+  },
+];
+
+const PROFILE_DETAIL_META = new Set([
+  'id', 'displayLabel', 'displayName', 'relationship', 'createdAt', 'updatedAt',
+  'workspaceId', 'createdBy', 'updatedBy', 'documentId', 'confirmedAt', 'confirmedBy',
+  'source', 'confidence', 'document_type', 'document_label', 'needs_type', 'data',
+]);
+
+function flattenProfileFields(profile) {
+  const out: Record<string, string> = {};
+  const raw = { ...(profile || {}), ...((profile && profile.data) || {}) };
+  for (const [k, v] of Object.entries(raw)) {
+    if (PROFILE_DETAIL_META.has(k)) continue;
+    let val: any = (v && typeof v === 'object' && v !== null && 'value' in (v as object))
+      ? (v as any).value
+      : v;
+    if (val == null || val === '') continue;
+    if (typeof val === 'object') {
+      try {
+        val = Object.entries(val as Record<string, unknown>)
+          .map(([sk, sv]) => `${sk}: ${sv == null ? '' : String(sv)}`)
+          .join(', ');
+      } catch {
+        continue;
+      }
+    }
+    const text = String(val).trim();
+    if (!text) continue;
+    out[k] = text;
+    const underscored = k.replace(/-/g, '_');
+    if (underscored !== k && !out[underscored]) out[underscored] = text;
+  }
+  if (profile?.name && !out.name) out.name = String(profile.name);
+  const phone = getPhone(profile);
+  if (phone && !out.phone) out.phone = phone;
+  return out;
+}
+
+function closeProfileDetail() {
+  _detailOpenId = null;
+  document.body.classList.remove('showing-detail');
+  updateFillHint();
+}
+
+function renderProfileDetail(profile) {
+  if (!profileDetailEl || !detailBodyEl) return;
+  const name = profile?.name || 'Customer';
+  const phone = getPhone(profile);
+  const { percent } = getCompleteness(profile);
+  if (detailNameEl) detailNameEl.textContent = name;
+  if (detailSubEl) detailSubEl.textContent = phone || 'No phone on file';
+  if (detailBadgeEl) {
+    const cls = percent >= 85 ? 'ok' : percent >= 50 ? 'warn' : 'low';
+    detailBadgeEl.className = 'profile-badge ' + cls;
+    detailBadgeEl.textContent = percent + '%';
+  }
+  const flat = flattenProfileFields(profile);
+  const claimed = new Set<string>();
+  const chunks: string[] = [];
+  for (const section of PROFILE_DETAIL_SECTIONS) {
+    const rows: string[] = [];
+    for (const field of section.fields) {
+      const key = field[0] as string;
+      const label = field[1] as string;
+      const required = !!field[2];
+      const value = flat[key] || '';
+      if (!value && !required) continue;
+      claimed.add(key);
+      rows.push(
+        `<div class="detail-row">` +
+        `<div class="detail-label">${escapeHtml(label)}</div>` +
+        (value
+          ? `<div class="detail-value">${escapeHtml(value)}</div>`
+          : `<div class="detail-value missing">Missing</div>`) +
+        `</div>`
+      );
+    }
+    if (!rows.length) continue;
+    chunks.push(
+      `<div class="detail-section">` +
+      `<div class="detail-section-title">${escapeHtml(section.title)}</div>` +
+      rows.join('') +
+      `</div>`
+    );
+  }
+  const extras = Object.keys(flat).filter((k) => !claimed.has(k) && flat[k]);
+  if (extras.length) {
+    chunks.push(
+      `<div class="detail-section"><div class="detail-section-title">Other</div>` +
+      extras.map((k) =>
+        `<div class="detail-row"><div class="detail-label">${escapeHtml(k.replace(/_/g, ' '))}</div>` +
+        `<div class="detail-value">${escapeHtml(flat[k])}</div></div>`
+      ).join('') +
+      `</div>`
+    );
+  }
+  detailBodyEl.innerHTML = chunks.length
+    ? chunks.join('')
+    : `<div class="detail-empty">No stored fields yet. Complete this profile in Hub.</div>`;
+}
+
+async function openProfileDetail(id) {
+  if (!id) return;
+  _detailOpenId = id;
+  document.body.classList.add('showing-detail');
+  if (selectedProfile?.id !== id) selectProfile(id);
+  const listRow = allProfiles.find((p) => p.id === id) || selectedProfile;
+  const cached = _prefetchedProfile?.id === id ? _prefetchedProfile : listRow;
+  renderProfileDetail(cached || { id, name: 'Customer' });
+  updateFillHint();
+  if (_prefetchedProfile?.id !== id) {
+    const full = await prefetchProfile(id);
+    if (_detailOpenId === id && full) renderProfileDetail(full);
+  }
+}
+
+async function openSelectedInHub() {
+  const profile = _prefetchedProfile?.id === selectedProfile?.id ? _prefetchedProfile : selectedProfile;
+  const phone = getPhone(profile || {});
+  if (phone) {
+    await openHub('/app/customers/' + encodeURIComponent(phone));
+    return;
+  }
+  await openHub('/app/customers');
+}
+
 updateSearchClear();
 updateFillHint();
 
 fillBtn.addEventListener('click', async () => {
   if (!selectedProfile) return;
+  closeProfileDetail();
 
   const full = _prefetchedProfile?.id === selectedProfile.id ? _prefetchedProfile : selectedProfile;
   const { percent, missing } = getCompleteness(full);
@@ -1106,6 +1369,20 @@ undoBtn.addEventListener('click', async () => {
 document.getElementById('open-btn').addEventListener('click', () => {
   openHub(HUB_APP_PATH);
 });
+
+if (detailBtn) {
+  detailBtn.addEventListener('click', () => {
+    if (!selectedProfile) return;
+    if (_detailOpenId === selectedProfile.id) closeProfileDetail();
+    else void openProfileDetail(selectedProfile.id);
+  });
+}
+if (detailBackBtn) {
+  detailBackBtn.addEventListener('click', () => closeProfileDetail());
+}
+if (detailHubBtn) {
+  detailHubBtn.addEventListener('click', () => { void openSelectedInHub(); });
+}
 
 // Cafe Auto fill is the only execution path. Remote action lists are not run
 // (Chrome Web Store MV3: no interpreter for commands fetched from a server).
