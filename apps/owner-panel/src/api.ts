@@ -180,11 +180,11 @@ async function send(cfg: Config, method: string, path: string, body?: unknown): 
   }
 }
 
-// Block (suspend) or unblock a café — gates login for all its users.
+// Block (suspend) or unblock a cafe — gates login for all its users.
 export const setWorkspaceStatus = (cfg: Config, id: string, action: 'block' | 'unblock') =>
   send(cfg, 'PATCH', `/owner/workspaces/${id}/status`, { action });
 
-// Permanently hard-delete a café + all its data. `confirm` must equal the café name.
+// Permanently hard-delete a cafe + all its data. `confirm` must equal the cafe name.
 export const deleteWorkspace = (cfg: Config, id: string, confirm: string) =>
   send(cfg, 'DELETE', `/owner/workspaces/${id}`, { confirm });
 

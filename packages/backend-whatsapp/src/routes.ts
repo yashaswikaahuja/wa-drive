@@ -262,7 +262,7 @@ router.post('/event', async (req, res) => {
 
   if (event === 'qr') {
     await setWorkspaceQR(workspaceId, qr);
-    // QR means the café is not online — clear the owner-panel connected flag.
+    // QR means the cafe is not online — clear the owner-panel connected flag.
     markWhatsAppOffline();
     console.log(`[Hub] QR cached for workspace ${workspaceId.slice(0, 8)} (qr_len=${qr?.length || 0})`);
   } else if (event === 'connected') {

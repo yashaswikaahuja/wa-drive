@@ -13,7 +13,7 @@ import {
 } from './doc-extract-maps.js';
 
 function buildClassifyPrompt(): string {
-  return `You are classifying an Indian document image for a cyber-café. Choose the SINGLE best matching type.
+  return `You are classifying an Indian document image for a cyber-cafe. Choose the SINGLE best matching type.
 Return ONLY JSON (no markdown): {"document_type":"<key>","document_label":"<short human title>","confidence":0.0}
 
 You MUST pick document_type from EXACTLY this list (use these snake_case keys verbatim):
@@ -329,7 +329,7 @@ export async function proposeDocumentRule(
   const hint = hintType
     ? `The operator/classifier already named this type as "${hintType}". Propose the lean field list for that type (reuse the type key if valid).`
     : `If it matches a seed type, reuse that key. Otherwise invent a short snake_case document_type.`;
-  const prompt = `You are building an extract RULE for an Indian cyber-café autofill system (like teaching a form mapping once).
+  const prompt = `You are building an extract RULE for an Indian cyber-cafe autofill system (like teaching a form mapping once).
 Look at this document image and return ONLY JSON:
 {"document_type":"<snake_case>","document_label":"<short title>","fields":["key1","key2"],"confidence":0.0}
 

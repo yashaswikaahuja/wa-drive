@@ -1,7 +1,7 @@
 import type { Trends } from '../api';
 import { fmt } from '../lib/format';
 
-/** North-Star: Weekly Active Cafés trend + WAU/MAU stickiness + signup cohort retention heatmap. */
+/** North-Star: Weekly Active Cafes trend + WAU/MAU stickiness + signup cohort retention heatmap. */
 export function TrendsPanel({ t }: { t: Trends }) {
   const peak = Math.max(1, ...t.wauSeries.map(w => w.active));
   const cur = t.wauSeries[t.wauSeries.length - 1]?.active ?? 0;
@@ -9,7 +9,7 @@ export function TrendsPanel({ t }: { t: Trends }) {
     <section className="card" style={{ padding: 16, marginBottom: 16 }} aria-label="Engagement trends">
       <div className="row between" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
         <h2 className="display" style={{ fontSize: 16 }}>
-          Weekly Active Cafés <span className="muted" style={{ fontSize: 12 }}>· North Star</span>
+          Weekly Active Cafes <span className="muted" style={{ fontSize: 12 }}>· North Star</span>
         </h2>
         <div className="row" style={{ gap: 18 }}>
           <div><span className="num" style={{ fontWeight: 700, fontSize: 18 }}>{fmt(cur)}</span> <span className="muted" style={{ fontSize: 12 }}>this week</span></div>

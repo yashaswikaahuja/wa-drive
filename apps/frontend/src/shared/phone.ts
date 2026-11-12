@@ -4,7 +4,7 @@ export function phoneDigits(p: string): string {
 }
 
 /**
- * Match café phones across 91 / 0 / bare-10 formats.
+ * Match cafe phones across 91 / 0 / bare-10 formats.
  * Prefer exact digit equality; then suffix match for ≥10 digits.
  */
 export function phonesMatch(a: string, b: string): boolean {
@@ -19,7 +19,7 @@ export function phonesMatch(a: string, b: string): boolean {
 }
 
 /**
- * Display formatting for Indian café phones (91… / 0… / bare 10).
+ * Display formatting for Indian cafe phones (91… / 0… / bare 10).
  * Falls back to the original string when digits are not a phone.
  */
 export function formatPhoneDisplay(p: string): string {

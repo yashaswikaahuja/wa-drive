@@ -198,7 +198,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     await auditLog(user.workspace_id, user.id, 'login', 'user', user.id, { field: useEmail ? 'email' : 'phone' });
     // Owner-panel activity signal (best-effort; column added in migration 007).
     pool.query('UPDATE workspaces SET last_active_at = now() WHERE id = $1', [user.workspace_id]).catch(() => {});
-    // Tier-2 location capture (best-effort, only if the café has no location yet).
+    // Tier-2 location capture (best-effort, only if the cafe has no location yet).
     captureIpLocation(req, user.workspace_id).catch(() => {});
     setRefreshCookie(res, refreshToken);
     res.json({ ok: true, accessToken, refreshToken, user: { id: user.id, workspaceId: user.workspace_id, name: user.name, role: user.role } });
@@ -381,8 +381,8 @@ router.patch('/password', authMiddleware, loginLimiter, async (req: any, res) =>
   }
 });
 
-// Caller's café (workspace) location. GET to check, PATCH to set — used to prompt existing
-// operators whose café has no location yet (surfaced in the owner panel).
+// Caller's cafe (workspace) location. GET to check, PATCH to set — used to prompt existing
+// operators whose cafe has no location yet (surfaced in the owner panel).
 router.get('/workspace', authMiddleware, async (req: any, res) => {
   try {
     const w = (await pool.query('SELECT id, name, location, lat, lng, location_source FROM workspaces WHERE id = $1', [req.user.workspaceId])).rows[0];

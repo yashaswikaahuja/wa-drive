@@ -181,7 +181,7 @@ HTTPS: token mint, profile CRUD, health, rare fallback only
 #### T13 — Lift kernel into product extension tree
 **Labels:** `transform-legacy`, `fill-kernel`  
 **Depends:** T1–T3, T6–T10  
-**Deliverable:** Product extension uses sequential kernel as default café fill path; ActionPlan/APE only where it earns keep or as opt-in.  
+**Deliverable:** Product extension uses sequential kernel as default cafe fill path; ActionPlan/APE only where it earns keep or as opt-in.  
 **Done when:** Side-panel Fill on product build matches legacy-best quality on golden portals.
 
 #### T14 — Product WSS client wired to fill loop

@@ -2,7 +2,7 @@
  * LocationBanner — the location-capture waterfall UI for logged-in operators.
  *   Tier ① "Use exact location" → browser geolocation popup → reverse-geocode (Google) → save as gps
  *   Tier ③ manual field → PlaceAutocompleteElement (if Maps key) else plain text → save as manual
- * Tier ② (silent IP) already runs server-side at login. The banner shows only while the café has no
+ * Tier ② (silent IP) already runs server-side at login. The banner shows only while the cafe has no
  * location or just a coarse IP one — so we nudge for something more precise — and hides otherwise.
  */
 import { useEffect, useRef, useState } from 'react';

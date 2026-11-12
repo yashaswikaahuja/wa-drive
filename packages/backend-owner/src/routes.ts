@@ -49,9 +49,9 @@ router.get('/metrics', async (req: any, res) => {
 });
 
 /**
- * GET /owner/funnel — activation funnel across live cafés:
+ * GET /owner/funnel — activation funnel across live cafes:
  * signed up → WhatsApp connected → activated (1st file) → weekly-active → paying.
- * Shows where cafés drop off on the path to value.
+ * Shows where cafes drop off on the path to value.
  */
 router.get('/funnel', async (req: any, res) => {
   try {
@@ -82,8 +82,8 @@ router.get('/funnel', async (req: any, res) => {
 
 /**
  * GET /owner/trends — North-Star engagement over time:
- *  • wauSeries  Weekly Active Cafés for the last 8 weeks (≥1 doc processed that week)
- *  • stickiness WAU / MAU (how many monthly-active cafés are also active this week)
+ *  • wauSeries  Weekly Active Cafes for the last 8 weeks (≥1 doc processed that week)
+ *  • stickiness WAU / MAU (how many monthly-active cafes are also active this week)
  *  • cohorts    monthly signup cohorts × % still active k months later (retention triangle)
  */
 router.get('/trends', async (req: any, res) => {
@@ -222,7 +222,7 @@ router.get('/workspaces', async (req: any, res) => {
 });
 
 /**
- * GET /owner/workspaces/:id — one café's full detail: operators, WhatsApp sessions, file stats, dates.
+ * GET /owner/workspaces/:id — one cafe's full detail: operators, WhatsApp sessions, file stats, dates.
  */
 router.get('/workspaces/:id', async (req: any, res) => {
   const { id } = req.params;
@@ -286,7 +286,7 @@ router.patch('/workspaces/:id', async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH /owner/workspaces/:id/status — block (suspend) or unblock a café.
+// PATCH /owner/workspaces/:id/status — block (suspend) or unblock a cafe.
 // Block gates every login for all its users and revokes active sessions → locked out now + future.
 router.patch('/workspaces/:id/status', async (req: any, res) => {
   const { id } = req.params;
@@ -309,8 +309,8 @@ router.patch('/workspaces/:id/status', async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /owner/workspaces/:id — PERMANENT hard delete of a café and ALL its data. Irreversible.
-// Requires body { confirm: "<exact café name>" } to guard against accidents. Cascades every
+// DELETE /owner/workspaces/:id — PERMANENT hard delete of a cafe and ALL its data. Irreversible.
+// Requires body { confirm: "<exact cafe name>" } to guard against accidents. Cascades every
 // workspace/user-scoped table (all FKs are NO ACTION) inside one transaction.
 router.delete('/workspaces/:id', async (req: any, res) => {
   const { id } = req.params;
@@ -322,7 +322,7 @@ router.delete('/workspaces/:id', async (req: any, res) => {
     const confirm = (req.body?.confirm ?? '').toString();
     if (confirm !== (w.name || '')) {
       client.release();
-      return res.status(400).json({ error: 'Confirmation text does not match the café name.' });
+      return res.status(400).json({ error: 'Confirmation text does not match the cafe name.' });
     }
     await client.query('BEGIN');
     // Every table with a workspace_id column (except users + workspaces), discovered live so new

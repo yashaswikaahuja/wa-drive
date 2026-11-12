@@ -152,7 +152,7 @@ export default function Login() {
               <h1 className="pt-display text-lg font-bold tracking-tight text-white">
                 Cyber<span style={{ color: 'hsl(var(--marigold))' }}>Control</span>
               </h1>
-              <p className="text-[11px] text-white/55">Operator workspace for Indian cybercafés</p>
+              <p className="text-[11px] text-white/55">Operator workspace for Indian cybercafes</p>
             </div>
           </div>
         </div>

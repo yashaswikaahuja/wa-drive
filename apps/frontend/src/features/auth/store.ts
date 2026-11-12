@@ -31,7 +31,7 @@ export const useAuthStore = create<AuthState>()(
       setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken, isAuthenticated: true }),
       setUser: (user) => set({ user }),
       logout: () => {
-        // Drop café-local caches so the next account does not see the previous workspace.
+        // Drop cafe-local caches so the next account does not see the previous workspace.
         try {
           localStorage.removeItem('cc-drive-files');
           localStorage.removeItem('cc-wa-connected');

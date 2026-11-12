@@ -1,5 +1,5 @@
 /**
- * PDF Scan — Adobe Scan–style for cybercafé:
+ * PDF Scan — Adobe Scan–style for cybercafe:
  * add pages → enhance → reorder → export multi-page PDF → Download / Save.
  */
 import { useEffect, useRef, useState } from 'react';

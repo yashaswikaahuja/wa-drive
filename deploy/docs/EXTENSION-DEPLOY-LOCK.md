@@ -1,6 +1,6 @@
 # Extension deploy lock (Phase 0 / CYB-85)
 
-Café operators must run a **paired** extension package and extension-service image so perception contracts and fill routes stay in sync.
+Cafe operators must run a **paired** extension package and extension-service image so perception contracts and fill routes stay in sync.
 
 ## Rule
 
@@ -34,7 +34,7 @@ When cutting a downloadable zip, stamp `extension/build-info.json`:
 }
 ```
 
-Do not ship `"commit": "development"` to cafés.
+Do not ship `"commit": "development"` to cafes.
 
 ## Deploying extension-service
 
@@ -52,7 +52,7 @@ curl -sS https://api.cybercontrol.fun/api/extension/health
 # or on the host: curl -sS http://127.0.0.1:3300/health
 ```
 
-## Product path (only café default)
+## Product path (only cafe default)
 
 ```
 Side panel Fill

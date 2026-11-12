@@ -13,11 +13,11 @@ Use this copy in the Developer Dashboard. Upload `release/cybercontrol-extension
 
 ## Short description
 
-Fill government and portal forms from CyberControl customer profiles — for café operators.
+Fill government and portal forms from CyberControl customer profiles — for cafe operators.
 
 ## Long description
 
-CyberControl AutoFill helps cyber-café operators fill government and portal forms from customer profiles stored in the CyberControl Hub.
+CyberControl AutoFill helps cyber-cafe operators fill government and portal forms from customer profiles stored in the CyberControl Hub.
 
 How it works:
 
@@ -27,7 +27,7 @@ How it works:
 
 The extension reads visible fields on the current form, matches them to the selected customer profile, and types the values. It does not submit the form. OTP, password, CAPTCHA, and payment fields are skipped.
 
-Customer profiles stay in the café workspace. Fill runs only when the operator chooses a customer and taps Fill this form.
+Customer profiles stay in the cafe workspace. Fill runs only when the operator chooses a customer and taps Fill this form.
 
 ## Single purpose
 
@@ -65,7 +65,7 @@ Talks to the CyberControl API, Hub, and fill WebSocket. Profiles are loaded over
 
 ### Host access (`http://*/*`, `https://*/*`)
 
-Café operators fill many government portals. After the operator taps Fill this form, bundled scripts run on that page only. The extension does not inject a content script on every website.
+Cafe operators fill many government portals. After the operator taps Fill this form, bundled scripts run on that page only. The extension does not inject a content script on every website.
 
 The Hub bridge content script is limited to `https://app.cybercontrol.fun/*` (and local Hub URLs for development). File pages are not accessed.
 
@@ -77,7 +77,7 @@ Only the CyberControl Hub origin may message the extension. Localhost entries ar
 
 - **Collects:** customer profile fields the operator already stored in Hub (name, ID numbers, address, dates) and technical fill results (field labels, success/skip).
 - **Does not collect:** passwords, OTP, CAPTCHA, payment credentials, or browsing history.
-- **Used for:** filling the current form and improving mapping quality in the café workspace.
+- **Used for:** filling the current form and improving mapping quality in the cafe workspace.
 - **Not sold.** Not used for credit or advertising.
 - **Remote code:** none. All executable code is in the store package. The API returns profile values and field mappings (data), not scripts.
 

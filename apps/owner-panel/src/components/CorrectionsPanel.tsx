@@ -187,7 +187,7 @@ export function CorrectionsPanel({ cfg }: { cfg: Config }) {
       </div>
 
       <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-        Operator edits after autofill — review overrides and new fields taught from the café floor.
+        Operator edits after autofill — review overrides and new fields taught from the cafe floor.
       </p>
 
       <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -196,9 +196,9 @@ export function CorrectionsPanel({ cfg }: { cfg: Config }) {
           value={workspaceId}
           onChange={(e) => setWorkspaceId(e.target.value)}
           style={{ minWidth: 200, flex: '0 1 240px' }}
-          title="Filter by café workspace"
+          title="Filter by cafe workspace"
         >
-          <option value="">All cafés</option>
+          <option value="">All cafes</option>
           {workspaces.map((w) => (
             <option key={w.id} value={w.id}>{w.name || w.id.slice(0, 8)}</option>
           ))}
@@ -225,7 +225,7 @@ export function CorrectionsPanel({ cfg }: { cfg: Config }) {
           <p className="muted" style={{ marginTop: 4 }}>
             {batches.length === 0
               ? 'Operator edits to autofilled forms show up here for review.'
-              : 'Try another café or clear the search filter.'}
+              : 'Try another cafe or clear the search filter.'}
           </p>
         </div>
       ) : (

@@ -45,7 +45,7 @@ const OPERATOR_NAV = [
 ];
 
 // Learning/config (Mappings, Corrections, Sessions, Overview) lives in owner-panel.
-// Hub admins only manage Operators so café owners can give employees workspace access.
+// Hub admins only manage Operators so cafe owners can give employees workspace access.
 const ADMIN_NAV = [
   { path: '/admin/operators', icon: UserCircle, label: 'Operators' },
 ];

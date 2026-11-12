@@ -1285,7 +1285,7 @@ export default function WhatsApp() {
         {useAuthStore.getState().user?.role === 'admin' ? (
           <>
             <p className="text-sm mb-6 leading-relaxed" style={{ color: 'hsl(var(--pt-muted))' }}>
-              Link your café WhatsApp to receive customer documents. Files sent to this number appear here automatically.
+              Link your cafe WhatsApp to receive customer documents. Files sent to this number appear here automatically.
             </p>
             {qrCode && !qrExpired ? (
               <div className="p-4 rounded-2xl mb-4" style={{ background: 'hsl(var(--pt-card))', boxShadow: 'var(--shadow-lift)', border: '1px solid hsl(var(--pt-border))' }}>

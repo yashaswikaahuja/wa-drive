@@ -519,7 +519,7 @@ const Nav = () => {
   const links = [
     { href: "#products", label: "Products" },
     { href: "#proof", label: "See it working" },
-    { href: "#humse", label: "Why cafés" },
+    { href: "#humse", label: "Why cafes" },
     { href: "#extension", label: "Extension" },
   ];
   return (
@@ -615,7 +615,7 @@ const Hero = () => (
         </h1>
         <p className="mt-5 max-w-2xl text-[16px] leading-relaxed text-ink-soft sm:text-[17px]">
           CyberControl is the workspace that remembers every customer, organizes every WhatsApp document,
-          prepares photos and PDFs, and fills government portals — so your café never starts from scratch.
+          prepares photos and PDFs, and fills government portals — so your cafe never starts from scratch.
         </p>
       </div>
 
@@ -670,7 +670,7 @@ const PRODUCTS: Product[] = [
     id: "whatsapp",
     title: "WhatsApp Documents",
     blurb: "Customer chats and files land in one place.",
-    detail: "Aadhaar, marksheets, photos — pulled from WhatsApp into the café workspace instead of phone galleries and random folders.",
+    detail: "Aadhaar, marksheets, photos — pulled from WhatsApp into the cafe workspace instead of phone galleries and random folders.",
     icon: MessageCircle,
     href: "#proof-wa",
     tone: "whatsapp",
@@ -690,7 +690,7 @@ const PRODUCTS: Product[] = [
     id: "files",
     title: "File Manager",
     blurb: "Documents organized per customer.",
-    detail: "Browse, preview, and open files like a real drive — built for café desks, not cloud clutter.",
+    detail: "Browse, preview, and open files like a real drive — built for cafe desks, not cloud clutter.",
     icon: FileText,
     href: "#proof-files",
     tone: "ink",
@@ -719,7 +719,7 @@ const PRODUCTS: Product[] = [
   {
     id: "workspace",
     title: "Operator Workspace",
-    blurb: "One OS for the whole café day.",
+    blurb: "One OS for the whole cafe day.",
     detail: "Customers, WhatsApp, files, photos, and forms in a single signed-in workspace your staff can run.",
     icon: Store,
     href: "#proof-workspace",
@@ -824,7 +824,7 @@ const ProductsSection = () => (
           What CyberControl actually is
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">
-          Six parts of one café operating system — each built for a job you already do every day, explained simply so you know exactly what you&apos;re signing into.
+          Six parts of one cafe operating system — each built for a job you already do every day, explained simply so you know exactly what you&apos;re signing into.
         </p>
       </div>
 

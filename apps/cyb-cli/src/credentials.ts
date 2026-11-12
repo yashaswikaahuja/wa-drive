@@ -64,7 +64,7 @@ export async function requireAuth(flags: Partial<CliFlags> = {}): Promise<AuthCo
       throw new AuthError(
         'Token expired (--token).\n' +
           '  Run:  cyb login\n' +
-          '  Or paste a fresh JWT from the café app.',
+          '  Or paste a fresh JWT from the cafe app.',
         'TOKEN_EXPIRED'
       );
     }

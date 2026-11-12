@@ -168,7 +168,7 @@ export function cloneCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
   return c;
 }
 
-/** One image → one page, fitted with margin (default café document layout). */
+/** One image → one page, fitted with margin (default cafe document layout). */
 export function fitImageOnPage(
   src: HTMLCanvasElement,
   paper: DocPaperDef,
