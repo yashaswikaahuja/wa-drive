@@ -392,6 +392,150 @@
     }
     .profile-item.selected .profile-check { display: grid; }
 
+    .profile-detail-btn {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border: 1px solid hsl(var(--pt-border));
+      border-radius: 8px;
+      background: hsl(var(--pt-card));
+      color: hsl(var(--pt-muted));
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      font-style: italic;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      padding: 0;
+    }
+    .profile-detail-btn:hover,
+    .profile-item.selected .profile-detail-btn {
+      color: hsl(var(--pt-marigold-deep));
+      border-color: hsl(var(--pt-marigold) / 0.45);
+      background: hsl(var(--pt-marigold) / 0.1);
+    }
+
+    #profile-detail {
+      display: none;
+      flex: 1 1 auto;
+      min-height: 0;
+      flex-direction: column;
+    }
+    body.showing-detail .search-block { display: none; }
+    body.showing-detail #profiles { display: none; }
+    body.showing-detail #profile-detail { display: flex; }
+
+    .detail-head {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid hsl(var(--pt-border-soft));
+      background: hsl(var(--pt-secondary) / 0.45);
+    }
+    .detail-back {
+      width: 28px;
+      height: 28px;
+      border: 1px solid hsl(var(--pt-border));
+      border-radius: 8px;
+      background: hsl(var(--pt-card));
+      color: hsl(var(--pt-ink));
+      font-size: 14px;
+      cursor: pointer;
+      font-family: inherit;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .detail-back:hover { background: hsl(var(--pt-paper-deep)); }
+    .detail-head-copy { min-width: 0; flex: 1; }
+    .detail-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: hsl(var(--pt-ink));
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.2;
+    }
+    .detail-sub {
+      font-size: 11px;
+      color: hsl(var(--pt-muted));
+      font-variant-numeric: tabular-nums;
+      margin-top: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .detail-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px 10px 10px;
+    }
+    .detail-section {
+      margin-bottom: 10px;
+    }
+    .detail-section-title {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: hsl(var(--pt-muted));
+      padding: 4px 2px 6px;
+      font-family: ui-monospace, 'Cascadia Code', monospace;
+    }
+    .detail-row {
+      display: grid;
+      grid-template-columns: 7.2rem 1fr;
+      gap: 8px;
+      align-items: start;
+      padding: 6px 2px;
+      border-bottom: 1px solid hsl(var(--pt-border-soft));
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label {
+      font-size: 11px;
+      color: hsl(var(--pt-muted));
+      font-weight: 550;
+      line-height: 1.35;
+    }
+    .detail-value {
+      font-size: 12px;
+      color: hsl(var(--pt-ink));
+      font-weight: 600;
+      line-height: 1.35;
+      word-break: break-word;
+      font-variant-numeric: tabular-nums;
+    }
+    .detail-value.missing {
+      color: hsl(var(--pt-warning));
+      font-weight: 550;
+    }
+    .detail-empty {
+      padding: 18px 8px;
+      text-align: center;
+      font-size: 12px;
+      color: hsl(var(--pt-muted));
+    }
+    .detail-hub {
+      flex-shrink: 0;
+      margin: 0 10px 10px;
+      height: 32px;
+      border: 1px solid hsl(var(--pt-border));
+      border-radius: 999px;
+      background: hsl(var(--pt-card));
+      color: hsl(var(--pt-marigold-deep));
+      font-size: 12px;
+      font-weight: 650;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .detail-hub:hover { background: hsl(var(--pt-secondary)); }
+
     .empty {
       padding: 32px 18px;
       text-align: center;
@@ -692,6 +836,16 @@
       border-color: hsl(var(--pt-ink) / 0.2);
     }
     .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #detail-btn {
+      font-style: italic;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    body.showing-detail #detail-btn {
+      color: hsl(var(--pt-marigold-deep));
+      border-color: hsl(var(--pt-marigold) / 0.45);
+      background: hsl(var(--pt-marigold) / 0.12);
+    }
     #undo-btn {
       background: hsl(35 92% 48% / 0.12);
       color: hsl(28 90% 36%);
@@ -824,7 +978,9 @@
     body.is-locked .advanced,
     body.is-locked #fill-btn,
     body.is-locked #undo-btn,
-    body.is-locked #agent-btn {
+    body.is-locked #agent-btn,
+    body.is-locked #detail-btn,
+    body.is-locked #profile-detail {
       display: none !important;
     }
     body.is-locked .footer-row {
@@ -889,6 +1045,18 @@
 
   <div class="main">
     <div id="profiles" role="listbox" aria-label="Customers"><div class="empty">Loading customers…</div></div>
+    <div id="profile-detail" aria-label="Customer details">
+      <div class="detail-head">
+        <button type="button" id="detail-back" class="detail-back" title="Back to customers" aria-label="Back to customers">←</button>
+        <div class="detail-head-copy">
+          <div class="detail-name" id="detail-name"></div>
+          <div class="detail-sub" id="detail-sub"></div>
+        </div>
+        <span class="profile-badge" id="detail-badge"></span>
+      </div>
+      <div class="detail-body" id="detail-body"></div>
+      <button type="button" id="detail-hub" class="detail-hub">Open in Hub →</button>
+    </div>
   </div>
 
   <div id="progress">
@@ -926,6 +1094,7 @@
     <div class="fill-hint" id="fill-hint">Select a customer to fill the open form</div>
     <div class="footer-row">
       <button id="fill-btn" disabled title="Select a customer first">Fill this form</button>
+      <button id="detail-btn" class="icon-btn" disabled title="View customer details" aria-label="View customer details">i</button>
       <button id="undo-btn" class="icon-btn" style="display:none" title="Undo last fill">↩</button>
       <button id="agent-btn" class="icon-btn" disabled title="AI Agent">🤖</button>
       <button id="open-btn" class="icon-btn" title="Open CyberControl Hub">⌂</button>
