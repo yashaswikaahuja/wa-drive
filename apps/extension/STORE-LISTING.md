@@ -5,7 +5,7 @@ Use this copy in the Developer Dashboard. Upload `release/cybercontrol-extension
 ## Item
 
 - **Name:** CyberControl AutoFill
-- **Version:** see `manifest.json` (currently 5.92.42)
+- **Version:** see `manifest.json` (currently 5.92.43)
 - **Homepage:** https://app.cybercontrol.fun/app
 - **Privacy policy:** https://cybercontrol.fun/privacy
 - **Category:** Productivity
