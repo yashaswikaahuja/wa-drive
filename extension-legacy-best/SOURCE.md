@@ -52,7 +52,7 @@ Chosen as tip **after** the Aug 3–4 legacy fix burst and knowledge-sync wire, 
 - `host_permissions`: **`<all_urls>`** (as at `f788a48`)  
 - `content_scripts.matches`: **`http://*/*`, `https://*/*`, `file://*/*`** (widened so Bihar / any portal works without allowlist)
 
-Do **not** ship this build as production café software without re-applying host policy.
+Do **not** ship this build as production cafe software without re-applying host policy.
 
 ## How to load in Chrome
 

@@ -57,7 +57,7 @@ export function applyTone(source: HTMLCanvasElement, tone: ToneAdjust): HTMLCanv
   const intercept = 128 * (1 - contrastF) + b * 1.2;
   ctx.filter = `brightness(${100 + b}%) contrast(${100 + ct}%)`;
   if (tone.smooth > 0) {
-    // Soft blur pass blended for gentle skin polish (café-safe, not beauty-filter)
+    // Soft blur pass blended for gentle skin polish (cafe-safe, not beauty-filter)
     const blurPx = Math.max(0.4, (tone.smooth / 100) * 2.2);
     ctx.filter += ` blur(${blurPx}px)`;
     ctx.drawImage(source, 0, 0);

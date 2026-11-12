@@ -1,6 +1,6 @@
 /**
  * Daily health monitor — the "proactive" part of the customer-success playbook.
- * Sweeps every live café, computes its health, and when one DROPS to at-risk (from a healthier,
+ * Sweeps every live cafe, computes its health, and when one DROPS to at-risk (from a healthier,
  * activated band) it sends the owner a single WhatsApp digest. Runs on a cron; a per-day DB
  * leader election prevents duplicate alerts across the two backend instances.
  */
@@ -9,7 +9,7 @@ import { pool, OWNER_ALERT_PHONE, BRAND_NAME } from '@cybercontrol/backend-core'
 import { computeHealth } from './cafeHealth.js';
 import { notifyWhatsApp } from '@cybercontrol/backend-communications';
 
-const ALERT_COOLDOWN_MS = 7 * 24 * 3600 * 1000; // don't re-alert the same café within a week
+const ALERT_COOLDOWN_MS = 7 * 24 * 3600 * 1000; // don't re-alert the same cafe within a week
 
 const SIGNALS_SQL = `
   SELECT w.id, w.name, w.created_at AS "createdAt",
@@ -33,12 +33,12 @@ const FLAG_TEXT: Record<string, string> = {
 function buildDigest(drops: { name: string; score: number; flags: string[] }[]): string {
   const lines = drops.slice(0, 15).map(d => {
     const why = d.flags.map(f => FLAG_TEXT[f]).filter(Boolean).join(', ');
-    return `• *${d.name || 'Unnamed café'}* (health ${d.score})${why ? ' — ' + why : ''}`;
+    return `• *${d.name || 'Unnamed cafe'}* (health ${d.score})${why ? ' — ' + why : ''}`;
   });
   const more = drops.length > 15 ? `\n…and ${drops.length - 15} more.` : '';
   return (
     `⚡ *${BRAND_NAME} — health alert*\n\n` +
-    `${drops.length} café${drops.length > 1 ? 's' : ''} just dropped to *at-risk*:\n\n` +
+    `${drops.length} cafe${drops.length > 1 ? 's' : ''} just dropped to *at-risk*:\n\n` +
     `${lines.join('\n')}${more}\n\n` +
     `Open the owner panel to review and reach out.`
   );
@@ -65,7 +65,7 @@ export async function runHealthSweep(opts: { skipLeader?: boolean } = {}): Promi
     const prev = (await pool.query(
       'SELECT band, alerted_at FROM workspace_health_state WHERE workspace_id = $1', [r.id]
     )).rows[0];
-    // Alert only when an ACTIVATED café that was doing OK slips to at-risk (the churn signal).
+    // Alert only when an ACTIVATED cafe that was doing OK slips to at-risk (the churn signal).
     const droppedToRisk = h.band === 'at-risk' && (prev?.band === 'healthy' || prev?.band === 'watch');
     const cooled = !prev?.alerted_at || (Date.now() - new Date(prev.alerted_at).getTime() > ALERT_COOLDOWN_MS);
     if (droppedToRisk && cooled) drops.push({ id: r.id, name: r.name, score: h.score, flags: h.flags });
@@ -87,7 +87,7 @@ export async function runHealthSweep(opts: { skipLeader?: boolean } = {}): Promi
       console.warn('[HealthMonitor] digest send failed:', e?.message);
     }
   }
-  console.log(`[HealthMonitor] swept ${rows.length} cafés · ${drops.length} new at-risk · alerted=${alerted}`);
+  console.log(`[HealthMonitor] swept ${rows.length} cafes · ${drops.length} new at-risk · alerted=${alerted}`);
   return { checked: rows.length, drops: drops.length, alerted };
 }
 

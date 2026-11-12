@@ -43,7 +43,7 @@ node extension-dev\cli\cc-debug.ts live
 
 **Operator (any Chrome with the shipped / product extension):**
 
-1. Login as Ramishwar (or any café user)  
+1. Login as Ramishwar (or any cafe user)  
 2. Open real form  
 3. Select profile (e.g. Kamaljeet Kumar)  
 4. Click **Fill Form**

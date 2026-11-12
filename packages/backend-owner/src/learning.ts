@@ -1,9 +1,9 @@
 /**
  * Owner learning/config API — form mappings, fill sessions, corrections, aggregate stats.
- * These used to live under Hub /admin/*; café staff stay on the golden path while the
+ * These used to live under Hub /admin/*; cafe staff stay on the golden path while the
  * platform owner reviews/teaches mappings here (tailnet + OWNER_KEY).
  *
- * Mappings live in shared ext_kv_store (global across cafés). Sessions/corrections are
+ * Mappings live in shared ext_kv_store (global across cafes). Sessions/corrections are
  * workspace-scoped; list endpoints accept an optional workspaceId filter.
  */
 import { Router, type Router as ExpressRouter } from 'express';
@@ -56,7 +56,7 @@ async function mutateDoc(pool: any, key: string, mutator: (data: Record<string, 
   }
 }
 
-// ── Aggregate learning stats (cross-café) ────────────────────────────────────
+// ── Aggregate learning stats (cross-cafe) ────────────────────────────────────
 
 router.get('/stats', async (req: any, res) => {
   try {

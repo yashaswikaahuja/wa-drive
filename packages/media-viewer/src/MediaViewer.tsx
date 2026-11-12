@@ -3,7 +3,7 @@
  * Dark stage (#0a0a0a), frosted white controls, filmstrip for images,
  * Mozilla PDF.js embed for PDFs. Shared by File Manager and WhatsApp Documents.
  *
- * Café-operator UX: inspect ID photos quickly — focal pinch/cursor zoom,
+ * Cafe-operator UX: inspect ID photos quickly — focal pinch/cursor zoom,
  * pan while zoomed, filmstrip nav, frosted chrome that stays readable on dark photos.
  */
 import {

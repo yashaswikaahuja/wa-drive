@@ -1,5 +1,5 @@
 /**
- * Create a local test café admin for frontend login.
+ * Create a local test cafe admin for frontend login.
  * Usage (from repo root):
  *   DATABASE_URL=postgresql://... node packages/backend-auth/../../scripts/create-test-account.ts
  * Prefer:

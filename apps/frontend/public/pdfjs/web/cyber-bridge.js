@@ -43,7 +43,7 @@
     bindEdgeSwipe();
   }
 
-  // Café print owns save/print. PDF.js must not download when this frame is replaced.
+  // Cafe print owns save/print. PDF.js must not download when this frame is replaced.
   function patchClose(app) {
     if (!app || app.__cyberClosePatched) return;
     const orig = app.close.bind(app);

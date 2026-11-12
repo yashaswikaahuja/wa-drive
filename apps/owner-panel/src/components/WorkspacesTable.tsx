@@ -43,16 +43,16 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
   }, [rows, band, sort]);
 
   return (
-    <section className="card" aria-label="Cybercafés">
+    <section className="card" aria-label="Cybercafes">
       <div className="row between" style={{ padding: '14px 16px', flexWrap: 'wrap', gap: 10 }}>
         <div className="row" style={{ gap: 8 }}>
-          <h2 className="display" style={{ fontSize: 16 }}>Cybercafés</h2>
+          <h2 className="display" style={{ fontSize: 16 }}>Cybercafes</h2>
           <span className="muted num" style={{ fontSize: 13 }}>{fmt(view.length)}</span>
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           <input
             className="input" type="search" value={q} onChange={e => onQ(e.target.value)}
-            placeholder="Search name…" aria-label="Search cybercafés" style={{ width: 200, maxWidth: '100%' }}
+            placeholder="Search name…" aria-label="Search cybercafes" style={{ width: 200, maxWidth: '100%' }}
           />
           <label className="label" htmlFor="band">Health</label>
           <select id="band" className="input" value={band} onChange={e => setBand(e.target.value as BandFilter)} style={{ width: 'auto' }}>
@@ -75,7 +75,7 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
 
       {view.length === 0 ? (
         <div className="state">
-          <h3>No cybercafés{q || band !== 'all' ? ' match' : ' yet'}</h3>
+          <h3>No cybercafes{q || band !== 'all' ? ' match' : ' yet'}</h3>
           <p className="muted" style={{ marginTop: 4 }}>{q || band !== 'all' ? 'Try a different search or filter.' : 'Signups will appear here.'}</p>
         </div>
       ) : (<>
@@ -99,7 +99,7 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
           <table>
             <thead>
               <tr>
-                <th>Café</th><th>Contact</th><th>Location</th><th>Plan</th><th>Ops</th><th>WhatsApp</th>
+                <th>Cafe</th><th>Contact</th><th>Location</th><th>Plan</th><th>Ops</th><th>WhatsApp</th>
                 <th className="num">Files</th><th>Activity</th><th>Health</th><th>Last active</th><th>Status</th>
               </tr>
             </thead>
@@ -108,7 +108,7 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
                 <tr key={w.id}>
                   <td>
                     <button className="linklike" onClick={() => onSelect(w.id)}
-                      aria-label={`Open ${w.name || 'cybercafé'} detail`}>{w.name || 'Untitled'}</button>
+                      aria-label={`Open ${w.name || 'cybercafe'} detail`}>{w.name || 'Untitled'}</button>
                     <div className="muted" style={{ fontSize: 12 }}>joined {relativeTime(w.createdAt)}</div>
                   </td>
                   <td style={{ fontSize: 13 }}>
@@ -172,7 +172,7 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
 
 export function TableSkeleton() {
   return (
-    <section className="card" style={{ padding: 16 }} aria-busy="true" aria-label="Loading cybercafés">
+    <section className="card" style={{ padding: 16 }} aria-busy="true" aria-label="Loading cybercafes">
       {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="skeleton" style={{ height: 44, marginBottom: 8 }} />
       ))}

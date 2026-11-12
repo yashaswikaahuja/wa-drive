@@ -8,7 +8,7 @@ Verify **stabilize single fill path + deploy lock** before opening Phase 1 (CYB-
 - [ ] Extension reloaded / zip reinstalled after Phase 0 package
 - [ ] Operator logged into side panel (CONNECT from app or stored JWT)
 - [ ] Seeded `knowledge_records` (or known form with mappings) available for a test profile
-- [ ] `chrome.storage.local.allowLegacyClientFill` is **unset or false** (café default)
+- [ ] `chrome.storage.local.allowLegacyClientFill` is **unset or false** (cafe default)
 
 ## A. Deploy lock UI
 
@@ -24,7 +24,7 @@ Verify **stabilize single fill path + deploy lock** before opening Phase 1 (CYB-
 2. Select a customer profile with values for mapped fields.
 3. Click **Fill Form** (not Agent).
 4. Expect:
-   - [ ] Side-panel **Fill** is the only café-visible fill entry point (Agent hidden)
+   - [ ] Side-panel **Fill** is the only cafe-visible fill entry point (Agent hidden)
    - [ ] Fill runs without hang; results UI shows filled / skipped / failed counts
    - [ ] On `phase-3-perception`: Fill still uses the grandfathered extension executor path (mapper not deleted — Phase 6). Dual-brain **Agent** and **DISPATCH_JOB** remain gated off.
    - [ ] When server `POST /fill-plan` + ActionPlanExecutor are product-wired (master product line / later phase), prefer that path and observation POST — not required to re-open Phase 0 gate work

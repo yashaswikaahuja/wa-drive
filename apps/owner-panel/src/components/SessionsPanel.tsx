@@ -282,9 +282,9 @@ export function SessionsPanel({ cfg }: { cfg: Config }) {
           value={workspaceId}
           onChange={(e) => setWorkspaceId(e.target.value)}
           style={{ minWidth: 200, flex: '0 1 240px' }}
-          title="Filter by café workspace"
+          title="Filter by cafe workspace"
         >
-          <option value="">All cafés</option>
+          <option value="">All cafes</option>
           {workspaces.map((w) => (
             <option key={w.id} value={w.id}>{w.name || w.id.slice(0, 8)}</option>
           ))}
@@ -293,7 +293,7 @@ export function SessionsPanel({ cfg }: { cfg: Config }) {
           className="input"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter hostname, formKey, café…"
+          placeholder="Filter hostname, formKey, cafe…"
           style={{ flex: 1, minWidth: 180 }}
         />
       </div>
@@ -310,8 +310,8 @@ export function SessionsPanel({ cfg }: { cfg: Config }) {
           <h3>{sessions.length === 0 ? 'No sessions yet' : 'No matches'}</h3>
           <p className="muted" style={{ marginTop: 4 }}>
             {sessions.length === 0
-              ? 'Fill runs from cafés will appear here for review.'
-              : 'Try another café or clear the search filter.'}
+              ? 'Fill runs from cafes will appear here for review.'
+              : 'Try another cafe or clear the search filter.'}
           </p>
         </div>
       ) : (

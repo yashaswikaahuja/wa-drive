@@ -48,7 +48,7 @@ export function WorkspaceDrawer({ cfg, id, onClose, hint, onLocationSaved, onSta
   const closeRef = useRef<HTMLButtonElement>(null);
 
   const doStatus = async (action: 'block' | 'unblock') => {
-    if (action === 'block' && !window.confirm('Block this café? All its users are logged out and cannot sign in until you unblock it.')) return;
+    if (action === 'block' && !window.confirm('Block this cafe? All its users are logged out and cannot sign in until you unblock it.')) return;
     setAcctBusy(true); setAcctMsg('');
     const status = action === 'block' ? 'suspended' : 'active';
     try {
@@ -101,10 +101,10 @@ export function WorkspaceDrawer({ cfg, id, onClose, hint, onLocationSaved, onSta
 
   return (
     <div className="scrim" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <aside className="drawer" role="dialog" aria-modal="true" aria-label="Cybercafé detail">
+      <aside className="drawer" role="dialog" aria-modal="true" aria-label="Cybercafe detail">
         <header className="drawer__head row between">
           <div>
-            <h2 className="display" style={{ fontSize: 18, fontWeight: 700 }}>{w?.name || 'Cybercafé'}</h2>
+            <h2 className="display" style={{ fontSize: 18, fontWeight: 700 }}>{w?.name || 'Cybercafe'}</h2>
             <div className="label">{detail ? `${fmt(detail.operators.length)} operators` : 'loading…'}</div>
           </div>
           <button ref={closeRef} className="iconbtn" onClick={onClose} aria-label="Close">×</button>
@@ -260,12 +260,12 @@ export function WorkspaceDrawer({ cfg, id, onClose, hint, onLocationSaved, onSta
               {showDelete && (
                 <div style={{ marginTop: 10, padding: 12, borderRadius: 10, border: '1px solid hsl(var(--danger) / 0.4)', background: 'hsl(var(--danger) / 0.06)' }}>
                   <p style={{ fontSize: 13, marginBottom: 8 }}>
-                    Permanently deletes <strong>{w!.name || 'this café'}</strong> and ALL its data
-                    (documents, jobs, WhatsApp, operators). This cannot be undone. Type the café name to confirm:
+                    Permanently deletes <strong>{w!.name || 'this cafe'}</strong> and ALL its data
+                    (documents, jobs, WhatsApp, operators). This cannot be undone. Type the cafe name to confirm:
                   </p>
                   <div className="row" style={{ gap: 8 }}>
                     <input className="input grow" value={delConfirm} onChange={e => setDelConfirm(e.target.value)}
-                      placeholder={w!.name || 'café name'} aria-label="Type café name to confirm deletion" />
+                      placeholder={w!.name || 'cafe name'} aria-label="Type cafe name to confirm deletion" />
                     <button className="btn" style={{ background: 'hsl(var(--danger))', color: '#fff', borderColor: 'transparent' }}
                       disabled={acctBusy || delConfirm !== (w!.name || '')} onClick={doDelete}>
                       {acctBusy ? 'Deleting…' : 'Delete'}

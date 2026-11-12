@@ -152,7 +152,7 @@ loadDriveTokenFromDB();
 // No-ops safely if the extraction_jobs table isn't present yet.
 startExtractionRecovery();
 
-// Daily café-health monitor → owner WhatsApp digest on at-risk drops (leader-guarded across instances).
+// Daily cafe-health monitor → owner WhatsApp digest on at-risk drops (leader-guarded across instances).
 scheduleHealthMonitor();
 
 // Proactive WA failover — every 60s reassigns workspaces from dead instances to healthy ones.

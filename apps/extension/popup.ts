@@ -505,7 +505,7 @@ function renderProfiles(query) {
   if (!filteredProfiles.length) {
     profilesEl.innerHTML = q
       ? `<div class="empty"><div class="empty-title">No match</div>No customer matches “${escapeHtml(query)}”. Try phone digits or another name.</div>`
-      : `<div class="empty"><div class="empty-title">No customers yet</div>Add customers in CyberControl Hub for this café, then come back here.</div>`;
+      : `<div class="empty"><div class="empty-title">No customers yet</div>Add customers in CyberControl Hub for this cafe, then come back here.</div>`;
     focusIdx = -1;
     updateListMeta(q, 0, 0);
     return;
@@ -681,7 +681,7 @@ async function init() {
 
   if (!data.accessToken || !data.backendUrl) {
     connText.textContent = 'Signed out';
-    showLoginEmpty('Sign in required', 'Open CyberControl Hub and sign in as the café account, then reopen this panel.');
+    showLoginEmpty('Sign in required', 'Open CyberControl Hub and sign in as the cafe account, then reopen this panel.');
     return;
   }
 
@@ -856,10 +856,10 @@ if (mcpRequestsEl) {
 async function loadProfilesHttps(data?: any) {
   const creds = data || (await chrome.storage.local.get(['accessToken', 'backendUrl']));
   if (!creds.accessToken || !creds.backendUrl) {
-    showLoginEmpty('Sign in required', 'Open CyberControl Hub and sign in as the café account, then reopen this panel.');
+    showLoginEmpty('Sign in required', 'Open CyberControl Hub and sign in as the cafe account, then reopen this panel.');
     return;
   }
-  profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Loading customers…</div>Getting your café list ready.</div>';
+  profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Loading customers…</div>Getting your cafe list ready.</div>';
   if (listCountEl) listCountEl.textContent = '';
   if (listHintEl) listHintEl.textContent = '';
 
@@ -923,7 +923,7 @@ async function loadProfilesHttps(data?: any) {
     profilesEl.innerHTML =
       `<div class="empty">` +
       `<div class="empty-title">No customers yet</div>` +
-      `Open Hub, add customers for this café, then tap Retry.` +
+      `Open Hub, add customers for this cafe, then tap Retry.` +
       `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">` +
       `<button type="button" id="retry-profiles">Retry</button>` +
       `<button type="button" class="primary" id="open-hub-customers">Open Hub</button>` +

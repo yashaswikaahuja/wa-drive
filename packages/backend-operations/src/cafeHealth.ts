@@ -1,5 +1,5 @@
 /**
- * Per-café health score (0-100) — the composite churn/engagement signal for the owner panel.
+ * Per-cafe health score (0-100) — the composite churn/engagement signal for the owner panel.
  * Follows the SaaS customer-health pattern: weight by VALUE delivered (real product usage),
  * not vanity metrics. Trend matters as much as absolutes. Output → a band + action.
  *
@@ -81,7 +81,7 @@ export function computeHealth(s: HealthSignals): Health {
   if (s.filesPrev7 > 0 && s.filesLast7 < s.filesPrev7) flags.push('cooling');
   if (activated && daysSince(s.lastUpload) > 30) flags.push('dormant');
 
-  // Band: a brand-new, not-yet-activated café is "onboarding" (don't penalise it as at-risk).
+  // Band: a brand-new, not-yet-activated cafe is "onboarding" (don't penalise it as at-risk).
   let band: HealthBand;
   if (!activated) {
     band = ageDays <= 14 ? 'onboarding' : 'at-risk';

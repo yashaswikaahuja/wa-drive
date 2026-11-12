@@ -2,11 +2,11 @@ import { google } from 'googleapis';
 import { pool, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } from '@cybercontrol/backend-core';
 
 // Used only to start the OAuth redirect and exchange the code.
-// It must not stay signed in as a café. Tenant reads and writes use
+// It must not stay signed in as a cafe. Tenant reads and writes use
 // getDriveForWorkspace, which loads that workspace's own secret.
 export const oauth2Client: any = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
 
-/** Shared Drive tokens are not loaded. A process-wide client listed every café's folders. */
+/** Shared Drive tokens are not loaded. A process-wide client listed every cafe's folders. */
 export async function loadDriveTokenFromDB() {
   oauth2Client.setCredentials({});
 }

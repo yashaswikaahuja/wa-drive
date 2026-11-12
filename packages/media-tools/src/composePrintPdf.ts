@@ -1,5 +1,5 @@
 /**
- * Post-process the final print PDF for a cybercafé counter:
+ * Post-process the final print PDF for a cybercafe counter:
  *  - copies: print the whole job N times
  *  - nUp: place 1, 2 or 4 document pages on one physical sheet (toner/paper saver)
  *

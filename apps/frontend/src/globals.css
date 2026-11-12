@@ -85,7 +85,7 @@
   --wa-avatar-fg: 142 64% 28%;
 }
 
-/* Dark Hub — café ink night with marigold accents. Toggle via Settings (cc-theme). */
+/* Dark Hub — cafe ink night with marigold accents. Toggle via Settings (cc-theme). */
 html[data-theme="dark"] {
   --ink: 38 28% 94%;
   --ink-soft: 35 16% 78%;

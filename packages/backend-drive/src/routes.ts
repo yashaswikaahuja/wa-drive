@@ -42,7 +42,7 @@ router.get('/callback', async (req, res) => {
 });
 
 // Status check — this workspace only. A missing token is "not connected",
-// never the process-wide Drive used by another café.
+// never the process-wide Drive used by another cafe.
 router.get('/status', authMiddleware, async (req: any, res) => {
   const wsId = req.user?.workspaceId;
   if (!wsId) return res.json({ connected: false });

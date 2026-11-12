@@ -35,7 +35,7 @@ extension-dev/   # tests & tooling (not an app)
 | **Hub API** | `apps/backend/` | Auth mint/refresh, profiles CRUD source of truth, WhatsApp orchestration. |
 | **WA Baileys worker** | `apps/whatsapp-service/` | Multi-tenant sessions on WA VMs (`:3100`). Thin entry; logic in `@cybercontrol/wa-service` + `wa-auth`. |
 | **WA LID resolver** | `apps/whatsapp-resolver/` | Singleton wwebjs oracle (`:3200`). Thin entry; logic in `@cybercontrol/wa-resolver`. |
-| **Operator dashboard** | `apps/frontend/` | Café UI. |
+| **Operator dashboard** | `apps/frontend/` | Cafe UI. |
 | **CLI** | `apps/cyb-cli/` | `cyb live`, sessions, login (HTTPS mint → WSS watch). |
 | **Capability libs** | `packages/cc-*` (`@cc/*`) | Sources for extension bundles. Extension depends on them by package name; `apps/extension/scripts` concat/esbuild into inject `*-bundle.js`. |
 | **WA libs** | `packages/wa-*` (`@cybercontrol/wa-*`) | Baileys/wwebjs runtime packages imported by name (same pattern as `@cybercontrol/svc-*`). Hub routing stays in `@cybercontrol/backend-whatsapp`. |
@@ -56,7 +56,7 @@ extension-dev/   # tests & tooling (not an app)
 | Folder | Role |
 |--------|------|
 | `perception/` + `runtime/` (APE, gateway, WSS client) | **Product path** (ActionPlan) |
-| `autofill/` + `drivers/` | **Sequential kernel** — café default fill; **path-stable** (inject lists) |
+| `autofill/` + `drivers/` | **Sequential kernel** — cafe default fill; **path-stable** (inject lists) |
 | `autofill/executor/` | Task-split fill kernel (`debug`, `fill-one`, `sequential`, …) + thin `executor.ts` facade |
 | `application/` | Orchestration (`fill-orchestrator.js`) |
 | `shared/` | Shared utils for both stacks |

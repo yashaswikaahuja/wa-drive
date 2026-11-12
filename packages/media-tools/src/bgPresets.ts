@@ -1,4 +1,4 @@
-/** Café passport / ID background presets — many options, not only white/blue. */
+/** Cafe passport / ID background presets — many options, not only white/blue. */
 export type BgPresetId =
   | 'white'
   | 'offwhite'
