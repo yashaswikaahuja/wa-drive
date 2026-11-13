@@ -98,18 +98,25 @@ assert.deepEqual(shotPlan.offsets, [0, 800, 1600, 2400, 3200, 4000]);
 assert.equal(shotPlan.clipped, true);
 assert.equal(pageShotOffsets(900, 800, 6).clipped, false);
 
-const beforeBlockedSnapshot = calls.length;
 const shot = await respondToMcp({
   jsonrpc: '2.0',
   id: 9,
   method: 'tools/call',
   params: { name: 'snapshot', arguments: { scope: 'page', selector: 'form-field-1', rect: { x: 1, y: 2, width: 40, height: 20 } } },
-}, 'ws-9', async () => {
-  throw new Error('snapshot must not execute while egress is blocked');
+}, 'ws-9', async (_workspaceId, body) => {
+  assert.equal(body.task, 'snapshot');
+  assert.equal(body.scope, 'area');
+  assert.equal(body.selector, 'form-field-1');
+  return {
+    status: 200,
+    payload: { ok: true, result: { ok: true, image: 'abc', mimeType: 'image/jpeg', width: 10, height: 20, scope: 'area' } },
+  };
 });
-assert.equal(shot.body.result.isError, true);
-assert.equal(JSON.parse(shot.body.result.content[0].text).error, 'privacy_boundary_blocked');
-assert.equal(calls.length, beforeBlockedSnapshot);
+assert.equal(shot.body.result.isError, false);
+assert.equal(shot.body.result.content[1].type, 'image');
+assert.equal(shot.body.result.content[1].data, 'abc');
+assert.equal(shot.body.result.content[1].mimeType, 'image/jpeg');
+assert.equal(JSON.parse(shot.body.result.content[0].text).result.image, undefined);
 
 const missingProfileScope = await respondToMcp({
   jsonrpc: '2.0',
