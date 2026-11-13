@@ -307,6 +307,26 @@ handlers.set('browser_task_result', (_session, message) => {
     typed: message.typed ? String(message.typed).slice(0, 80) : null,
     focused: message.focused ? String(message.focused).slice(0, 80) : null,
     value: message.value ? String(message.value).slice(0, 80) : null,
+    fileName: (function () {
+      if (!message.fileName) return null;
+      const base = String(message.fileName).replace(/\\/g, '/').split('/').pop() || '';
+      return base ? base.slice(0, 80) : null;
+    })(),
+    fileSize: message.fileSize == null ? null : Number(message.fileSize),
+    fileCount: message.fileCount == null ? null : Number(message.fileCount),
+    files: Array.isArray(message.files)
+      ? message.files.slice(0, 80).map((row: any) => {
+          if (!row || typeof row !== 'object') return null;
+          const id = String(row.id || '').slice(0, 80);
+          if (!id) return null;
+          return {
+            id,
+            tag: row.tag ? String(row.tag).slice(0, 40) : '',
+            kind: row.kind === 'pdf' || row.kind === 'image' ? row.kind : '',
+            mimeType: row.mimeType ? String(row.mimeType).slice(0, 80) : '',
+          };
+        }).filter(Boolean)
+      : null,
   });
 });
 
