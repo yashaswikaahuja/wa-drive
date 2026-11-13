@@ -23,6 +23,7 @@
     "./resolve-cc-selector": "./src/resolve-cc-selector.ts",
     "./pointer-keys": "./src/pointer-keys.ts",
     "./click-control": "./src/click-control.ts",
+    "./upload-file-input": "./src/upload-file-input.ts",
     "./sort-fields-by-dom-order": "./src/sort-fields-by-dom-order.ts",
     "./cascade-field-level": "./src/cascade-field-level.ts",
     "./select-option-state": "./src/select-option-state.ts",

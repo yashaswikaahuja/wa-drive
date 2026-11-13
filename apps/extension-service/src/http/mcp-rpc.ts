@@ -5,6 +5,18 @@
 
 const SUPPORTED = ['2025-03-26', '2024-11-05'];
 
+const ALLOWED_UPLOAD_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+
+function looksLikeFilePath(value: string) {
+  const t = String(value || '').trim();
+  if (!t) return false;
+  if (/^file:/i.test(t)) return true;
+  if (/^[a-zA-Z]:[\\/]/.test(t)) return true;
+  if (/^\\\\/.test(t)) return true;
+  if (/^\/[A-Za-z]/.test(t) && t.indexOf('://') < 0) return true;
+  return false;
+}
+
 const tools = [
   {
     name: 'open_url',
@@ -31,7 +43,7 @@ const tools = [
   },
   {
     name: 'fill_form',
-    description: 'Type into fields from the latest read_form. Each field needs selector and value. For a dropdown whose options are already listed, set type to dropdown, select, ng-dropdown, or mat-select and set value to one option string. For a slider (type slider or range), set value to the number. One browser task at a time per workspace; a second fill or scroll waits for the first. Does not solve CAPTCHA or submit payment.',
+    description: 'Type into fields from the latest read_form. Each field needs selector and value. For a dropdown whose options are already listed, set type to dropdown, select, ng-dropdown, or mat-select and set value to one option string. For a slider (type slider or range), set value to the number. File inputs (type file, humanGate upload) use upload_file, not this tool. One browser task at a time per workspace; a second fill or scroll waits for the first. Does not solve CAPTCHA or submit payment.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -133,7 +145,7 @@ const tools = [
   },
   {
     name: 'list_tabs',
-    description: 'List the open Chrome tabs for this extension: tabId, title, url without the query string, and active. Use a tabId with focus_tab, close_tab, read_form, snapshot, scroll, mouse_click, hover, drag, or keyboard.',
+    description: 'List the open Chrome tabs for this extension: tabId, title, url without the query string, and active. Use a tabId with focus_tab, close_tab, read_form, snapshot, scroll, mouse_click, hover, drag, keyboard, or upload_file.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -258,6 +270,36 @@ const tools = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'list_files',
+    description: 'List this workspace’s Hub image and PDF files the operator can put on a form. Returns id, tag, kind (image or pdf), and mimeType. Pass profileId from list_profiles to list that customer’s files. Use an id as fileId on upload_file. Does not return file names or URLs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        profileId: { type: 'string', description: 'Customer id from list_profiles. Omit to list the whole workspace.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'upload_file',
+    description: 'Put a jpeg, png, webp, gif, or PDF onto a file input from the latest read_form. selector is required. Pass exactly one source: fileId from list_files, an http(s) url, or data as base64 with mimeType and filename. Does not accept computer file paths. Does not submit the form. Stop at CAPTCHA, OTP, and payment.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tabId: { type: 'number' },
+        selector: { type: 'string', description: 'File input from read_form (type file or humanGate upload).' },
+        frameId: { type: 'number', description: 'Frame from read_form for iframe fields.' },
+        fileId: { type: 'string', description: 'Hub file id from list_files.' },
+        url: { type: 'string', description: 'http or https URL of an image or PDF.' },
+        data: { type: 'string', description: 'Base64 bytes, or a data: URL. Cap about 1.2 million characters.' },
+        mimeType: { type: 'string', description: 'Required with data. image/jpeg, image/png, image/webp, image/gif, or application/pdf.' },
+        filename: { type: 'string', description: 'Required with data. Basename only, for example photo.jpg or document.pdf.' },
+      },
+      required: ['selector'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 function rpcResult(id: any, result: any) {
@@ -323,7 +365,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
         serverInfo: { name: 'cybercontrol-browser', version: '1.0.0' },
         instructions: [
           'You control the operator Chrome where the CyberControl extension for this workspace is signed in. You do not have a separate cloud browser.',
-          'Call one tool at a time: open_url, then read_form, then fill_form for typed fields or click for buttons. After every click or navigation, read_form again and use only selectors from that latest read.',
+          'Call one tool at a time: open_url, then read_form, then fill_form for typed fields, upload_file for a file input, or click for buttons. After every click or navigation, read_form again and use only selectors from that latest read.',
           'A click with reason no_effect still ran; the address did not change. Read the page again before repeating it. not_found and label_drift mean the selector is stale.',
           'If the tool returns no_extension_connected, ask the operator to open Chrome with the CyberControl extension signed in.',
           'Stop at CAPTCHA, OTP, and payment. Do not solve a CAPTCHA and do not invent card numbers, UPI ids, or OTPs. Tell the operator what is on screen.',
@@ -331,7 +373,7 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
           'Dropdowns: if read_form includes options, fill_form with that type and value equal to one option. If options is null, click the dropdown, read_form, then click the choice. Read again before a dependent dropdown such as District after State.',
           'list_profiles returns profile id, customer display name, and only the last four phone digits. read_profile is available only after workspace policy, operator session permission, and just-in-time approval for the selected customer and exact fields. If approval is pending, ask the operator to approve it in the CyberControl extension, then retry. Prefer local fill when possible.',
           'snapshot photographs the GUI when read_form is not enough. Call it with no arguments for the visible screen, scope page for the whole page, or a selector or rect for one area. It does not type or click. The JPEG can be smaller than the screen: mouse_click x,y are CSS pixels, cssX = imageX * scaleX from the snapshot result.',
-          'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector; it never uses a left nav, and to bottom stays on the window so infinite pages can grow. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. action hover or drag on mouse_click works even when hover and drag are missing from the tool list. hover moves the mouse over a point or selector. drag moves from x,y to x2,y2 or from selector to toSelector and fires HTML5 dragstart/drop. click also finds visible links by text; a link that navigates is success (moved true) even if the old frame is gone. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first; arrows move a range slider. read_form includes iframe fields with frameId, hover figures (type hover), drag handles (type drag), and drop targets (type drop); duplicate ids in hidden tab panes are omitted. One browser task at a time per workspace, including fill and scroll. copy frameId on fill_form, click, keyboard, mouse_click, hover, and drag. After any of those, read_form or snapshot before the next click or fill.',
+          'list_tabs shows the open tabs. focus_tab switches to a tabId. close_tab closes a tabId. open_url with tabId or newTab false loads the URL in that tab so history back/forward works. scroll moves the overflowing root by dy pixels, to top or bottom, or onto a selector; it never uses a left nav, and to bottom stays on the window so infinite pages can grow. history goes back, forward, or reloads. mouse_click presses at visible-screen CSS x,y (imageX * scaleX after a snapshot) or at a selector. action hover or drag on mouse_click works even when hover and drag are missing from the tool list. hover moves the mouse over a point or selector. drag moves from x,y to x2,y2 or from selector to toSelector and fires HTML5 dragstart/drop. click also finds visible links by text; a link that navigates is success (moved true) even if the old frame is gone. keyboard types text or presses Enter, Tab, Escape, arrows, and the other named keys; pass selector to focus first; arrows move a range slider. list_files lists Hub image and PDF ids for this workspace (pass profileId for one customer). upload_file puts one of those files, an https URL, or capped base64 onto a file input from read_form; it rejects computer file paths and does not submit. read_form includes iframe fields with frameId, hover figures (type hover), drag handles (type drag), and drop targets (type drop); duplicate ids in hidden tab panes are omitted. One browser task at a time per workspace, including fill and scroll. copy frameId on fill_form, click, keyboard, mouse_click, hover, drag, and upload_file. After any of those, read_form or snapshot before the next click or fill.',
         ].join(' '),
       }),
     };
@@ -491,6 +533,54 @@ export async function respondToMcp(message: any, workspaceId: string, run: (work
         alt: !!args.alt,
         shift: !!args.shift,
         meta: !!args.meta,
+      });
+      return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(out.payload, out.status >= 400)) };
+    }
+    if (name === 'list_files') {
+      const out = await run(workspaceId, {
+        task: 'list_files',
+        profileId: args.profileId ? String(args.profileId) : '',
+      });
+      return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(out.payload, out.status >= 400)) };
+    }
+    if (name === 'upload_file') {
+      const selector = args.selector ? String(args.selector) : '';
+      if (!selector) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'selector required' }, true)) };
+      const fileId = args.fileId ? String(args.fileId) : '';
+      const url = args.url ? String(args.url) : '';
+      const data = args.data ? String(args.data) : '';
+      const sources = (fileId ? 1 : 0) + (url ? 1 : 0) + (data ? 1 : 0);
+      if (sources !== 1) return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'exactly one of fileId, url, or data required' }, true)) };
+      if (looksLikeFilePath(fileId) || looksLikeFilePath(url)) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'file_reference_invalid' }, true)) };
+      }
+      if (url && !/^https?:\/\//i.test(url)) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'url must be http or https' }, true)) };
+      }
+      if (data && data.length > 1200000) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'data too large' }, true)) };
+      }
+      const mimeType = args.mimeType ? String(args.mimeType) : '';
+      if (mimeType && ALLOWED_UPLOAD_MIME.indexOf(mimeType === 'image/jpg' ? 'image/jpeg' : mimeType) < 0) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'mimeType not allowed' }, true)) };
+      }
+      if (data && !mimeType) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'mimeType required with data' }, true)) };
+      }
+      const filename = args.filename ? String(args.filename) : '';
+      if (data && !filename) {
+        return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText({ error: 'filename required with data' }, true)) };
+      }
+      const out = await run(workspaceId, {
+        task: 'upload_file',
+        tabId: args.tabId || null,
+        selector,
+        frameId: Number(args.frameId) || null,
+        fileId: fileId || undefined,
+        url: url || undefined,
+        data: data || undefined,
+        mimeType: mimeType || undefined,
+        filename: filename || undefined,
       });
       return { kind: 'json' as const, status: 200, body: rpcResult(id, toolText(out.payload, out.status >= 400)) };
     }

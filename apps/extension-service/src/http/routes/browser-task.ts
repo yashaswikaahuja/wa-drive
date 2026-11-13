@@ -19,6 +19,35 @@ function allowedPageUrl(url: string) {
   }
 }
 
+const ALLOWED_UPLOAD_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'application/pdf': 'pdf',
+};
+
+function looksLikeFilePath(value: string) {
+  const t = String(value || '').trim();
+  if (!t) return false;
+  if (/^file:/i.test(t)) return true;
+  if (/^[a-zA-Z]:[\\/]/.test(t)) return true;
+  if (/^\\\\/.test(t)) return true;
+  if (/^\/[A-Za-z]/.test(t) && t.indexOf('://') < 0) return true;
+  return false;
+}
+
+function isOpaqueFileId(id: string) {
+  return /^[A-Za-z0-9_-]{8,80}$/.test(id);
+}
+
+function sanitizeFilename(name: any) {
+  const s = String(name || '').replace(/\\/g, '/').split('/').pop() || '';
+  const cleaned = s.replace(/[^\w.\-]+/g, '_').replace(/^\.+/, '').slice(0, 80);
+  if (!cleaned || cleaned === '.' || cleaned === '..') return '';
+  return cleaned;
+}
+
 function newTaskId() {
   return `task.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -281,6 +310,49 @@ export async function executeBrowserTask(workspaceId: string, body: any) {
       taskId,
     };
     timeoutMs = 15000;
+  } else if (task === 'list_files') {
+    message = {
+      type: 'browser_task',
+      task: 'list_files',
+      profileId: body && body.profileId ? String(body.profileId).slice(0, 80) : '',
+      taskId,
+    };
+    timeoutMs = 20000;
+  } else if (task === 'upload_file') {
+    const selector = body && body.selector ? String(body.selector).slice(0, 300) : '';
+    if (!selector) return { status: 400, payload: { error: 'selector required' } };
+    const fileId = body && body.fileId ? String(body.fileId).slice(0, 80) : '';
+    const url = body && body.url ? String(body.url).slice(0, 2000) : '';
+    const data = body && typeof body.data === 'string' ? body.data : '';
+    const sources = (fileId ? 1 : 0) + (url ? 1 : 0) + (data ? 1 : 0);
+    if (sources !== 1) return { status: 400, payload: { error: 'exactly one of fileId, url, or data required' } };
+    if (fileId && (looksLikeFilePath(fileId) || !isOpaqueFileId(fileId))) {
+      return { status: 400, payload: { error: 'file_reference_invalid' } };
+    }
+    if (url && (looksLikeFilePath(url) || !allowedPageUrl(url))) {
+      return { status: 400, payload: { error: 'url must be http or https' } };
+    }
+    if (data && data.length > 1200000) return { status: 400, payload: { error: 'data too large' } };
+    let mimeType = body && body.mimeType ? String(body.mimeType).slice(0, 80).toLowerCase() : '';
+    if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+    if (mimeType && !ALLOWED_UPLOAD_MIME[mimeType]) return { status: 400, payload: { error: 'mimeType not allowed' } };
+    if (data && !mimeType) return { status: 400, payload: { error: 'mimeType required with data' } };
+    const filename = sanitizeFilename(body && body.filename);
+    if (data && !filename) return { status: 400, payload: { error: 'filename required with data' } };
+    message = {
+      type: 'browser_task',
+      task: 'upload_file',
+      tabId: body && body.tabId || null,
+      selector,
+      frameId: Number.isFinite(Number(body && body.frameId)) ? Number(body.frameId) : null,
+      fileId: fileId || undefined,
+      url: url || undefined,
+      data: data || undefined,
+      mimeType: mimeType || undefined,
+      filename: filename || undefined,
+      taskId,
+    };
+    timeoutMs = 30000;
   } else {
     return { status: 400, payload: { error: 'unsupported task' } };
   }

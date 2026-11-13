@@ -16,7 +16,7 @@ assert.equal(init.body.result.serverInfo.name, 'cybercontrol-browser');
 
 const listed = await respondToMcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, 'ws', run);
 const names = listed.body.result.tools.map((tool) => tool.name);
-assert.deepEqual(names, ['open_url', 'read_form', 'fill_form', 'click', 'list_profiles', 'read_profile', 'fill', 'snapshot', 'list_tabs', 'close_tab', 'focus_tab', 'scroll', 'history', 'mouse_click', 'hover', 'drag', 'keyboard']);
+assert.deepEqual(names, ['open_url', 'read_form', 'fill_form', 'click', 'list_profiles', 'read_profile', 'fill', 'snapshot', 'list_tabs', 'close_tab', 'focus_tab', 'scroll', 'history', 'mouse_click', 'hover', 'drag', 'keyboard', 'list_files', 'upload_file']);
 
 const note = await respondToMcp({ jsonrpc: '2.0', method: 'notifications/initialized' }, 'ws', run);
 assert.equal(note.kind, 'accept');
@@ -276,6 +276,80 @@ assert.equal(calls[calls.length - 1].body.selector, '[name="search_query"]');
 assert.equal(calls[calls.length - 1].body.text, 'govind bolo');
 assert.equal(calls[calls.length - 1].body.key, 'Enter');
 assert.equal(JSON.parse(typed.body.result.content[0].text).ok, true);
+
+const listedFiles = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '18a',
+  method: 'tools/call',
+  params: { name: 'list_files', arguments: { profileId: 'p1' } },
+}, 'ws-9', run);
+assert.equal(calls[calls.length - 1].body.task, 'list_files');
+assert.equal(calls[calls.length - 1].body.profileId, 'p1');
+assert.equal(JSON.parse(listedFiles.body.result.content[0].text).ok, true);
+
+const uploaded = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '18b',
+  method: 'tools/call',
+  params: { name: 'upload_file', arguments: { selector: '#90837', url: 'https://example.com/photo.jpg', tabId: 9 } },
+}, 'ws-9', run);
+assert.equal(calls[calls.length - 1].body.task, 'upload_file');
+assert.equal(calls[calls.length - 1].body.selector, '#90837');
+assert.equal(calls[calls.length - 1].body.url, 'https://example.com/photo.jpg');
+assert.equal(JSON.parse(uploaded.body.result.content[0].text).ok, true);
+
+const missingSelector = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '18c',
+  method: 'tools/call',
+  params: { name: 'upload_file', arguments: { url: 'https://example.com/photo.jpg' } },
+}, 'ws-9', run);
+assert.equal(missingSelector.body.result.isError, true);
+
+const twoSources = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '18d',
+  method: 'tools/call',
+  params: { name: 'upload_file', arguments: { selector: '#90837', fileId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', url: 'https://example.com/photo.jpg' } },
+}, 'ws-9', run);
+assert.equal(twoSources.body.result.isError, true);
+
+const pathRejected = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '18e',
+  method: 'tools/call',
+  params: { name: 'upload_file', arguments: { selector: '#90837', url: 'C:\\\\Users\\\\op\\\\photo.jpg' } },
+}, 'ws-9', run);
+assert.equal(pathRejected.body.result.isError, true);
+assert.match(JSON.parse(pathRejected.body.result.content[0].text).error, /file_reference_invalid|http or https/);
+
+const fileUrlRejected = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '18f',
+  method: 'tools/call',
+  params: { name: 'upload_file', arguments: { selector: '#90837', url: 'file:///tmp/photo.jpg' } },
+}, 'ws-9', run);
+assert.equal(fileUrlRejected.body.result.isError, true);
+
+const inlineUpload = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '18g',
+  method: 'tools/call',
+  params: { name: 'upload_file', arguments: { selector: '#90837', data: 'iVBORw0KGgo=', mimeType: 'image/png', filename: 'photo.png', frameId: 2 } },
+}, 'ws-9', run);
+assert.equal(calls[calls.length - 1].body.task, 'upload_file');
+assert.equal(calls[calls.length - 1].body.mimeType, 'image/png');
+assert.equal(calls[calls.length - 1].body.filename, 'photo.png');
+assert.equal(calls[calls.length - 1].body.frameId, 2);
+assert.equal(JSON.parse(inlineUpload.body.result.content[0].text).ok, true);
+
+const zipRejected = await respondToMcp({
+  jsonrpc: '2.0',
+  id: '18h',
+  method: 'tools/call',
+  params: { name: 'upload_file', arguments: { selector: '#90837', data: 'AAAA', mimeType: 'application/zip', filename: 'x.zip' } },
+}, 'ws-9', run);
+assert.equal(zipRejected.body.result.isError, true);
 
 const scrollPage = (globalThis as any).CcScrollPage.scrollPage;
 const inner = {

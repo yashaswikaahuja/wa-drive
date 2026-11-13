@@ -40,6 +40,257 @@
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined") module.exports = root.CcParseDateValue;
 
+/* ==== jquery-ui-adapter.ts ==== */
+(function(root) {
+  "use strict";
+  function normalize(value) {
+    return String(value == null ? "" : value).replace(/\\s+/g, " ").trim().toLowerCase();
+  }
+  function text(node) {
+    return String(node && node.textContent || "").replace(/\\s+/g, " ").trim();
+  }
+  function isSelectmenuButton(el) {
+    return !!(el && el.classList && el.classList.contains("ui-selectmenu-button"));
+  }
+  function findSelectForButton(button) {
+    if (!button) return null;
+    var id = String(button.id || "");
+    if (id.endsWith("-button")) {
+      var selectId = id.slice(0, -7);
+      var byId = button.ownerDocument.getElementById(selectId);
+      if (byId && String(byId.tagName).toLowerCase() === "select") return byId;
+    }
+    var labelledBy = button.getAttribute && button.getAttribute("aria-labelledby");
+    if (labelledBy) {
+      var label = button.ownerDocument.getElementById(labelledBy);
+      if (label && label.htmlFor) {
+        var linked = button.ownerDocument.getElementById(label.htmlFor);
+        if (linked && String(linked.tagName).toLowerCase() === "select") return linked;
+      }
+    }
+    return null;
+  }
+  function findButton(el) {
+    if (isSelectmenuButton(el)) return el;
+    if (el && el.matches && el.matches('[id$="-button"].ui-selectmenu-button')) return el;
+    if (el && el.querySelector) {
+      var nested = el.querySelector(".ui-selectmenu-button");
+      if (nested) return nested;
+    }
+    return null;
+  }
+  function findVisibleMenu(doc, button) {
+    var menus = Array.from(doc.querySelectorAll(".ui-selectmenu-menu.ui-selectmenu-open, .ui-selectmenu-menu"));
+    var visible = menus.filter(function(menu) {
+      var style = doc.defaultView && doc.defaultView.getComputedStyle ? doc.defaultView.getComputedStyle(menu) : null;
+      return menu.getClientRects().length > 0 && (!style || style.display !== "none" && style.visibility !== "hidden");
+    });
+    if (!visible.length) return null;
+    var buttonId = String(button && button.id || "");
+    var expectedId = buttonId.endsWith("-button") ? buttonId.slice(0, -7) + "-menu" : "";
+    if (expectedId) {
+      var owned = visible.find(function(menu) {
+        return menu.id === expectedId;
+      });
+      if (owned) return owned;
+    }
+    return visible.find(function(menu) {
+      return menu.classList.contains("ui-selectmenu-open");
+    }) || null;
+  }
+  function selectmenu(el, requestedValue) {
+    var button = findButton(el);
+    if (!button) return null;
+    var select = findSelectForButton(button);
+    if (!select) return Promise.resolve({ success: false, verified: false, settled: true, reason: "jquery-ui-source-select-not-found" });
+    var before = String(select.value || "");
+    button.click();
+    return new Promise(function(resolve) {
+      var started = Date.now();
+      var poll = setInterval(function() {
+        var menu = findVisibleMenu(select.ownerDocument, button);
+        var items = menu ? Array.from(menu.querySelectorAll(".ui-menu-item-wrapper")) : [];
+        if (!menu || !items.length) {
+          if (Date.now() - started >= 3e3) {
+            clearInterval(poll);
+            resolve({ success: false, verified: false, settled: true, reason: "jquery-ui-menu-not-open", previousValue: before });
+          }
+          return;
+        }
+        var options = Array.from(select.options || []);
+        var wanted = normalize(requestedValue);
+        var option = options.find(function(candidate) {
+          return normalize(candidate.value) === wanted || normalize(candidate.text) === wanted;
+        });
+        if (!option) {
+          option = options.find(function(candidate) {
+            var label = normalize(candidate.text);
+            return label === wanted || label && wanted && (label.includes(wanted) || wanted.includes(label));
+          });
+        }
+        if (!option) {
+          clearInterval(poll);
+          resolve({ success: false, verified: false, settled: true, reason: "jquery-ui-option-not-found", optionCount: options.length });
+          return;
+        }
+        var target = items.find(function(item) {
+          return normalize(text(item)) === normalize(option.text);
+        });
+        if (!target) {
+          clearInterval(poll);
+          resolve({ success: false, verified: false, settled: true, reason: "jquery-ui-menu-option-not-found" });
+          return;
+        }
+        clearInterval(poll);
+        target.click();
+        setTimeout(function() {
+          var selected = String(select.value || "");
+          var rendered = button.querySelector(".ui-selectmenu-text");
+          var renderedText = text(rendered);
+          var expectedText = String(option.text || "").trim();
+          var verified = selected === String(option.value) && normalize(renderedText) === normalize(expectedText);
+          resolve({
+            success: verified,
+            verified,
+            settled: true,
+            reason: verified ? "" : "jquery-ui-selection-not-confirmed",
+            previousValue: before,
+            selectedValue: selected,
+            selectedText: renderedText,
+            waitMs: Date.now() - started
+          });
+        }, 100);
+      }, 50);
+    });
+  }
+  function isDatepickerInput(el) {
+    return !!(el && el.classList && el.classList.contains("hasDatepicker"));
+  }
+  function fillDatepicker(el, value, parseDateValue) {
+    if (!isDatepickerInput(el)) return null;
+    var rawValue = String(value == null ? "" : value).trim();
+    if (!rawValue) return 0;
+    var jq = root.jQuery || root.$;
+    if (jq && jq.fn && typeof jq.fn.datepicker === "function") {
+      try {
+        jq(el).datepicker("setDate", rawValue);
+        return String(el.value || "").trim() === rawValue ? 1 : 0;
+      } catch (e) {
+        return 0;
+      }
+    }
+    var doc = el.ownerDocument;
+    var view = doc && doc.defaultView;
+    var descriptor = view && view.HTMLInputElement ? Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, "value") : null;
+    if (typeof el.focus === "function") el.focus();
+    if (descriptor && descriptor.set) descriptor.set.call(el, rawValue);
+    else el.value = rawValue;
+    var EventCtor = view && view.Event ? view.Event : Event;
+    ["input", "change", "keyup"].forEach(function(eventName) {
+      el.dispatchEvent(new EventCtor(eventName, { bubbles: true }));
+    });
+    if (typeof el.blur === "function") el.blur();
+    return String(el.value || "").trim() === rawValue ? 1 : 0;
+  }
+  root.CcJQueryUiAdapter = {
+    isSelectmenuButton,
+    findSelectForButton,
+    selectmenu,
+    isDatepickerInput,
+    fillDatepicker
+  };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+/* ==== jquery-interaction-adapter.ts ==== */
+(function(root) {
+  "use strict";
+  function getJQuery() {
+    var jq = root && (root.jQuery || root.$);
+    return typeof jq === "function" && jq.fn && typeof jq.fn.trigger === "function" ? jq : null;
+  }
+  function makeEvent(el, name, detail) {
+    var view = el && el.ownerDocument && el.ownerDocument.defaultView;
+    var E = view && view.Event ? view.Event : typeof Event !== "undefined" ? Event : null;
+    var CE = view && view.CustomEvent ? view.CustomEvent : typeof CustomEvent !== "undefined" ? CustomEvent : null;
+    if (detail !== void 0 && CE) return new CE(name, { bubbles: true, cancelable: true, detail });
+    return E ? new E(name, { bubbles: true, cancelable: true }) : null;
+  }
+  function trigger(el, name, detail) {
+    if (!el || typeof name !== "string" || !name.trim()) return { success: false, strategy: "none", reason: "invalid-target-or-event" };
+    var jq = getJQuery();
+    if (jq) {
+      try {
+        jq(el).trigger(name.trim(), detail === void 0 ? void 0 : [detail]);
+        return { success: true, strategy: "jquery-trigger", event: name.trim() };
+      } catch (e) {
+      }
+    }
+    var event = makeEvent(el, name.trim(), detail);
+    if (!event || typeof el.dispatchEvent !== "function") return { success: false, strategy: "none", reason: "event-dispatch-unavailable" };
+    try {
+      return { success: el.dispatchEvent(event) !== false, strategy: "native-event", event: name.trim() };
+    } catch (e) {
+      return { success: false, strategy: "native-event", event: name.trim(), reason: "dispatch-failed" };
+    }
+  }
+  function triggerHandler(el, name, detail) {
+    var jq = getJQuery();
+    if (!jq || !el || typeof name !== "string" || !name.trim()) return { success: false, strategy: "none", reason: "jquery-triggerHandler-unavailable" };
+    try {
+      jq(el).triggerHandler(name.trim(), detail === void 0 ? void 0 : [detail]);
+      return { success: true, strategy: "jquery-triggerHandler", event: name.trim() };
+    } catch (e) {
+      return { success: false, strategy: "jquery-triggerHandler", event: name.trim(), reason: "handler-failed" };
+    }
+  }
+  function setValue(el, value, options) {
+    if (!el) return { success: false, verified: false, reason: "target-not-found" };
+    var raw = value == null ? "" : String(value);
+    var jq = getJQuery();
+    var strategy = "native-setter";
+    try {
+      if (jq) {
+        jq(el).val(raw);
+        strategy = "jquery-val";
+      } else {
+        var view = el.ownerDocument && el.ownerDocument.defaultView;
+        var tag = String(el.tagName || "").toLowerCase();
+        var ctor = tag === "textarea" ? view && view.HTMLTextAreaElement : view && view.HTMLInputElement;
+        var desc = ctor && Object.getOwnPropertyDescriptor(ctor.prototype, "value");
+        if (desc && desc.set) desc.set.call(el, raw);
+        else el.value = raw;
+      }
+    } catch (e) {
+      return { success: false, verified: false, strategy, reason: "value-set-failed" };
+    }
+    var events = options && Array.isArray(options.events) ? options.events : [];
+    var eventResults = events.map(function(eventName) {
+      return trigger(el, eventName);
+    });
+    var actual = String(el.value == null ? "" : el.value);
+    var verified = actual === raw;
+    return { success: verified, verified, strategy, value: actual, events: eventResults, reason: verified ? "" : "value-verification-failed" };
+  }
+  function click(el) {
+    if (!el || typeof el.click !== "function") return { success: false, strategy: "native-click", reason: "click-unavailable" };
+    try {
+      el.click();
+      return { success: true, strategy: "native-click" };
+    } catch (e) {
+      return { success: false, strategy: "native-click", reason: "click-failed" };
+    }
+  }
+  root.CcJQueryInteractionAdapter = {
+    isJQueryAvailable: function() {
+      return !!getJQuery();
+    },
+    trigger,
+    triggerHandler,
+    setValue,
+    click
+  };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
 /* ==== cascade-field-level.ts ==== */
 (function(root2) {
   "use strict";
@@ -795,7 +1046,7 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
     }
     return true;
   }
-  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable, .ui-droppable, .droppable, [ondrop]';
+  var CONTROL_QUERY = 'button, input[type="submit"], input[type="button"], [role="button"], [role="checkbox"], [role="radio"], [role="option"], [role="combobox"], mat-select, mat-checkbox, mat-radio-button, td, div, span, a, li, strong, p, label, small, .rct-checkbox, .rct-title, .custom-control-label, [class*="auto-complete__option"], figure, .figure, [draggable="true"], .ui-draggable, .ui-droppable, .droppable, [ondrop]';
   var CLASS_WORD = /\b(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)\b/i;
   var CLASS_ONLY = /^(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV)$/i;
   var AVAIL_WORD = /\b(AVAILABLE|GNWL|RAC|REGRET|CURR)\b/i;
@@ -816,9 +1067,13 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
   function isChoice(el) {
     if (!el || !el.tagName || inChrome(el)) return false;
     var role = el.getAttribute && el.getAttribute("role");
-    if (role === "checkbox" || role === "radio" || role === "option") return true;
+    var tagName = String(el.tagName || "").toLowerCase();
+    if (role === "checkbox" || role === "radio" || role === "option" || role === "combobox") return true;
+    if (tagName === "mat-select" || tagName === "mat-checkbox" || tagName === "mat-radio-button") return true;
+    var componentClass = String(el.className || "");
+    if (/\bv-select\b|\bv-autocomplete\b|\bv-combobox\b/.test(componentClass)) return true;
     if (/\b\S*auto-complete__option\b/.test(String(el.className || ""))) return true;
-    var tag = String(el.tagName).toLowerCase();
+    var tag = tagName;
     var cls = String(el.className || "");
     if (tag === "a") {
       var href = el.getAttribute && el.getAttribute("href");
@@ -826,6 +1081,7 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
       return !!(href && text && text.length >= 2 && text.length <= 60);
     }
     if (tag === "label") {
+      if (el.closest && el.closest("mat-checkbox, mat-radio-button")) return false;
       if (/custom-control-label|form-check-label|rct-text/.test(cls)) return true;
       if (el.getAttribute && el.getAttribute("for")) return true;
       if (el.querySelector && el.querySelector('input[type="radio"], input[type="checkbox"], .rct-checkbox')) return true;
@@ -1044,7 +1300,7 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
       if (hit && (hit === el || typeof el.contains === "function" && el.contains(hit))) target = hit;
     }
     var view = el.ownerDocument && el.ownerDocument.defaultView || (typeof window !== "undefined" ? window : null);
-    var names = ["pointerdown", "mousedown", "pointerup", "mouseup", "click"];
+    var names = ["pointerdown", "mousedown", "pointerup", "mouseup"];
     for (var i = 0; i < names.length; i++) {
       var ev = null;
       var init = {
@@ -1067,15 +1323,14 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
       if (ev && typeof target.dispatchEvent === "function") target.dispatchEvent(ev);
       else if (typeof target.dispatchEvent === "function") target.dispatchEvent({ type: names[i], bubbles: true, cancelable: true });
     }
-    if (typeof target.click === "function") target.click();
-    else if (typeof el.click === "function") el.click();
-    var type = String(el.getAttribute && el.getAttribute("type") || el.type || "").toLowerCase();
-    var form = el.form || (typeof el.closest === "function" ? el.closest("form") : null);
-    if (form && type === "submit" && typeof form.requestSubmit === "function") {
-      try {
-        form.requestSubmit(el);
-      } catch (e) {
-      }
+    if (typeof target.click === "function") {
+      target.click();
+    } else if (typeof el.click === "function") {
+      el.click();
+    } else if (typeof target.dispatchEvent === "function") {
+      var clickView = target.ownerDocument && target.ownerDocument.defaultView || (typeof window !== "undefined" ? window : null);
+      var clickEvent = clickView && typeof clickView.MouseEvent === "function" ? new clickView.MouseEvent("click", { bubbles: true, cancelable: true, view: clickView }) : { type: "click", bubbles: true, cancelable: true };
+      target.dispatchEvent(clickEvent);
     }
   }
   function forceHoverCss(el) {
@@ -1200,6 +1455,190 @@ if (typeof module !== "undefined") module.exports = globalThis.CcLabelStillMatch
   root.CcClickControl = { list, press, chooseOption, norm, elementFor, findByText };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined") module.exports = globalThis.CcClickControl;
+
+/* ==== upload-file-input.ts ==== */
+(function(root) {
+  "use strict";
+  var ALLOWED = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "application/pdf": "pdf"
+  };
+  function isFileInput(el) {
+    if (!el) return false;
+    var tag = String(el.tagName || "").toLowerCase();
+    var type = String(el.type || el.getAttribute && el.getAttribute("type") || "").toLowerCase();
+    return tag === "input" && type === "file";
+  }
+  function resolveNode(selector, doc) {
+    if (!selector || !doc) return null;
+    var resolver = root.CcResolveCcSelector;
+    if (resolver && typeof resolver.resolveCcSelector === "function") {
+      try {
+        var hit = resolver.resolveCcSelector(selector, doc);
+        if (hit) return hit;
+      } catch (e0) {
+      }
+    }
+    try {
+      if (typeof doc.querySelector === "function") return doc.querySelector(selector);
+    } catch (e1) {
+    }
+    return null;
+  }
+  function findFileInput(selector, doc) {
+    var d = doc || (typeof document !== "undefined" ? document : null);
+    if (!d) return null;
+    var node = resolveNode(selector, d);
+    if (isFileInput(node)) return node;
+    if (node && typeof node.querySelector === "function") {
+      try {
+        var inner = node.querySelector('input[type="file"]');
+        if (inner) return inner;
+      } catch (e2) {
+      }
+    }
+    var parent = node && (node.parentElement || node.parentNode);
+    for (var hops = 0; parent && hops < 6; hops++) {
+      if (typeof parent.querySelector === "function") {
+        try {
+          var near = parent.querySelector('input[type="file"]');
+          if (near) return near;
+        } catch (e3) {
+        }
+      }
+      parent = parent.parentElement || parent.parentNode;
+    }
+    try {
+      var all = d.querySelectorAll('input[type="file"]');
+      if (all && all.length === 1) return all[0];
+    } catch (e4) {
+    }
+    return null;
+  }
+  function matchesAccept(accept, mimeType, filename) {
+    var raw = String(accept || "").trim();
+    if (!raw) return true;
+    var mime = String(mimeType || "").toLowerCase();
+    var name = String(filename || "").toLowerCase();
+    var ext = name.lastIndexOf(".") >= 0 ? name.slice(name.lastIndexOf(".")) : "";
+    var parts = raw.split(",");
+    for (var i = 0; i < parts.length; i++) {
+      var p = String(parts[i] || "").trim().toLowerCase();
+      if (!p) continue;
+      if (p === "*/*") return true;
+      if (p.charAt(p.length - 1) === "*" && p.charAt(p.length - 2) === "/") {
+        if (mime.indexOf(p.slice(0, p.length - 1)) === 0) return true;
+        continue;
+      }
+      if (p.charAt(0) === ".") {
+        if (ext === p) return true;
+        if (p === ".jpg" && mime === "image/jpeg") return true;
+        if (p === ".jpeg" && mime === "image/jpeg") return true;
+        if (p === ".png" && mime === "image/png") return true;
+        if (p === ".webp" && mime === "image/webp") return true;
+        if (p === ".gif" && mime === "image/gif") return true;
+        if (p === ".pdf" && mime === "application/pdf") return true;
+        continue;
+      }
+      if (p === mime) return true;
+    }
+    return false;
+  }
+  function decodeBase64(data) {
+    var raw = String(data || "");
+    var comma = raw.indexOf(",");
+    if (raw.slice(0, 5) === "data:" && comma >= 0) raw = raw.slice(comma + 1);
+    raw = raw.replace(/\s+/g, "");
+    if (!raw) throw new Error("empty_data");
+    var binary = atob(raw);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+  function mimeFromDataUrl(data) {
+    var raw = String(data || "");
+    if (raw.slice(0, 5) !== "data:") return "";
+    var match = raw.match(/^data:([^;,]+)/i);
+    return match ? String(match[1]).toLowerCase() : "";
+  }
+  function safeName(name, mime) {
+    var s = String(name || "").replace(/\\/g, "/").split("/").pop() || "";
+    s = s.replace(/[^\w.\-]+/g, "_").replace(/^\.+/, "").slice(0, 80);
+    var ext = ALLOWED[mime] || "";
+    if (!s || s === "." || s === "..") s = ext === "pdf" ? "document.pdf" : "upload." + (ext || "bin");
+    if (ext && s.toLowerCase().indexOf("." + ext) < 0 && !(ext === "jpg" && /\.jpe?g$/i.test(s))) {
+      s = s.replace(/\.[^.]+$/, "") + "." + ext;
+    }
+    return s;
+  }
+  function assignFileInput(spec) {
+    var g = typeof globalThis !== "undefined" ? globalThis : root;
+    var doc = spec && spec.document || g.document;
+    if (!doc) return { ok: false, error: "no_document" };
+    var selector = spec && spec.selector ? String(spec.selector) : "";
+    if (!selector) return { ok: false, error: "selector_required" };
+    var el = findFileInput(selector, doc);
+    if (!el) return { ok: false, error: "not_found", selector };
+    var mime = String(spec && spec.mimeType || mimeFromDataUrl(spec && spec.data) || "").toLowerCase();
+    if (mime === "image/jpg") mime = "image/jpeg";
+    if (!ALLOWED[mime]) return { ok: false, error: "mime_not_allowed", mimeType: mime, selector };
+    var filename = safeName(spec && spec.filename, mime);
+    var accept = el.accept || el.getAttribute && el.getAttribute("accept") || "";
+    if (!matchesAccept(accept, mime, filename)) {
+      return { ok: false, error: "accept_mismatch", selector, accept: String(accept).slice(0, 80), mimeType: mime };
+    }
+    if (typeof File !== "function" || typeof DataTransfer !== "function") {
+      return { ok: false, error: "file_api_unavailable", selector };
+    }
+    var bytes;
+    try {
+      bytes = decodeBase64(spec && spec.data);
+    } catch (e0) {
+      return { ok: false, error: "bad_data", selector };
+    }
+    if (!bytes || !bytes.length) return { ok: false, error: "empty_data", selector };
+    var file;
+    try {
+      file = new File([bytes], filename, { type: mime, lastModified: Date.now() });
+    } catch (e1) {
+      return { ok: false, error: "file_create_failed", selector };
+    }
+    try {
+      var dt = new DataTransfer();
+      dt.items.add(file);
+      el.files = dt.files;
+    } catch (e2) {
+      return { ok: false, error: "assign_failed", selector };
+    }
+    try {
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    } catch (e3) {
+      try {
+        el.dispatchEvent({ type: "change", bubbles: true });
+      } catch (e4) {
+      }
+    }
+    var count = el.files && el.files.length || 1;
+    return {
+      ok: true,
+      selector,
+      fileName: filename,
+      fileSize: file.size,
+      mimeType: mime,
+      fileCount: count
+    };
+  }
+  root.CcUploadFile = {
+    assignFileInput,
+    findFileInput,
+    matchesAccept
+  };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = globalThis.CcUploadFile;
 
 /* ==== pointer-keys.ts ==== */
 (function(root) {
@@ -1575,17 +2014,31 @@ if (typeof module !== "undefined") module.exports = globalThis.CcClickControl;
         dragged: true
       };
     }
-    var names = buttonName === "right" ? ["pointerdown", "mousedown", "pointerup", "mouseup", "contextmenu"] : ["pointerdown", "mousedown", "pointerup", "mouseup", "click"];
+    var names = buttonName === "right" ? ["pointerdown", "mousedown", "pointerup", "mouseup", "contextmenu"] : ["pointerdown", "mousedown", "pointerup", "mouseup"];
     fire(target, point, button, buttons, names, 1);
     if (count === 2 && buttonName === "left") {
       fire(target, point, button, buttons, names, 2);
-      var dbl = makeEvent("dblclick", point, 0, 1, 2);
-      if (typeof target.dispatchEvent === "function") target.dispatchEvent(dbl);
     }
-    if (buttonName === "left" && count === 1 && typeof target.click === "function") {
-      try {
-        target.click();
-      } catch (e5) {
+    if (buttonName === "left") {
+      var activations = count === 2 ? 2 : 1;
+      if (typeof target.click === "function") {
+        for (var activation = 0; activation < activations; activation++) {
+          try {
+            target.click();
+          } catch (e5) {
+            break;
+          }
+        }
+      } else if (typeof target.dispatchEvent === "function") {
+        var clickView = target.ownerDocument && target.ownerDocument.defaultView || g.window || g;
+        for (var fallbackActivation = 0; fallbackActivation < activations; fallbackActivation++) {
+          var clickEvent = clickView && typeof clickView.MouseEvent === "function" ? new clickView.MouseEvent("click", { bubbles: true, cancelable: true, view: clickView, clientX: point.x, clientY: point.y, button: 0, detail: fallbackActivation + 1 }) : { type: "click", bubbles: true, cancelable: true };
+          target.dispatchEvent(clickEvent);
+        }
+      }
+      if (count === 2 && typeof target.dispatchEvent === "function") {
+        var dbl = makeEvent("dblclick", point, 0, 1, 2);
+        target.dispatchEvent(dbl);
       }
     }
     if (typeof target.focus === "function") {
@@ -2620,6 +3073,44 @@ if (typeof module !== "undefined") module.exports = root.CcPostFillCorrections;
     var _nos = root2.CcNgOptionScorer || {};
     var _nsm = root2.CcNgSessionManager || {};
     var _bfr = root2.CcBuildFillRecord || {};
+    var startedAtForJqueryUi = Date.now();
+    var jqueryUi = root2.CcJQueryUiAdapter || {};
+    if (jqueryUi.isSelectmenuButton && jqueryUi.isSelectmenuButton(el)) {
+      if (!jqueryUi.selectmenu) return 0;
+      return Promise.resolve(jqueryUi.selectmenu(el, value)).then(function(result) {
+        var ok = !!(result && result.success && result.verified);
+        var reason = ok ? null : result && result.reason || "jquery-ui-selection-not-confirmed";
+        _replayResults[filledBySource[selector] && filledBySource[selector].label || selector] = ok ? "ok" : reason;
+        var rec = _bfr.buildFillRecord ? _bfr.buildFillRecord(
+          {
+            selector,
+            value,
+            type: "ng-dropdown",
+            result: ok ? "filled" : "skipped",
+            failReason: reason,
+            strategy: "jquery-ui-selectmenu",
+            durationMs: Date.now() - startedAtForJqueryUi
+          },
+          { rv: RUNTIME_VERSION }
+        ) : {
+          selector,
+          value,
+          type: "ng-dropdown",
+          result: ok ? "filled" : "skipped",
+          failReason: reason,
+          strategy: "jquery-ui-selectmenu",
+          durationMs: Date.now() - startedAtForJqueryUi,
+          ts: Date.now(),
+          rv: RUNTIME_VERSION,
+          fillMode: "sequential"
+        };
+        _ccRecords.push(rec);
+        _flushRecords();
+        return ok ? 1 : 0;
+      }).catch(function() {
+        return 0;
+      });
+    }
     var rootClass = el.className ? el.className.trim().split(/\s+/)[0] : "ng-dropdown";
     var adapter = portalAdapters[rootClass] || portalAdapters["ng-dropdown"];
     if (!adapter) {
@@ -2915,21 +3406,12 @@ if (typeof module !== "undefined") module.exports = root.CcFillOneNg;
       var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value");
       if (nativeSetter) nativeSetter.set.call(el2, opt2.value);
       else el2.value = opt2.value;
-      ["mousedown", "mouseup", "click", "input", "change"].forEach(function(ev) {
+      ["mousedown", "mouseup", "click", "input"].forEach(function(ev) {
         el2.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }));
       });
-      if (typeof el2.onchange === "function") {
-        try {
-          el2.onchange.call(el2, new Event("change"));
-        } catch (e) {
-        }
-      }
-      if (typeof $ !== "undefined") {
-        try {
-          $(el2).trigger("change");
-        } catch (e) {
-        }
-      }
+      var jqueryInteraction = root2.CcJQueryInteractionAdapter || {};
+      if (jqueryInteraction.trigger) jqueryInteraction.trigger(el2, "change");
+      else el2.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
       try {
         el2.dispatchEvent(new Event("propertychange", { bubbles: true }));
       } catch (e) {
@@ -3039,19 +3521,9 @@ if (typeof module !== "undefined") module.exports = root.CcFillOneSelect;
       }
       return el.value ? 1 : 0;
     }
-    if (el.classList.contains("hasDatepicker") || typeof $ !== "undefined" && typeof $.fn !== "undefined" && typeof $.fn.datepicker !== "undefined" && $(el).data("datepicker")) {
-      var parsed2 = parseDateValue(value);
-      var dateObj2 = parsed2.dateObj;
-      if (!isNaN(dateObj2)) {
-        $(el).datepicker("setDate", dateObj2);
-      } else {
-        var niv2 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
-        el.focus();
-        if (niv2) niv2.set.call(el, value);
-        else el.value = value;
-        el.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-      return el.value ? 1 : 0;
+    var _jqueryUi = root2.CcJQueryUiAdapter || {};
+    if (_jqueryUi.isDatepickerInput && _jqueryUi.isDatepickerInput(el)) {
+      return _jqueryUi.fillDatepicker ? _jqueryUi.fillDatepicker(el, value, parseDateValue) : 0;
     }
     if (el.getAttribute("matdatepicker") !== null || el.getAttribute("matInput") !== null && el.closest("mat-datepicker-toggle,mat-form-field") && (el.type === "text" || el.type === "date")) {
       var niv3 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
@@ -3335,10 +3807,16 @@ if (typeof module !== "undefined") module.exports = root.CcFillOneMat;
       return ok ? 1 : 0;
     }
     el.focus();
-    if (niv) niv.set.call(el, value);
-    else el.value = value;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
+    var jqueryInteraction = root2.CcJQueryInteractionAdapter || {};
+    if (jqueryInteraction.setValue) {
+      var jquerySetResult = jqueryInteraction.setValue(el, value, { events: ["input", "change"] });
+      if (!jquerySetResult || !jquerySetResult.verified) return 0;
+    } else {
+      if (niv) niv.set.call(el, value);
+      else el.value = value;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
     el.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "a" }));
     el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "a" }));
     el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: value.slice(-1) }));
@@ -4855,10 +5333,10 @@ if (typeof module !== "undefined") module.exports = root.CcFillOneText;
               _ccRecords.push(_buildFillRecord({ selector, value, type, result: _r ? "filled" : "skipped", failReason: _r ? null : _pResult.reason, strategy: "plugin:" + _ngPlugin.id, plugin: _ngPlugin.id, durationMs: Date.now() - _t0 }, { rv: RUNTIME_VERSION }));
               _flushRecords();
             } catch (e) {
-              fillOne(selector, value, type);
+              await fillOne(selector, value, type);
             }
           } else {
-            fillOne(selector, value, type);
+            await fillOne(selector, value, type);
           }
           await settleAfterAct("select");
         } else if (_selectLike && el && el.tagName === "SELECT") {

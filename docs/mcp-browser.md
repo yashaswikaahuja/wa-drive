@@ -12,7 +12,7 @@ MCP URL:
 
 Add that URL in the LLM app with no pasted token. The app opens a browser window. The operator signs in with the CyberControl email or phone and password. The app then holds the session and calls the tools below.
 
-If a tool returns `no_extension_connected`, the extension is not on the workspace socket. Ask the operator to open Chrome, confirm the CyberControl extension is signed in, and try again. `extension_timeout` means the extension did not answer in time. `fill` waits up to 88s, `fill_form` up to 80s, and a whole-page `snapshot` up to 45s. The workspace runs one browser task at a time, including `scroll` and `fill`; a second call waits for the first. The MCP gateway allows 240s so three queued fills can finish. Read the page again before repeating the same action.
+If a tool returns `no_extension_connected`, the extension is not on the workspace socket. Ask the operator to open Chrome, confirm the CyberControl extension is signed in, and try again. `extension_timeout` means the extension did not answer in time. `fill` waits up to 88s, `fill_form` up to 80s, `upload_file` up to 30s, and a whole-page `snapshot` up to 45s. The workspace runs one browser task at a time, including `scroll` and `fill`; a second call waits for the first. The MCP gateway allows 240s so three queued fills can finish. Read the page again before repeating the same action.
 
 ## Profiles and Fill
 
@@ -155,6 +155,51 @@ Types on the keyboard in the focused control, or presses a named key. Pass `sele
 
 `key` is one of `Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`, `PageUp`, `PageDown`, or a single character. `keys` is a short sequence of those. Arrow keys on a slider (`input type=range`) move its value. `ctrl`, `alt`, `shift`, and `meta` are modifiers. It does not type into a password, CAPTCHA, or OTP box. Copy `frameId` from `read_form` when the control is inside an iframe.
 
+### `list_files`
+
+Lists Hub image and PDF files this workspace can put on a form. Each row is `id`, `tag`, `kind` (`image` or `pdf`), and `mimeType`. File names and URLs are omitted.
+
+```json
+{}
+```
+
+Pass `profileId` from `list_profiles` to list that customer’s files:
+
+```json
+{ "profileId": "the id from list_profiles" }
+```
+
+Use an `id` as `fileId` on `upload_file`. If this tool returns `unknown task`, the operator needs to reload the unpacked extension.
+
+### `upload_file`
+
+Puts one jpeg, png, webp, gif, or PDF onto a file input from the latest `read_form`. `selector` is required. Pass exactly one source: `fileId` from `list_files`, an `http`/`https` `url`, or `data` as base64 with `mimeType` and `filename`. It does not accept a path on the operator’s computer. It does not submit the form.
+
+Hub file:
+
+```json
+{ "selector": "#90837", "fileId": "the id from list_files" }
+```
+
+Public URL:
+
+```json
+{ "selector": "input[type=\"file\"]", "url": "https://example.com/photo.jpg" }
+```
+
+Small inline image or PDF (about 1.2 million characters of base64):
+
+```json
+{
+  "selector": "#90837",
+  "data": "iVBORw0KGgo...",
+  "mimeType": "image/png",
+  "filename": "photo.png"
+}
+```
+
+Copy `frameId` from `read_form` when the control is inside an iframe. The result has `ok`, `selector`, `fileName`, `fileSize`, and `mimeType` — not the bytes. `file_reference_invalid` means a filesystem path was sent. `accept_mismatch` means that input does not take this type. `unknown task` means the operator needs to reload the unpacked extension.
+
 ### `open_url`
 
 Opens an `http` or `https` URL. Default is a new tab. Pass `tabId` or `newTab: false` to load the URL in an already open tab so `history` back/forward has a stack.
@@ -213,7 +258,7 @@ Each item has:
 
 - `selector` — the handle for a later `fill_form` or `click`
 - `label` and `visualLabel` — the text the operator sees
-- `type` — `text`, `checkbox-group`, `button`, `link`, `hover`, `drag`, `drop`, `slider`, `contenteditable`, and similar
+- `type` — `text`, `file`, `checkbox-group`, `button`, `link`, `hover`, `drag`, `drop`, `slider`, `contenteditable`, and similar. `humanGate` `upload` is a file input; use `upload_file`.
 - `frameId` — Chrome frame id when the isolated world ran in that frame. Same-origin editors such as TinyMCE `about:blank` are read through the parent `contentDocument`; copy `frameId` when it is present, and `fill_form` / `keyboard` still find `#tinymce` from the parent tab.
 - `role` — `button` on controls that are clicked, `link` / `hover` / `drag` / `drop` on those targets, absent on typed fields
 
@@ -221,7 +266,7 @@ Selectors such as `form-field-1` and `cc-button-6` are positions in that read. T
 
 ### `fill_form`
 
-Types into fields from the latest read. It does not press buttons.
+Types into fields from the latest read. It does not press buttons. File inputs (`type` `file`) need `upload_file`.
 
 ```json
 {
@@ -298,7 +343,7 @@ Then `read_form` again. Continue when the field shows that choice. A record of `
 1. `list_tabs` when more than one page may be open. `focus_tab` with the `tabId` you want. `open_url` opens a new tab unless you pass `tabId` or `newTab: false`. `close_tab` closes extras.
 2. `read_form`. Choose fields and controls from that list only. Do not invent selectors.
 3. `snapshot` when you need to see the screen. `scroll` when the control is below the visible screen, then snapshot again.
-4. `fill_form` for text and sliders (`type` `slider`, value a number). `click` for named buttons and links. `mouse_click` for a point on the snapshot or a selector. `hover` to open a hover menu. `drag` to move a handle. `keyboard` to type or press Enter, Tab, Escape, and arrows.
+4. `fill_form` for text and sliders (`type` `slider`, value a number). `upload_file` for a file input (`type` `file` or `humanGate` `upload`): `list_files` then `fileId`, or an `https` URL, or capped base64 `data`. `click` for named buttons and links. `mouse_click` for a point on the snapshot or a selector. `hover` to open a hover menu. `drag` to move a handle. `keyboard` to type or press Enter, Tab, Escape, and arrows.
 5. `read_form` again. `history` with `back` when the last page was the right one. Decide the next action from the new list.
 
 A click result has `clicked`, `selector`, `url`, and sometimes `reason`.
@@ -315,6 +360,6 @@ On the IRCTC train list, Book Now stays inactive until a class is chosen and an 
 
 Stop when the page asks for a CAPTCHA, an OTP, or a payment card. Tell the operator what is on screen. Do not solve the CAPTCHA. Do not invent card numbers, UPI ids, or OTPs.
 
-Do not store button presses as form mappings. Mappings are for typed fields. `open_url`, `read_form`, `snapshot`, `fill_form`, `click`, `mouse_click`, `hover`, `drag`, and `keyboard` are the page controls.
+Do not store button presses as form mappings. Mappings are for typed fields. `open_url`, `read_form`, `snapshot`, `fill_form`, `upload_file`, `list_files`, `click`, `mouse_click`, `hover`, `drag`, and `keyboard` are the page controls.
 
 The extension’s own Fill button uses saved field mappings for the page key. These tools do not. `fill_form` types only the `value` you pass in that call.

@@ -983,11 +983,15 @@ scrollRoot.CcScrollPage = { scrollPage };
         await chrome.tabs.update(tab.id, { active: true });
       } catch (e0) {
       }
-      await injectKernel(tab.id, false);
+      var requestedFrameId = spec && spec.frameId != null ? Number(spec.frameId) : spec && spec.control && spec.control.frameId != null ? Number(spec.control.frameId) : null;
+      var hasFrameTarget = requestedFrameId !== null && Number.isFinite(requestedFrameId);
+      await injectKernel(tab.id, hasFrameTarget);
+      var clickTarget = { tabId: tab.id };
+      if (hasFrameTarget) clickTarget.frameIds = [requestedFrameId];
       var results = null;
       try {
         results = await withTimeout(chrome.scripting.executeScript({
-          target: { tabId: tab.id },
+          target: clickTarget,
           func: clickFromJson,
           args: [spec || {}]
         }), 3500, "click_script_timeout");
@@ -1788,6 +1792,298 @@ scrollRoot.CcScrollPage = { scrollPage };
       meta: !!(spec && spec.meta)
     }, keyboardFromJson);
   }
+  var UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+  var UPLOAD_MIME = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "application/pdf": "pdf"
+  };
+  function looksLikeFilePath(value) {
+    var t = String(value || "").trim();
+    if (!t) return false;
+    if (/^file:/i.test(t)) return true;
+    if (/^[a-zA-Z]:[\\/]/.test(t)) return true;
+    if (/^\\\\/.test(t)) return true;
+    if (/^\/[A-Za-z]/.test(t) && t.indexOf("://") < 0) return true;
+    return false;
+  }
+  function sanitizeUploadName(name, mime) {
+    var s = String(name || "").replace(/\\/g, "/").split("/").pop() || "";
+    s = s.replace(/[^\w.\-]+/g, "_").replace(/^\.+/, "").slice(0, 80);
+    var ext = UPLOAD_MIME[mime] || "";
+    if (!s || s === "." || s === "..") s = ext === "pdf" ? "document.pdf" : "upload." + (ext || "bin");
+    if (ext && s.toLowerCase().indexOf("." + ext) < 0 && !(ext === "jpg" && /\.jpe?g$/i.test(s))) {
+      s = s.replace(/\.[^.]+$/, "") + "." + ext;
+    }
+    return s;
+  }
+  function sniffUploadMime(bytes) {
+    if (!bytes || bytes.length < 4) return "";
+    if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return "image/jpeg";
+    if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) return "image/png";
+    if (bytes[0] === 71 && bytes[1] === 73 && bytes[2] === 70) return "image/gif";
+    if (bytes.length >= 12 && bytes[0] === 82 && bytes[1] === 73 && bytes[2] === 70 && bytes[3] === 70 && bytes[8] === 87 && bytes[9] === 69 && bytes[10] === 66 && bytes[11] === 80) return "image/webp";
+    if (bytes[0] === 37 && bytes[1] === 80 && bytes[2] === 68 && bytes[3] === 70) return "application/pdf";
+    return "";
+  }
+  function mimeFromName(name) {
+    var n = String(name || "").toLowerCase();
+    if (/\.jpe?g$/.test(n)) return "image/jpeg";
+    if (/\.png$/.test(n)) return "image/png";
+    if (/\.webp$/.test(n)) return "image/webp";
+    if (/\.gif$/.test(n)) return "image/gif";
+    if (/\.pdf$/.test(n)) return "application/pdf";
+    return "";
+  }
+  function bytesToBase64(bytes) {
+    var binary = "";
+    var chunk = 32768;
+    for (var i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+  function decodeInlineUpload(data) {
+    var raw = String(data || "");
+    var comma = raw.indexOf(",");
+    var headerMime = "";
+    if (raw.slice(0, 5) === "data:" && comma >= 0) {
+      var match = raw.slice(0, comma).match(/^data:([^;,]+)/i);
+      headerMime = match ? String(match[1]).toLowerCase() : "";
+      raw = raw.slice(comma + 1);
+    }
+    raw = raw.replace(/\s+/g, "");
+    var binary = atob(raw);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return { bytes, mime: headerMime };
+  }
+  function filenameFromDisposition(header) {
+    var s = String(header || "");
+    var star = s.match(/filename\*=UTF-8''([^;]+)/i);
+    if (star) {
+      try {
+        return decodeURIComponent(star[1]);
+      } catch (e) {
+        return star[1];
+      }
+    }
+    var plain = s.match(/filename="?([^";]+)"?/i);
+    return plain ? plain[1] : "";
+  }
+  async function fetchUploadBytes(url, headers) {
+    var res = await fetch(url, headers ? { headers } : void 0);
+    if (!res.ok) {
+      var err = new Error("file_fetch_" + res.status);
+      err.status = res.status;
+      throw err;
+    }
+    var len = Number(res.headers.get("content-length"));
+    if (len && len > UPLOAD_MAX_BYTES) {
+      var tooBig = new Error("file_too_large");
+      throw tooBig;
+    }
+    var buf = await res.arrayBuffer();
+    if (buf.byteLength > UPLOAD_MAX_BYTES) throw new Error("file_too_large");
+    return {
+      bytes: new Uint8Array(buf),
+      contentType: String(res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase(),
+      filename: filenameFromDisposition(res.headers.get("content-disposition"))
+    };
+  }
+  function normalizeUploadMime(declared, sniffed, named) {
+    var mime = String(declared || "").toLowerCase();
+    if (mime === "image/jpg") mime = "image/jpeg";
+    if (!UPLOAD_MIME[mime]) mime = sniffed || named || "";
+    if (mime === "image/jpg") mime = "image/jpeg";
+    return mime;
+  }
+  async function loadUploadBytes(spec) {
+    if (looksLikeFilePath(spec && spec.fileId) || looksLikeFilePath(spec && spec.url) || looksLikeFilePath(spec && spec.filename)) {
+      return { ok: false, error: "file_reference_invalid" };
+    }
+    var declared = spec && spec.mimeType ? String(spec.mimeType) : "";
+    if (spec && spec.data) {
+      if (String(spec.data).length > 12e5) return { ok: false, error: "data too large" };
+      var decoded;
+      try {
+        decoded = decodeInlineUpload(spec.data);
+      } catch (e0) {
+        return { ok: false, error: "bad_data" };
+      }
+      if (!decoded.bytes.length) return { ok: false, error: "empty_data" };
+      if (decoded.bytes.length > UPLOAD_MAX_BYTES) return { ok: false, error: "file_too_large" };
+      var mime = normalizeUploadMime(declared || decoded.mime, sniffUploadMime(decoded.bytes), mimeFromName(spec.filename));
+      if (!UPLOAD_MIME[mime]) return { ok: false, error: "mime_not_allowed" };
+      return {
+        ok: true,
+        data: bytesToBase64(decoded.bytes),
+        mimeType: mime,
+        filename: sanitizeUploadName(spec.filename, mime),
+        fileSize: decoded.bytes.length
+      };
+    }
+    var stored = await chrome.storage.local.get(["accessToken", "backendUrl"]);
+    if (spec && spec.fileId) {
+      if (!stored.accessToken || !stored.backendUrl) return { ok: false, error: "extension_not_signed_in" };
+      if (!/^[A-Za-z0-9_-]{8,80}$/.test(String(spec.fileId))) return { ok: false, error: "file_reference_invalid" };
+      var base = String(stored.backendUrl).replace(/\/$/, "");
+      var fetched;
+      try {
+        fetched = await fetchUploadBytes(base + "/drive/download/" + encodeURIComponent(spec.fileId), {
+          Authorization: "Bearer " + stored.accessToken
+        });
+      } catch (e1) {
+        var code = e1 && e1.status || 0;
+        if (code === 404) return { ok: false, error: "file_not_found" };
+        return { ok: false, error: e1 && e1.message || "file_fetch_failed" };
+      }
+      var fileMime = normalizeUploadMime(declared || fetched.contentType, sniffUploadMime(fetched.bytes), mimeFromName(fetched.filename || spec.filename));
+      if (!UPLOAD_MIME[fileMime]) return { ok: false, error: "mime_not_allowed" };
+      return {
+        ok: true,
+        data: bytesToBase64(fetched.bytes),
+        mimeType: fileMime,
+        filename: sanitizeUploadName(spec.filename || fetched.filename, fileMime),
+        fileSize: fetched.bytes.length
+      };
+    }
+    if (spec && spec.url) {
+      var parsed;
+      try {
+        parsed = new URL(spec.url);
+      } catch (e2) {
+        return { ok: false, error: "bad url" };
+      }
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return { ok: false, error: "url must be http or https" };
+      var remote;
+      try {
+        remote = await fetchUploadBytes(spec.url, null);
+      } catch (e3) {
+        return { ok: false, error: e3 && e3.message || "file_fetch_failed" };
+      }
+      var urlMime = normalizeUploadMime(declared || remote.contentType, sniffUploadMime(remote.bytes), mimeFromName(remote.filename || parsed.pathname || spec.filename));
+      if (!UPLOAD_MIME[urlMime]) return { ok: false, error: "mime_not_allowed" };
+      var fromPath = String(parsed.pathname || "").split("/").pop();
+      return {
+        ok: true,
+        data: bytesToBase64(remote.bytes),
+        mimeType: urlMime,
+        filename: sanitizeUploadName(spec.filename || remote.filename || fromPath, urlMime),
+        fileSize: remote.bytes.length
+      };
+    }
+    return { ok: false, error: "exactly one of fileId, url, or data required" };
+  }
+  function uploadFromJson(spec) {
+    var api = typeof globalThis !== "undefined" ? globalThis.CcUploadFile : null;
+    if (!api || typeof api.assignFileInput !== "function") return { ok: false, error: "upload_not_loaded" };
+    return api.assignFileInput(spec);
+  }
+  function fileKindOf(mime, name) {
+    var m = String(mime || "").toLowerCase();
+    if (m === "image/jpg") m = "image/jpeg";
+    if (m === "application/pdf" || mimeFromName(name) === "application/pdf") return { kind: "pdf", mimeType: m || "application/pdf" };
+    if (UPLOAD_MIME[m] && m.indexOf("image/") === 0) return { kind: "image", mimeType: m };
+    var named = mimeFromName(name);
+    if (named === "application/pdf") return { kind: "pdf", mimeType: named };
+    if (named && named.indexOf("image/") === 0) return { kind: "image", mimeType: named };
+    return null;
+  }
+  async function runListFiles(spec) {
+    var stored = await chrome.storage.local.get(["accessToken", "backendUrl"]);
+    if (!stored.accessToken || !stored.backendUrl) return { ok: false, error: "extension_not_signed_in" };
+    var base = String(stored.backendUrl).replace(/\/$/, "");
+    var customerId = "";
+    if (spec && spec.profileId) {
+      var pres = await fetch(base + "/profiles/" + encodeURIComponent(String(spec.profileId)), {
+        headers: { Authorization: "Bearer " + stored.accessToken }
+      });
+      if (!pres.ok) return { ok: false, error: "profile_fetch_" + pres.status };
+      var profile = await pres.json();
+      customerId = String(profile && (profile.phone || profile.primary_contact_phone) || "").trim();
+    }
+    var listUrl = base + "/drive/files/ws";
+    if (customerId) listUrl += "?customerId=" + encodeURIComponent(customerId);
+    var res = await fetch(listUrl, {
+      headers: { Authorization: "Bearer " + stored.accessToken }
+    });
+    if (!res.ok) return { ok: false, error: "files_fetch_" + res.status };
+    var rows = await res.json();
+    var files = [];
+    var list = Array.isArray(rows) ? rows : [];
+    for (var i = 0; i < list.length && files.length < 80; i++) {
+      var row = list[i];
+      if (!row || !row.id) continue;
+      var typed = fileKindOf(row.mimeType, row.fileName);
+      if (!typed) continue;
+      files.push({
+        id: String(row.id).slice(0, 80),
+        tag: row.tag ? String(row.tag).slice(0, 40) : "",
+        kind: typed.kind,
+        mimeType: typed.mimeType
+      });
+    }
+    return { ok: true, files, fileCount: files.length };
+  }
+  async function runUploadFile(spec) {
+    var tab = await pickWebTab(spec && spec.tabId);
+    if (!tab || !tab.id) return { ok: false, error: "no_tab" };
+    if (String(tab.url || "").indexOf("http") !== 0) return { ok: false, error: "open_a_form_page", tabId: tab.id };
+    var selector = spec && spec.selector ? String(spec.selector) : "";
+    if (!selector) return { ok: false, error: "selector_required", tabId: tab.id };
+    var loaded = await loadUploadBytes(spec || {});
+    if (!loaded || loaded.ok === false) {
+      return Object.assign({ tabId: tab.id, selector }, loaded || { ok: false, error: "load_failed" });
+    }
+    try {
+      await chrome.tabs.update(tab.id, { active: true });
+    } catch (e0) {
+    }
+    try {
+      await injectKernel(tab.id, true);
+    } catch (e1) {
+    }
+    try {
+      var target = { tabId: tab.id };
+      if (Number.isFinite(Number(spec && spec.frameId))) target.frameIds = [Number(spec.frameId)];
+      var payload = {
+        selector,
+        filename: loaded.filename,
+        mimeType: loaded.mimeType,
+        data: loaded.data
+      };
+      var results = await withTimeout(chrome.scripting.executeScript({
+        target,
+        func: uploadFromJson,
+        args: [payload],
+        injectImmediately: true
+      }), 12e3, "upload_script_timeout");
+      var page = results && results[0] && results[0].result;
+      if ((!page || page.error === "not_found") && !target.frameIds) {
+        results = await withTimeout(chrome.scripting.executeScript({
+          target: { tabId: tab.id, allFrames: true },
+          func: uploadFromJson,
+          args: [payload],
+          injectImmediately: true
+        }), 12e3, "upload_script_timeout");
+        page = pickBestFrameResult(results);
+      }
+      var after = tab;
+      try {
+        after = await chrome.tabs.get(tab.id);
+      } catch (e2) {
+      }
+      return Object.assign({
+        tabId: tab.id,
+        url: pageUrl(after && after.url || tab.url || "")
+      }, page || { ok: false, error: "no_result" });
+    } catch (e3) {
+      return { ok: false, error: isFrameGone(e3) ? e3 && e3.message : "page_not_readable", tabId: tab.id, selector };
+    }
+  }
   function runBrowserTask(msg) {
     if (!msg || !msg.task) {
       replyBrowserTask(msg && msg.taskId, { ok: false, error: "unknown task" });
@@ -1890,6 +2186,22 @@ scrollRoot.CcScrollPage = { scrollPage };
         replyBrowserTask(msg.taskId, result);
       }).catch(function(err) {
         replyBrowserTask(msg.taskId, { ok: false, error: err && err.message || "keyboard_failed" });
+      });
+      return;
+    }
+    if (msg.task === "list_files") {
+      runListFiles(msg).then(function(result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function(err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: err && err.message || "list_files_failed" });
+      });
+      return;
+    }
+    if (msg.task === "upload_file") {
+      runUploadFile(msg).then(function(result) {
+        replyBrowserTask(msg.taskId, result);
+      }).catch(function(err) {
+        replyBrowserTask(msg.taskId, { ok: false, error: err && err.message || "upload_failed" });
       });
       return;
     }
