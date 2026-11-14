@@ -15,6 +15,7 @@
     "./DocumentPrintPage": "./src/DocumentPrintPage.tsx",
     "./PdfScan": "./src/PdfScan.tsx",
     "./PdfToolsHome": "./src/PdfToolsHome.tsx",
+    "./PdfWorkspace": "./src/PdfWorkspace.tsx",
     "./PdfOrganize": "./src/PdfOrganize.tsx",
     "./PdfMerge": "./src/PdfMerge.tsx",
     "./PdfSplit": "./src/PdfSplit.tsx",

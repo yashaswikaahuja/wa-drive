@@ -1,5 +1,5 @@
 /**
- * Photos home — exactly two tools (#317).
+ * Photos home — Photo Editor, Print Doc, and PDF Tool.
  */
 import { Link, useSearchParams } from 'react-router-dom';
 import { Images, FilePdf, Stack } from '@phosphor-icons/react';
@@ -43,7 +43,7 @@ export default function MediaDeskHome() {
       <div style={reveal(0)}>
         <PageHeader
           title="Photos"
-          subtitle="Photo Editor and Print Doc — files stay in File Manager / Drive."
+          subtitle="Photo Editor, Print Doc, and PDF Tool. Files stay in File Manager / Drive."
         />
       </div>
 
