@@ -93,13 +93,32 @@ test.describe('PDF Tools (desktop)', () => {
 
   test.beforeEach(async ({ page }) => { await setup(page, await makePdf(5)); });
 
-  test('hub lists all five tools with no overflow', async ({ page }) => {
+  test('workspace is the PDF desk and still opens every tool', async ({ page }) => {
     await page.goto('/app/photos/pdf?fileId=drv-pdf1', { waitUntil: 'domcontentloaded' });
     const later = page.getByRole('button', { name: /^Later$/i });
     if (await later.isVisible().catch(() => false)) await later.click();
-    for (const t of ['organize', 'merge', 'split', 'compress', 'resize']) {
+    await expect(page.locator('[data-pdf-workspace="1"]')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'PDF Tool' })).toBeVisible();
+    for (const t of ['merge', 'split', 'compress', 'resize']) {
       await expect(page.locator(`[data-pdf-tool-card="${t}"]`)).toBeVisible();
     }
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+    await expect(page.locator('[data-pdf-tool-card="organize"]')).toBeVisible();
+    await noOverflow(page);
+  });
+
+  test('workspace: blank page downloads a 1-page PDF and Save posts source=printdoc', async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.goto('/app/photos/pdf', { waitUntil: 'domcontentloaded' });
+    const later = page.getByRole('button', { name: /^Later$/i });
+    if (await later.isVisible().catch(() => false)) await later.click();
+    await page.locator('[data-pdf-blank="1"]').click();
+    await expect(page.locator('[data-pdf-page="0"]')).toBeVisible();
+    expect(await downloadPageCount(page)).toBe(1);
+    await page.getByRole('tab', { name: 'Output' }).click();
+    await page.locator('[data-pdf-phone="1"]').fill('919000000001');
+    await page.locator('[data-pdf-save="1"]').click();
+    await expect.poll(() => lastUpload.source, { timeout: 10000 }).toBe('printdoc');
     await noOverflow(page);
   });
 
@@ -173,6 +192,17 @@ test.describe('PDF Tools (desktop)', () => {
 
 test.describe('PDF Tools (phone)', () => {
   test.beforeEach(async ({ page }) => { await setup(page, await makePdf(5)); });
+
+  test('phone: PDF workspace has no horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/app/photos/pdf', { waitUntil: 'domcontentloaded' });
+    const later = page.getByRole('button', { name: /^Later$/i });
+    if (await later.isVisible().catch(() => false)) await later.click();
+    await expect(page.locator('[data-pdf-workspace="1"]')).toBeVisible();
+    await page.locator('[data-pdf-blank="1"]').click();
+    await expect(page.locator('[data-pdf-page="0"]')).toBeVisible();
+    await noOverflow(page);
+  });
 
   test('phone: split runs and the action bar is reachable with no overflow', async ({ page }) => {
     test.setTimeout(60_000);
